@@ -1,0 +1,11 @@
+{
+  "name": "sp-video-editor-poc",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n server,client -c cyan,magenta \"yarn --cwd app/server dev\" \"yarn --cwd app/client dev\"",
+    "install:all": "yarn --cwd app/server install && yarn --cwd app/client install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
