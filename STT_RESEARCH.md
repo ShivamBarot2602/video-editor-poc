@@ -52,6 +52,7 @@ The STT layer powers two primary use cases:
 | **Speechmatics** | Standard | $0.004 | $0.24 | 1 GB | 2 hr |
 | **Speechmatics** | Enhanced | $0.004+ | $0.24+ | 1 GB | 2 hr |
 | **Mistral** | voxtral-mini-transcribe-v2 | $0.003 | $0.18 | — | 3 hr |
+| **ElevenLabs** | Scribe v2 | ~$0.0067 | ~$0.40 | 3 GB | Not specified |
 | **Sonix** | Sonix AI | $0.167 | $10.00 | 16 GB | Not specified |
 | **Sarvam AI** | Saaras v3 | $0.006 | $0.36 (≈ ₹30) | Not specified | 1 hr |
 
@@ -62,6 +63,7 @@ The STT layer powers two primary use cases:
 > **Google Cloud** — Dynamic Batch tier has ~24 hr turnaround; 75% cheaper than standard.
 > **AssemblyAI** — Diarization is a +$0.02/hr add-on for Universal-3 Pro; Universal-2 also +$0.02/hr.
 > **Mistral** — voxtral-mini-transcribe-v2 (Feb 2026); prior model was voxtral-mini-latest at $0.001/min with a 30 min cap.
+> **ElevenLabs** — Scribe v2 pricing is ~$0.40/hr; surcharges apply for entity detection (+30%), speaker role detection (+10%), and keyterms biasing (+20%). Minimum billable duration is 20 s when using >100 keyterms.
 
 ---
 
@@ -86,6 +88,7 @@ The STT layer powers two primary use cases:
 | **Speechmatics** | Standard | Competitive | ✅ | ✅ | 55+ | ✅ (`language_identification`) | ✅ |
 | **Speechmatics** | Enhanced | Best-in-class (claimed) | ✅ | ✅ | 55+ | ✅ (`language_identification`) | ✅ |
 | **Mistral** | voxtral-mini-transcribe-v2 | Very High | ✅ | ✅ | 13 | ✅ | ⚠️ Unclear |
+| **ElevenLabs** | Scribe v2 | High | ✅ | ✅ word | 32+ | ✅ | ⚠️ Unclear |
 | **Sonix** | Sonix AI | 85–95% | ✅ (up to 30 speakers) | ✅ | 53 | ✅ (single-language) | ⚠️ Between speakers only |
 | **Sarvam AI** | Saaras v3 | ~19.3% WER (Indic) | ✅ | ✅ | 23 (22 Indic + EN) | ✅ | ✅ Optimized for Indic |
 
@@ -117,9 +120,11 @@ Legend: ✅ Supported &nbsp;|&nbsp; ⚠️ Partial / Unclear &nbsp;|&nbsp; ❌ N
 
 **Speechmatics** — Two operating points: **Enhanced** (highest accuracy, best for domain-specific terminology) and **Standard** (faster, cost-effective). Code-mixing is now explicitly confirmed ✅ — Speechmatics launched bilingual packs in 2026 (Tagalog-English, Malay-English, Tamil-English, Mandarin-English, Arabic-English) with 35% fewer errors than the closest competitor. 55+ languages with automatic language identification. Speaker diarization and word-level timestamps both supported. 1 GB upload limit, 2 hr max per job. REST API — submit multipart job, poll for status, fetch `json-v2` transcript.
 
+**ElevenLabs (Scribe v2)** — Single synchronous REST call (no polling). Returns word-level timestamps with per-word logprob confidence scores and speaker labels when `diarize: true`. Segments are constructed client-side by grouping consecutive same-speaker words. `timestamps_granularity: "word"` enables character-level timestamps too. Optional add-ons: entity detection/redaction (+30%), speaker role detection (agent vs customer, +10%), keyterms biasing (+20%). Max 3 GB file upload or 2 GB via cloud URL. No max duration documented. Auto language detection when `language_code` is omitted; otherwise accepts ISO-639-1/3 codes.
+
 **Sonix** — Consumer-oriented product; $10/hr is the most expensive in this list. Supports up to 30 speaker labels. Code-mixing works best at speaker boundaries, not mid-sentence. No API for programmatic access — primarily a web UI tool.
 
-**Sarvam AI** — Purpose-built for Indian languages (22 Indic + English). Strong code-mixing support for Indic language pairs (Hinglish, Tanglish, etc.). Diarization is ₹45/hr (~$0.54) vs ₹30/hr without. 1 hr per job limit and higher WER (~19%) on Indic benchmarks limits it for general-purpose use, but it's the best option if the primary audience speaks Indian languages.
+**Sarvam AI** — Purpose-built for Indian languages (22 Indic + English). Strong code-mixing support for Indic language pairs (Hinglish, Tanglish, etc.). Diarization is ₹45/hr (~$0.54) vs ₹30/hr without. 1 hr per job limit and higher WER (~19%) on Indic benchmarks limits it for general-purpose use, but it's the best option if the primary audience speaks Indian languages. Our integration uses the **Batch API** (REST API is limited to 30s audio); the 7-step flow creates a job, uploads audio to Azure Blob via presigned URL, starts processing, polls for completion, then downloads the result JSON. Result includes word-level timestamps (`timestamps.words[]` parallel arrays) and segment-level diarization (`diarized_transcript[].{speaker_id, transcript, start_time_seconds, end_time_seconds}`).
 
 ---
 
