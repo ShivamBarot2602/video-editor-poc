@@ -7,6 +7,7 @@ const fs = require('fs')
 const uploadRouter = require('./routes/upload')
 const transcribeRouter = require('./routes/transcribe')
 const burnRouter = require('./routes/burn')
+const { extractThumbnail } = require('./lib/ffmpeg')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -61,6 +62,7 @@ app.get('/api/videos', (req, res) => {
         providers,
         hasBurned: files.some(f => f.startsWith('burned.')),
         uploadedAt: meta.uploadedAt || originalStat.mtime.toISOString(),
+        thumbnail: `/api/video/${id}/thumbnail`,
       })
     }
 
@@ -104,6 +106,35 @@ app.get('/api/video/:id/burned', (req, res) => {
   if (!burned) return res.status(404).json({ error: 'Burned video not ready' })
 
   res.sendFile(path.join(dir, burned))
+})
+
+// Generate and serve thumbnail for a video
+app.get('/api/video/:id/thumbnail', async (req, res) => {
+  try {
+    const dir = path.join(VIDEOS_DIR, req.params.id)
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'Video not found' })
+
+    const files = fs.readdirSync(dir)
+    const original = files.find(f => f.startsWith('original.'))
+    if (!original) return res.status(404).json({ error: 'Original file missing' })
+
+    const thumbnailPath = path.join(dir, 'thumbnail.jpg')
+    
+    // If thumbnail already exists, serve it
+    if (fs.existsSync(thumbnailPath)) {
+      return res.sendFile(thumbnailPath)
+    }
+
+    // Generate thumbnail from first frame
+    const originalPath = path.join(dir, original)
+    await extractThumbnail(originalPath, thumbnailPath)
+    
+    // Serve the newly generated thumbnail
+    res.sendFile(thumbnailPath)
+  } catch (err) {
+    console.error('Thumbnail generation error:', err)
+    res.status(500).json({ error: 'Failed to generate thumbnail' })
+  }
 })
 
 // Global error handler

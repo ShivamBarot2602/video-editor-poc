@@ -36,11 +36,12 @@ module.exports = async function run({ audioPath, language }) {
     form.append('language', language)
   } else {
     // Word-level timestamps only available when language is auto-detected
-    form.append('timestamp_granularities[]', 'word')
+    // form.append('timestamp_granularities[]', 'word')
     form.append('timestamp_granularities[]', 'segment')
   }
 
-  console.log(`  [mistral] Sending to ${MODEL}${wantWordTimestamps ? ' (word timestamps)' : ` (language=${language})`}…`)
+  console.log(`  [mistral] Sending to ${MODEL}${wantWordTimestamps ? ' (word timestamps)' : ` (language=${language})`}…`, form)
+
 
   let response
   try {
@@ -54,6 +55,7 @@ module.exports = async function run({ audioPath, language }) {
     })
     response = res.data
   } catch (err) {
+    console.dir({err:err.response?.data || err.message}, {depth:null})
     const msg = err.response?.data?.message || err.response?.data?.error || err.message
     throw new Error(`Mistral transcription failed: ${msg}`)
   }

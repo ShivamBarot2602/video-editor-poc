@@ -1,5 +1,6 @@
 const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
+const path = require('path')
 
 /**
  * Extract mono 16kHz WAV audio from any audio/video file.
@@ -69,4 +70,21 @@ function getFileSizeMB(filePath) {
   return fs.statSync(filePath).size / (1024 * 1024)
 }
 
-module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB }
+/**
+ * Extract the first frame of a video as a JPEG thumbnail.
+ */
+function extractThumbnail(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .screenshot({
+        timestamps: ['0'],
+        filename: 'thumbnail.jpg',
+        folder: path.dirname(outputPath),
+        size: '320x180',
+      })
+      .on('end', resolve)
+      .on('error', reject)
+  })
+}
+
+module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail }

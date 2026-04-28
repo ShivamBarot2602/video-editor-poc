@@ -11,5 +11,7 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    middlewareMode: false,
   },
+  appType: 'spa',
 })

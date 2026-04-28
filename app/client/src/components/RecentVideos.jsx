@@ -30,7 +30,8 @@ function fmtDate(iso) {
 }
 
 export default function RecentVideos({ onSelect }) {
-  const [videos, setVideos] = useState(null) // null = loading
+  const [videos, setVideos] = useState(null)
+  const [thumbnailErrors, setThumbnailErrors] = useState({})
 
   useEffect(() => {
     fetch('/api/videos')
@@ -38,6 +39,10 @@ export default function RecentVideos({ onSelect }) {
       .then(setVideos)
       .catch(() => setVideos([]))
   }, [])
+
+  const handleThumbnailError = (videoId) => {
+    setThumbnailErrors(prev => ({ ...prev, [videoId]: true }))
+  }
 
   if (videos === null) {
     return (
@@ -56,74 +61,119 @@ export default function RecentVideos({ onSelect }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 520 }}>
+    <div style={{ 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+      gap: 16, 
+      width: '100%', 
+      maxWidth: 1200 
+    }}>
       {videos.map(v => (
         <button
           key={v.id}
           onClick={() => onSelect(v)}
           style={{
-            display: 'flex', alignItems: 'center', gap: 14,
-            padding: '12px 16px', borderRadius: 10,
+            display: 'flex', 
+            flexDirection: 'column',
+            borderRadius: 10,
             border: '1px solid var(--border)',
             background: 'var(--surface)',
-            cursor: 'pointer', textAlign: 'left',
-            transition: 'border-color 150ms, background 150ms',
+            cursor: 'pointer', 
+            textAlign: 'left',
+            transition: 'all 150ms',
+            overflow: 'hidden',
+            padding: 0,
+            height: '100%',
           }}
           onMouseEnter={e => {
             e.currentTarget.style.borderColor = 'var(--accent)'
             e.currentTarget.style.background = 'var(--surface-2)'
+            e.currentTarget.style.transform = 'translateY(-2px)'
           }}
           onMouseLeave={e => {
             e.currentTarget.style.borderColor = 'var(--border)'
             e.currentTarget.style.background = 'var(--surface)'
+            e.currentTarget.style.transform = 'translateY(0)'
           }}
         >
-          {/* Icon */}
+          {/* Thumbnail */}
           <div style={{
-            width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18,
+            width: '100%',
+            aspect: '16 / 9',
+            background: 'var(--surface-2)',
+            border: 'none',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            flexShrink: 0,
           }}>
-            🎬
+            {!thumbnailErrors[v.id] ? (
+              <img
+                src={v.thumbnail}
+                alt={v.filename}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                onError={() => handleThumbnailError(v.id)}
+              />
+            ) : (
+              <div style={{
+                fontSize: 48,
+                color: 'var(--text-muted)',
+              }}>
+                🎬
+              </div>
+            )}
           </div>
 
           {/* Info */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Filename */}
             <div style={{
-              fontSize: 13, fontWeight: 500, color: 'var(--text)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              marginBottom: 4,
+              fontSize: 13, 
+              fontWeight: 600, 
+              color: 'var(--text)',
+              whiteSpace: 'nowrap', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis',
             }}>
               {v.filename}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+
+            {/* Metadata and badges */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Size and date */}
               <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
                 {fmtSize(v.size)} · {fmtDate(v.uploadedAt)}
               </span>
-              {v.providers.map(p => (
-                <span key={p} style={{
-                  fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                  padding: '2px 6px', borderRadius: 4,
-                  background: 'var(--accent-dim)', color: 'var(--accent)',
-                }}>
-                  {PROVIDER_LABELS[p] || p}
-                </span>
-              ))}
-              {v.hasBurned && (
-                <span style={{
-                  fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                  padding: '2px 6px', borderRadius: 4,
-                  background: 'rgba(34,197,94,0.15)', color: '#22c55e',
-                }}>
-                  Burned
-                </span>
-              )}
+
+              {/* Provider and status badges */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {v.providers.map(p => (
+                  <span key={p} style={{
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
+                    padding: '2px 6px', borderRadius: 4,
+                    background: 'var(--accent-dim)', color: 'var(--accent)',
+                  }}>
+                    {PROVIDER_LABELS[p] || p}
+                  </span>
+                ))}
+                {v.hasBurned && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
+                    padding: '2px 6px', borderRadius: 4,
+                    background: 'rgba(34,197,94,0.15)', color: '#22c55e',
+                  }}>
+                    Burned
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-
-          {/* Arrow */}
-          <span style={{ color: 'var(--text-dim)', fontSize: 16, flexShrink: 0 }}>›</span>
         </button>
       ))}
     </div>
