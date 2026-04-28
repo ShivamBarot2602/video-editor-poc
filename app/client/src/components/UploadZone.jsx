@@ -12,19 +12,15 @@ export default function UploadZone({ onUpload }) {
 
   const upload = useCallback(async (file) => {
     if (!file) return
-
     const sizeMB = file.size / (1024 * 1024)
     if (sizeMB > MAX_SIZE_MB) {
       toast.error(`File too large (${sizeMB.toFixed(0)} MB). Limit is ${MAX_SIZE_MB} MB.`)
       return
     }
-
     const formData = new FormData()
     formData.append('video', file)
-
     setUploading(true)
     setProgress(0)
-
     try {
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
@@ -38,8 +34,7 @@ export default function UploadZone({ onUpload }) {
             onUpload(data.videoId, { name: file.name, size: file.size })
             resolve()
           } else {
-            const err = JSON.parse(xhr.responseText)
-            reject(new Error(err.error || 'Upload failed'))
+            reject(new Error(JSON.parse(xhr.responseText)?.error || 'Upload failed'))
           }
         }
         xhr.onerror = () => reject(new Error('Network error'))
@@ -61,44 +56,50 @@ export default function UploadZone({ onUpload }) {
   }, [upload])
 
   return (
-    <div style={{ width: '100%', maxWidth: 520 }}>
+    <div style={{ width: '100%', maxWidth: 320 }}>
       <div
         onClick={() => !uploading && inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         style={{
-          border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border-2)'}`,
+          border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
           borderRadius: 12,
-          padding: '56px 32px',
+          padding: '40px 32px',
           textAlign: 'center',
           cursor: uploading ? 'default' : 'pointer',
-          background: dragging ? 'var(--accent-dim)' : 'var(--surface)',
+          background: dragging ? 'var(--accent-dim)' : 'var(--surface-2)',
           transition: 'all 200ms ease',
         }}
       >
-        <div style={{ fontSize: 40, marginBottom: 16 }}>🎬</div>
-
         {uploading ? (
           <>
-            <p style={{ color: 'var(--text)', fontWeight: 500, marginBottom: 12 }}>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500, marginBottom: 12, fontSize: 13 }}>
               Uploading… {progress}%
             </p>
-            <div className="progress-bar" style={{ maxWidth: 240, margin: '0 auto' }}>
-              <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+            <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', maxWidth: 200, margin: '0 auto' }}>
+              <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 200ms' }} />
             </div>
           </>
         ) : (
           <>
-            <p style={{ color: 'var(--text)', fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+            <div style={{ fontSize: 32, marginBottom: 10, color: '#444' }}>▶</div>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
               Drop your video here
             </p>
-            <p style={{ color: 'var(--text-muted)', marginBottom: 20 }}>
+            <p style={{ color: 'var(--text-faint)', fontSize: 12, marginBottom: 20 }}>
               or click to browse
             </p>
-            <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>
-              MP4, MOV, MKV, WebM, AVI · up to {MAX_SIZE_MB} MB
+            <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>
+              MP4, MOV, MKV, WebM · up to {MAX_SIZE_MB} MB
             </p>
+            <button
+              className="btn btn-primary"
+              style={{ marginTop: 20, fontSize: 12, padding: '6px 24px' }}
+              onClick={e => { e.stopPropagation(); inputRef.current?.click() }}
+            >
+              Browse Files
+            </button>
           </>
         )}
       </div>
@@ -108,7 +109,7 @@ export default function UploadZone({ onUpload }) {
         type="file"
         accept={ACCEPT}
         style={{ display: 'none' }}
-        onChange={(e) => upload(e.target.files[0])}
+        onChange={e => upload(e.target.files[0])}
       />
     </div>
   )

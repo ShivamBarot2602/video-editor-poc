@@ -111,10 +111,11 @@ function KaraokeWord({ word, currentTime, primaryColor, karaokeColor, karaokeSty
 export default function SubtitleOverlay({ segments, currentTime, style, containerDimensions }) {
   const {
     fontFamily, fontSize, primaryColor, karaokeColor,
-    outlineColor, outlineThickness, bold, italic,
+    outlineColor, outlineThickness, fontWeight, bold, italic,
     position, verticalMargin, backgroundBox, backgroundOpacity,
     karaokeStyle, maxLines = 2,
   } = style
+  const hasBox = backgroundBox === 'solid' || backgroundBox === 'blur'
 
   // Find the currently active segment
   const activeSegment = useMemo(() => {
@@ -136,9 +137,10 @@ export default function SubtitleOverlay({ segments, currentTime, style, containe
     position: 'absolute',
     ...pos,
     ...(isBottom ? { bottom: verticalMargin } : isTop ? { top: verticalMargin } : {}),
-    padding: backgroundBox ? `${Math.round(scaledFontSize * 0.25)}px ${Math.round(scaledFontSize * 0.5)}px` : 0,
-    background: backgroundBox ? `rgba(0,0,0,${backgroundOpacity / 100})` : 'transparent',
-    borderRadius: backgroundBox ? 4 : 0,
+    padding: hasBox ? `${Math.round(scaledFontSize * 0.25)}px ${Math.round(scaledFontSize * 0.5)}px` : 0,
+    background: hasBox ? `rgba(0,0,0,${backgroundOpacity / 100})` : 'transparent',
+    backdropFilter: backgroundBox === 'blur' ? `blur(${Math.round(scaledFontSize * 0.3)}px)` : 'none',
+    borderRadius: hasBox ? 4 : 0,
     maxWidth: '90%',
     pointerEvents: 'none',
     zIndex: 10,
@@ -154,7 +156,7 @@ export default function SubtitleOverlay({ segments, currentTime, style, containe
   const textStyle = {
     fontFamily,
     fontSize: scaledFontSize,
-    fontWeight: bold ? 700 : 400,
+    fontWeight: fontWeight || (bold ? 700 : 400),
     fontStyle: italic ? 'italic' : 'normal',
     color: primaryColor,
     textShadow: outlineShadow,

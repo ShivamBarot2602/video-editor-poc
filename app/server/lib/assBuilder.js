@@ -122,11 +122,12 @@ function buildAss(transcription, style) {
     karaokeColor = '#FFD700',
     outlineColor = '#000000',
     outlineThickness = 2,
+    fontWeight = 400,
     bold = false,
     italic = false,
     position = 'bottom-center',
     verticalMargin = 30,
-    backgroundBox = false,
+    backgroundBox = 'off',
     backgroundOpacity = 70,
     karaokeStyle = 'word-highlight',
     maxLines = 2,
@@ -139,10 +140,12 @@ function buildAss(transcription, style) {
   const primaryAss   = hexToAss(karaokeColor)    // color words transition TO (highlighted/spoken)
   const secondaryAss = hexToAss(primaryColor)    // color words start as (upcoming/unspoken)
   const outlineAss   = hexToAss(outlineColor)
+  const hasBox       = backgroundBox === 'solid' || backgroundBox === 'blur'
+  const isBold       = (fontWeight >= 600) || bold
   const boxAlpha     = opacityToAssAlpha(backgroundOpacity)
-  const backAss      = backgroundBox ? `&H${boxAlpha}000000` : '&H00000000'
-  const borderStyle  = backgroundBox ? 4 : 1
-  const outline      = backgroundBox ? 0 : outlineThickness
+  const backAss      = hasBox ? `&H${boxAlpha}000000` : '&H00000000'
+  const borderStyle  = hasBox ? 4 : 1
+  const outline      = hasBox ? 0 : outlineThickness
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -152,7 +155,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontFamily},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${bold ? -1 : 0},${italic ? -1 : 0},0,0,100,100,0,0,${borderStyle},${outline},0,${alignment},10,10,${verticalMargin},1
+Style: Default,${fontFamily},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${isBold ? -1 : 0},${italic ? -1 : 0},0,0,100,100,0,0,${borderStyle},${outline},0,${alignment},10,10,${verticalMargin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`

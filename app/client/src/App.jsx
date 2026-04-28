@@ -1,47 +1,22 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
-import UploadPage from './pages/UploadPage'
-import RecentSessionsPage from './pages/RecentSessionsPage'
+import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
+import PlaygroundPage from './pages/PlaygroundPage'
 
 function Header() {
   const location = useLocation()
   const isEditor = location.pathname.startsWith('/editor/')
+  if (isEditor) return null
 
-  if (isEditor) {
-    return null
-  }
+  const isPlayground = location.pathname === '/playground'
 
   return (
-    <header style={{
-      display: 'flex', alignItems: 'center', gap: 24,
-      padding: '12px 24px', borderBottom: '1px solid var(--border)',
-      background: 'var(--surface)', flexShrink: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>SP Video Editor</span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>POC</span>
-      </div>
-
-      {/* Navigation */}
-      <nav style={{ display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
-        {[
-          { path: '/upload', label: 'Upload New' },
-          { path: '/recent', label: 'Recent Sessions' },
-        ].map(({ path, label }) => (
-          <Link
-            key={path}
-            to={path}
-            style={{
-              padding: '8px 20px', fontSize: 13, fontWeight: 500,
-              border: 'none', cursor: 'pointer', transition: 'all 150ms',
-              background: location.pathname === path ? 'var(--accent)' : 'var(--surface)',
-              color: location.pathname === path ? '#fff' : 'var(--text-muted)',
-              textDecoration: 'none',
-            }}
-          >
-            {label}
-          </Link>
-        ))}
+    <header className="topbar">
+      <span className="topbar-logo">SP Video Editor</span>
+      <span className="topbar-poc">POC</span>
+      <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+        <Link to="/" className={`topbar-tab ${!isPlayground ? 'active' : ''}`}>Upload New</Link>
+        <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
       </nav>
     </header>
   )
@@ -50,23 +25,15 @@ function Header() {
 export default function App() {
   return (
     <Router>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <Header />
-
-        {/* Routes */}
-        <Routes>
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/recent" element={<RecentSessionsPage />} />
-          <Route path="/editor/:videoId" element={<EditorPage />} />
-          <Route path="/" element={<UploadPage />} />
-        </Routes>
-
-        <style>{`
-          @media (max-width: 768px) {
-            .mobile-reupload { display: block !important; }
-            .workspace-grid { grid-template-columns: 1fr !important; }
-          }
-        `}</style>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/playground" element={<PlaygroundPage />} />
+            <Route path="/editor/:videoId" element={<EditorPage />} />
+          </Routes>
+        </div>
       </div>
     </Router>
   )
