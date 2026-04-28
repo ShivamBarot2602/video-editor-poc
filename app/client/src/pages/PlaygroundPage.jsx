@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom'
 const ALL_PROVIDERS = [
   { id: 'assemblyai',   label: 'AssemblyAI' },
   { id: 'deepgram',     label: 'Deepgram' },
+  { id: 'gladia',       label: 'Gladia' },
   { id: 'mistral',      label: 'Mistral' },
   { id: 'groq',         label: 'Groq' },
   { id: 'openai',       label: 'OpenAI' },
   { id: 'revai',        label: 'Rev AI' },
   { id: 'speechmatics', label: 'Speechmatics' },
+  { id: 'pyannote',     label: 'pyannoteAI' },
 ]
 
 function fmtTime(s) {

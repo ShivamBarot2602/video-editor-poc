@@ -20,8 +20,9 @@ function fmtDate(iso) {
 
 const PROVIDER_LABELS = {
   assemblyai: 'AssemblyAI', deepgram: 'Deepgram', openai: 'OpenAI',
+  gladia: 'Gladia',
   groq: 'Groq', speechmatics: 'Speechmatics', sonix: 'Sonix',
-  mistral: 'Mistral', revai: 'Rev AI',
+  mistral: 'Mistral', revai: 'Rev AI', pyannote: 'pyannoteAI',
 }
 
 export default function RecentVideos({ onSelect }) {

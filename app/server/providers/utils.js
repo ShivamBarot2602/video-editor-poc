@@ -26,4 +26,14 @@ function fmtTime(seconds) {
   return `${String(m).padStart(2, '0')}:${s}`
 }
 
-module.exports = { buildMetadata, formatTranscript }
+function normalizeSpeaker(speaker) {
+  if (speaker == null || speaker === '') return 'SPEAKER_00'
+  const n = Number(speaker)
+  if (Number.isFinite(n)) return `SPEAKER_${String(Math.trunc(n)).padStart(2, '0')}`
+  const value = String(speaker).trim()
+  const m = value.match(/^SPEAKER_(\d+)$/i)
+  if (m) return `SPEAKER_${m[1].padStart(2, '0')}`
+  return value.toUpperCase()
+}
+
+module.exports = { buildMetadata, formatTranscript, normalizeSpeaker }

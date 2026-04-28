@@ -38,7 +38,7 @@ router.post('/:id', async (req, res) => {
 
     // Run transcription
     console.log(`[${id}] Running provider: ${provider}`)
-    const result = await providerFn({ audioPath, videoDir, language })
+    const result = await providerFn({ audioPath, videoDir, language, videoId: id })
 
     // Persist result
     fs.writeFileSync(transcriptionPath, JSON.stringify(result, null, 2), 'utf8')

@@ -2,9 +2,11 @@ const assemblyai    = require('./assemblyai')
 const openai        = require('./openai')
 const groq          = require('./groq')
 const deepgram      = require('./deepgram')
+const gladia        = require('./gladia')
 const sonix         = require('./sonix')
 const speechmatics  = require('./speechmatics')
 const mistral       = require('./mistral')
 const revai         = require('./revai')
+const pyannote      = require('./pyannote')
 
-module.exports = { assemblyai, openai, groq, deepgram, sonix, speechmatics, mistral, revai }
+module.exports = { assemblyai, openai, groq, deepgram, gladia, sonix, speechmatics, mistral, revai, pyannote }

@@ -40,9 +40,6 @@ module.exports = async function run({ audioPath, language }) {
     form.append('timestamp_granularities[]', 'segment')
   }
 
-  console.log(`  [mistral] Sending to ${MODEL}${wantWordTimestamps ? ' (word timestamps)' : ` (language=${language})`}…`, form)
-
-
   let response
   try {
     const res = await axios.post(`${BASE_URL}/v1/audio/transcriptions`, form, {
