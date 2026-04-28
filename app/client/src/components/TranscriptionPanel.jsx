@@ -3,7 +3,8 @@ const PROVIDERS = [
   { id: 'deepgram',      label: 'Deepgram',      note: 'Nova-3 · fast' },
   { id: 'openai',        label: 'OpenAI',        note: 'gpt-4o-transcribe-diarize · 25 MB cap' },
   { id: 'groq',          label: 'Groq',          note: 'Whisper Turbo · 100 MB cap' },
-  { id: 'mistral',       label: 'Mistral',       note: 'Voxtral Mini · $0.001/min · 30 min cap' },
+  { id: 'mistral',       label: 'Mistral',       note: 'Voxtral Mini · $0.003/min · 3 hr cap' },
+  { id: 'revai',         label: 'Rev AI',        note: 'Reverb ASR · premium diarization · 17 hr cap' },
   { id: 'speechmatics',  label: 'Speechmatics',  note: 'Enhanced · 55 langs · 1 GB cap' },
   { id: 'sonix',         label: 'Sonix',         note: '30 speakers · $10/hr' },
 ]

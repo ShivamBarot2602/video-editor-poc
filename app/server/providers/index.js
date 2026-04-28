@@ -5,5 +5,6 @@ const deepgram      = require('./deepgram')
 const sonix         = require('./sonix')
 const speechmatics  = require('./speechmatics')
 const mistral       = require('./mistral')
+const revai         = require('./revai')
 
-module.exports = { assemblyai, openai, groq, deepgram, sonix, speechmatics, mistral }
+module.exports = { assemblyai, openai, groq, deepgram, sonix, speechmatics, mistral, revai }
