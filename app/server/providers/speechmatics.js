@@ -91,6 +91,7 @@ module.exports = async function run({ audioPath, language }) {
     }),
     segments,
     full_transcript: formatTranscript(segments),
+    _raw: transcriptRes.data,
   }
 }
 

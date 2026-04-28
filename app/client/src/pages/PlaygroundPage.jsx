@@ -1,17 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Group, Panel, Separator } from 'react-resizable-panels'
+import { PROVIDERS } from '../providers'
 
-const ALL_PROVIDERS = [
-  { id: 'assemblyai',   label: 'AssemblyAI' },
-  { id: 'deepgram',     label: 'Deepgram' },
-  { id: 'gladia',       label: 'Gladia' },
-  { id: 'mistral',      label: 'Mistral' },
-  { id: 'groq',         label: 'Groq' },
-  { id: 'openai',       label: 'OpenAI' },
-  { id: 'revai',        label: 'Rev AI' },
-  { id: 'speechmatics', label: 'Speechmatics' },
-  { id: 'pyannote',     label: 'pyannoteAI' },
-]
+const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
 
 function fmtTime(s) {
   const m = Math.floor(s / 60)
@@ -19,10 +11,19 @@ function fmtTime(s) {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-function ProviderPanel({ providerId, onProviderChange, transcription, otherTranscription, onUse }) {
-  const prov = ALL_PROVIDERS.find(p => p.id === providerId)
+function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime }) {
   const segments = transcription?.segments || null
-  const otherSegments = otherTranscription?.segments || null
+  const rowRefs = useRef({})
+
+  const activeIdx = segments
+    ? segments.findIndex(seg => currentTime >= seg.start && currentTime < seg.end)
+    : -1
+
+  useEffect(() => {
+    if (activeIdx >= 0 && rowRefs.current[activeIdx]) {
+      rowRefs.current[activeIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [activeIdx])
 
   return (
     <div style={{
@@ -40,7 +41,7 @@ function ProviderPanel({ providerId, onProviderChange, transcription, otherTrans
           onChange={e => onProviderChange(e.target.value)}
           style={{ flex: 1, fontSize: 11, padding: '3px 6px' }}
         >
-          {ALL_PROVIDERS.map(p => (
+          {PROVIDERS.map(p => (
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
         </select>
@@ -69,19 +70,27 @@ function ProviderPanel({ providerId, onProviderChange, transcription, otherTrans
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Not yet transcribed</span>
           </div>
         ) : segments.map((seg, i) => {
-          const other = otherSegments?.[i]
-          const differs = other && other.text !== seg.text
+          const isActive = i === activeIdx
           return (
-            <div key={i} style={{
-              display: 'flex', gap: 8, padding: '6px 10px',
-              borderLeft: `3px solid ${differs ? 'var(--diff)' : 'transparent'}`,
-              background: differs ? 'var(--diff-bg)' : 'transparent',
-              borderBottom: '1px solid var(--border-sub)',
-            }}>
+            <div
+              key={i}
+              ref={el => { rowRefs.current[i] = el }}
+              style={{
+                display: 'flex', gap: 8, padding: '6px 10px',
+                borderLeft: `3px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+                background: isActive ? 'var(--accent-dim)' : 'transparent',
+                borderBottom: '1px solid var(--border-sub)',
+                transition: 'background 150ms',
+              }}
+            >
               <span style={{ color: 'var(--text-faint)', fontSize: 10, minWidth: 28, paddingTop: 1, flexShrink: 0 }}>
                 {fmtTime(seg.start)}
               </span>
-              <span style={{ color: differs ? 'var(--diff-text)' : 'var(--text-muted)', fontSize: 11, lineHeight: 1.5 }}>
+              <span style={{
+                fontSize: 11, lineHeight: 1.5,
+                color: isActive ? 'var(--text-bright)' : 'var(--text-muted)',
+                fontWeight: isActive ? 600 : 400,
+              }}>
                 {seg.text}
               </span>
             </div>
@@ -106,6 +115,7 @@ function ProviderPanel({ providerId, onProviderChange, transcription, otherTrans
 
 export default function PlaygroundPage() {
   const navigate = useNavigate()
+  const videoRef = useRef(null)
   const [videos, setVideos] = useState(null)
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [checked, setChecked] = useState({})
@@ -113,6 +123,7 @@ export default function PlaygroundPage() {
   const [running, setRunning] = useState({})
   const [leftProvider, setLeftProvider] = useState('assemblyai')
   const [rightProvider, setRightProvider] = useState('deepgram')
+  const [currentTime, setCurrentTime] = useState(0)
 
   useEffect(() => {
     fetch('/api/videos')
@@ -122,11 +133,9 @@ export default function PlaygroundPage() {
         if (vids.length > 0) {
           const v = vids[0]
           setSelectedVideo(v)
-          // Pre-check providers that already have transcriptions
           const initialChecked = {}
-          ALL_PROVIDERS.forEach(p => { initialChecked[p.id] = v.providers.includes(p.id) })
+          PROVIDERS.forEach(p => { initialChecked[p.id] = v.providers.includes(p.id) })
           setChecked(initialChecked)
-          // Load existing transcriptions
           v.providers.forEach(async (pid) => {
             try {
               const res = await fetch(`/api/transcription/${v.id}/${pid}`)
@@ -141,11 +150,13 @@ export default function PlaygroundPage() {
       .catch(() => setVideos([]))
   }, [])
 
+  useEffect(() => { setCurrentTime(0) }, [selectedVideo?.id])
+
   const toggleProvider = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
 
   const runAll = async () => {
     if (!selectedVideo) return
-    const toRun = ALL_PROVIDERS.filter(p => checked[p.id] && !transcriptions[p.id])
+    const toRun = PROVIDERS.filter(p => checked[p.id] && !transcriptions[p.id])
     for (const p of toRun) {
       setRunning(prev => ({ ...prev, [p.id]: true }))
       try {
@@ -168,114 +179,137 @@ export default function PlaygroundPage() {
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', height: '100%' }}>
+    <Group orientation="horizontal" style={{ flex: 1, height: '100%' }}>
 
-      {/* LEFT: video + controls */}
-      <div style={{
-        width: 260, flexShrink: 0,
-        background: 'var(--surface-dark)', borderRight: '1px solid var(--border-sub)',
-        display: 'flex', flexDirection: 'column', padding: 14, gap: 12, overflow: 'hidden',
-      }}>
-        {/* Video thumbnail */}
-        {selectedVideo ? (
-          <div style={{
-            width: '100%', aspectRatio: '16/9', background: '#000',
-            borderRadius: 6, overflow: 'hidden', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <img
-              src={`/api/video/${selectedVideo.id}/thumbnail`}
-              alt={selectedVideo.filename}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={e => {
-                e.currentTarget.style.display = 'none'
-                e.currentTarget.parentElement.innerHTML = `<span style="color:#333;font-size:11px">▶ ${selectedVideo.filename}</span>`
-              }}
+      {/* LEFT: sidebar */}
+      <Panel defaultSize="22%" minSize="16%" maxSize="35%"
+        style={{ background: 'var(--surface-dark)', borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', padding: 14, gap: 12, height: '100%', overflow: 'hidden' }}>
+
+          {/* Video player */}
+          {selectedVideo ? (
+            <div style={{
+              width: '100%',
+              borderRadius: 6,
+              overflow: 'hidden',
+              flexShrink: 0,
+              background: '#000',
+              maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <video
+                ref={videoRef}
+                key={selectedVideo.id}
+                src={`/api/video/${selectedVideo.id}`}
+                controls
+                style={{
+                  width: '100%',
+                  maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+                onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
+              />
+            </div>
+          ) : (
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              height: SIDEBAR_PREVIEW_MAX_HEIGHT,
+              background: 'var(--surface)',
+              borderRadius: 6,
+              flexShrink: 0,
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 11 }}>
+                {videos === null ? 'Loading…' : 'No video selected'}
+              </span>
+            </div>
+          )}
+
+          {/* Provider checklist */}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Transcribe Providers
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {PROVIDERS.map(p => {
+                const tx = transcriptions[p.id]
+                const isRunning = running[p.id]
+                return (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!checked[p.id]}
+                      onChange={() => toggleProvider(p.id)}
+                      style={{ accentColor: 'var(--accent)', width: 11, height: 11, flexShrink: 0 }}
+                    />
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>{p.label}</span>
+                    {isRunning && <span style={{ color: 'var(--accent)', fontSize: 10 }}>⟳</span>}
+                    {!isRunning && tx && (
+                      <span style={{ color: 'var(--success)', fontSize: 10 }}>
+                        ✓{tx.metadata?.confidence ? ` ${(tx.metadata.confidence * 100).toFixed(0)}%` : ''}
+                      </span>
+                    )}
+                    {!isRunning && !tx && checked[p.id] && (
+                      <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>—</span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+            <button
+              className="btn btn-primary btn-full"
+              onClick={runAll}
+              disabled={!selectedVideo || Object.keys(running).some(k => running[k])}
+              style={{ fontSize: 12, padding: '7px' }}
+            >
+              ▶ Run All
+            </button>
+            <button
+              className="btn btn-outline btn-full btn-sm"
+              onClick={() => navigate('/')}
+              style={{ color: 'var(--text-dim)', fontSize: 11 }}
+            >
+              ↑ Upload new video
+            </button>
+          </div>
+        </div>
+      </Panel>
+
+      <Separator className="panel-resize-handle" />
+
+      {/* RIGHT: comparison panels */}
+      <Panel style={{ overflow: 'hidden' }}>
+        <Group orientation="horizontal" style={{ height: '100%', padding: 14, gap: 0 }}>
+          <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
+            <ProviderPanel
+              providerId={leftProvider}
+              onProviderChange={setLeftProvider}
+              transcription={transcriptions[leftProvider] || null}
+              onUse={handleUse}
+              currentTime={currentTime}
             />
-          </div>
-        ) : (
-          <div style={{
-            width: '100%', aspectRatio: '16/9', background: 'var(--surface)',
-            borderRadius: 6, flexShrink: 0, border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>
-              {videos === null ? 'Loading…' : 'No video selected'}
-            </span>
-          </div>
-        )}
+          </Panel>
+          <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
+          <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
+            <ProviderPanel
+              providerId={rightProvider}
+              onProviderChange={setRightProvider}
+              transcription={transcriptions[rightProvider] || null}
+              onUse={handleUse}
+              currentTime={currentTime}
+            />
+          </Panel>
+        </Group>
+      </Panel>
 
-        {/* Provider checklist */}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Transcribe Providers
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {ALL_PROVIDERS.map(p => {
-              const tx = transcriptions[p.id]
-              const isRunning = running[p.id]
-              return (
-                <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!checked[p.id]}
-                    onChange={() => toggleProvider(p.id)}
-                    style={{ accentColor: 'var(--accent)', width: 11, height: 11, flexShrink: 0 }}
-                  />
-                  <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>{p.label}</span>
-                  {isRunning && <span style={{ color: 'var(--accent)', fontSize: 10 }}>⟳</span>}
-                  {!isRunning && tx && (
-                    <span style={{ color: 'var(--success)', fontSize: 10 }}>
-                      ✓{tx.metadata?.confidence ? ` ${(tx.metadata.confidence * 100).toFixed(0)}%` : ''}
-                    </span>
-                  )}
-                  {!isRunning && !tx && checked[p.id] && (
-                    <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>—</span>
-                  )}
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-          <button
-            className="btn btn-primary btn-full"
-            onClick={runAll}
-            disabled={!selectedVideo || Object.keys(running).some(k => running[k])}
-            style={{ fontSize: 12, padding: '7px' }}
-          >
-            ▶ Run All
-          </button>
-          <button
-            className="btn btn-outline btn-full btn-sm"
-            onClick={() => navigate('/')}
-            style={{ color: 'var(--text-dim)', fontSize: 11 }}
-          >
-            ↑ Upload new video
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT: two comparison panels */}
-      <div style={{ flex: 1, display: 'flex', gap: 10, padding: 14, overflow: 'hidden', minWidth: 0 }}>
-        <ProviderPanel
-          providerId={leftProvider}
-          onProviderChange={setLeftProvider}
-          transcription={transcriptions[leftProvider] || null}
-          otherTranscription={transcriptions[rightProvider] || null}
-          onUse={handleUse}
-        />
-        <div style={{ width: 1, background: 'var(--border)', flexShrink: 0 }} />
-        <ProviderPanel
-          providerId={rightProvider}
-          onProviderChange={setRightProvider}
-          transcription={transcriptions[rightProvider] || null}
-          otherTranscription={transcriptions[leftProvider] || null}
-          onUse={handleUse}
-        />
-      </div>
-    </div>
+    </Group>
   )
 }

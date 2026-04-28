@@ -112,6 +112,7 @@ module.exports = async function run({ audioPath, videoId, language }) {
     }),
     segments,
     full_transcript: formatTranscript(segments),
+    _raw: job,
   }
 }
 

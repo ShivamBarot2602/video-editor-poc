@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PROVIDERS } from '../providers'
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
@@ -18,12 +19,7 @@ function fmtDate(iso) {
   return d.toLocaleDateString()
 }
 
-const PROVIDER_LABELS = {
-  assemblyai: 'AssemblyAI', deepgram: 'Deepgram', openai: 'OpenAI',
-  gladia: 'Gladia',
-  groq: 'Groq', speechmatics: 'Speechmatics', sonix: 'Sonix',
-  mistral: 'Mistral', revai: 'Rev AI', pyannote: 'pyannoteAI',
-}
+const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 
 export default function RecentVideos({ onSelect }) {
   const [videos, setVideos] = useState(null)
@@ -60,17 +56,17 @@ export default function RecentVideos({ onSelect }) {
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
         >
-          {/* Thumbnail — 16:9 aspect ratio */}
-          <div style={{ width: '100%', aspectRatio: '16/9', background: '#0a0a0a', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Thumbnail — 16:9 via padding-bottom intrinsic ratio */}
+          <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0 }}>
             {!thumbErrors[v.id] ? (
               <img
                 src={v.thumbnail}
                 alt={v.filename}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))}
               />
             ) : (
-              <span style={{ color: '#333', fontSize: 10 }}>▶</span>
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: 10 }}>▶</span>
             )}
           </div>
 

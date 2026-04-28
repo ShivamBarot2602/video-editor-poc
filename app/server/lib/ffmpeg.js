@@ -1,6 +1,5 @@
 const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
-const path = require('path')
 
 /**
  * Extract mono 16kHz WAV audio from any audio/video file.
@@ -72,18 +71,18 @@ function getFileSizeMB(filePath) {
 
 /**
  * Extract the first frame of a video as a JPEG thumbnail.
+ * Keep the source aspect ratio and letterbox into a 16:9 canvas to avoid stretching.
  */
 function extractThumbnail(inputPath, outputPath) {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
-      .screenshot({
-        timestamps: ['0'],
-        filename: 'thumbnail.jpg',
-        folder: path.dirname(outputPath),
-        size: '320x180',
-      })
+      .seekInput(0)
+      .frames(1)
+      .videoFilters('scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2:black')
+      .output(outputPath)
       .on('end', resolve)
       .on('error', reject)
+      .run()
   })
 }
 

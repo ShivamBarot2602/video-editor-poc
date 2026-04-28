@@ -74,5 +74,6 @@ module.exports = async function run({ audioPath, videoDir, language }) {
     }),
     segments,
     full_transcript: formatTranscript(segments),
+    _raw: response,
   }
 }

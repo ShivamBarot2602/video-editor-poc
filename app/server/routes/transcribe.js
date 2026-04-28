@@ -40,11 +40,18 @@ router.post('/:id', async (req, res) => {
     console.log(`[${id}] Running provider: ${provider}`)
     const result = await providerFn({ audioPath, videoDir, language, videoId: id })
 
-    // Persist result
-    fs.writeFileSync(transcriptionPath, JSON.stringify(result, null, 2), 'utf8')
+    // Separate raw API response (for debugging) from the normalized result
+    const { _raw, ...normalizedResult } = result
 
+    if (_raw !== undefined) {
+      const rawPath = path.join(videoDir, `raw_${provider}.json`)
+      fs.writeFileSync(rawPath, JSON.stringify(_raw, null, 2), 'utf8')
+      console.log(`[${id}] Raw response saved → raw_${provider}.json`)
+    }
+
+    fs.writeFileSync(transcriptionPath, JSON.stringify(normalizedResult, null, 2), 'utf8')
     console.log(`[${id}] Transcription saved`)
-    res.json(result)
+    res.json(normalizedResult)
   } catch (err) {
     console.error(`[${id}] Transcription error:`, err.message)
     res.status(500).json({ error: err.message })

@@ -62,7 +62,7 @@ app.get('/api/videos', (req, res) => {
         providers,
         hasBurned: files.some(f => f.startsWith('burned.')),
         uploadedAt: meta.uploadedAt || originalStat.mtime.toISOString(),
-        thumbnail: `/api/video/${id}/thumbnail`,
+        thumbnail: `/api/video/${id}/thumbnail?v=2`,
       })
     }
 
@@ -118,7 +118,7 @@ app.get('/api/video/:id/thumbnail', async (req, res) => {
     const original = files.find(f => f.startsWith('original.'))
     if (!original) return res.status(404).json({ error: 'Original file missing' })
 
-    const thumbnailPath = path.join(dir, 'thumbnail.jpg')
+    const thumbnailPath = path.join(dir, 'thumbnail_v2.jpg')
     
     // If thumbnail already exists, serve it
     if (fs.existsSync(thumbnailPath)) {

@@ -179,6 +179,7 @@ module.exports = async function run({ audioPath, language }) {
     }),
     segments,
     full_transcript: tx.full_transcript || formatTranscript(segments),
+    _raw: job,
   }
 }
 
