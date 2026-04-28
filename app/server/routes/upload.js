@@ -3,6 +3,7 @@ const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
+const { normalizeVideoExtension } = require('../lib/videoExtensions')
 
 const router = express.Router()
 
@@ -24,7 +25,7 @@ const storage = multer.diskStorage({
     cb(null, dir)
   },
   filename(_req, file, cb) {
-    const ext = path.extname(file.originalname).toLowerCase() || '.mp4'
+    const ext = normalizeVideoExtension(path.extname(file.originalname))
     cb(null, `original${ext}`)
   },
 })

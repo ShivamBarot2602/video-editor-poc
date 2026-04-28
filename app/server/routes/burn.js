@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const { buildAss } = require('../lib/assBuilder')
 const { burnSubtitles } = require('../lib/ffmpeg')
+const { normalizeVideoExtension } = require('../lib/videoExtensions')
 
 const router = express.Router()
 
@@ -32,7 +33,7 @@ router.post('/:id', async (req, res) => {
   }
 
   const originalPath = path.join(videoDir, originalFile)
-  const ext = path.extname(originalFile)
+  const ext = normalizeVideoExtension(path.extname(originalFile))
   const burnedPath = path.join(videoDir, `burned${ext}`)
   const assPath = path.join(videoDir, 'subtitles.ass')
 
