@@ -6,6 +6,7 @@ const fs = require('fs')
 
 const uploadRouter = require('./routes/upload')
 const transcribeRouter = require('./routes/transcribe')
+const prepareRouter = require('./routes/prepare')
 const burnRouter = require('./routes/burn')
 const { extractThumbnail } = require('./lib/ffmpeg')
 
@@ -26,6 +27,7 @@ app.use((req, _res, next) => {
 })
 
 app.use('/api/upload', uploadRouter)
+app.use('/api/prepare', prepareRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/burn', burnRouter)
 

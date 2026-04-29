@@ -196,6 +196,7 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
 /* ── Segment row ──────────────────────────────── */
 .segment-row {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   padding: 5px 10px;
   border-radius: 5px;

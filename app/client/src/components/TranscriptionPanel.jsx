@@ -11,8 +11,11 @@ function SpeakerBadge({ speaker }) {
   const hue = (speaker.charCodeAt(speaker.length - 1) * 37 + 180) % 360
   return (
     <span style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 99,
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', flexShrink: 0,
+      display: 'inline-flex', alignItems: 'center',
+      padding: '1px 6px', borderRadius: 99,
+      fontSize: 9, lineHeight: 1.2,
+      fontWeight: 700, letterSpacing: '0.05em',
+      flexShrink: 0, alignSelf: 'flex-start', whiteSpace: 'nowrap',
       background: `hsla(${hue},50%,40%,0.25)`,
       color: `hsl(${hue},60%,65%)`,
     }}>

@@ -31,7 +31,7 @@ function fmtDate(iso) {
   return d.toLocaleDateString()
 }
 
-function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime }) {
+function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId }) {
   const segments = transcription?.segments || null
   const rowRefs = useRef({})
 
@@ -62,7 +62,9 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
           style={{ flex: 1, fontSize: 11, padding: '3px 6px' }}
         >
           {PROVIDERS.map(p => (
-            <option key={p.id} value={p.id}>{p.label}</option>
+            <option key={p.id} value={p.id} disabled={p.id === disabledProviderId}>
+              {p.label}{p.id === disabledProviderId ? ' (selected in other panel)' : ''}
+            </option>
           ))}
         </select>
         {transcription && (
@@ -223,7 +225,6 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
             alignItems: 'center', justifyContent: 'center',
             gap: 10,
             background: 'var(--surface)',
-            opacity: 0.45,
           }}>
             <div style={{
               width: 36, height: 36,
@@ -231,10 +232,10 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
               borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'var(--text-faint)', fontSize: 16 }}>⛶</span>
+              <span style={{ color: 'var(--text-dim)', fontSize: 16 }}>⛶</span>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-faint)', fontWeight: 500 }}>{label}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, padding: '0 24px' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6, padding: '0 24px' }}>
               Upload a video to<br />start comparing
             </div>
           </div>
@@ -259,6 +260,29 @@ export default function PlaygroundPage() {
   const [leftProvider, setLeftProvider] = useState('assemblyai')
   const [rightProvider, setRightProvider] = useState('deepgram')
   const [currentTime, setCurrentTime] = useState(0)
+
+  const findAlternativeProvider = (excludeId) => {
+    const alt = PROVIDERS.find(p => p.id !== excludeId)
+    return alt ? alt.id : excludeId
+  }
+
+  const handleLeftProviderChange = (nextId) => {
+    if (nextId === rightProvider) {
+      setLeftProvider(nextId)
+      setRightProvider(findAlternativeProvider(nextId))
+      return
+    }
+    setLeftProvider(nextId)
+  }
+
+  const handleRightProviderChange = (nextId) => {
+    if (nextId === leftProvider) {
+      setRightProvider(nextId)
+      setLeftProvider(findAlternativeProvider(nextId))
+      return
+    }
+    setRightProvider(nextId)
+  }
 
   /* Load transcriptions for a video */
   const loadTranscriptions = (video) => {
@@ -307,6 +331,14 @@ export default function PlaygroundPage() {
 
   useEffect(() => { setCurrentTime(0) }, [selectedVideo?.id])
 
+  // Safety net: if state ever ends up equal (e.g., future changes), keep them distinct.
+  useEffect(() => {
+    if (leftProvider === rightProvider) {
+      setRightProvider(findAlternativeProvider(leftProvider))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftProvider, rightProvider])
+
   /* Path A: upload inside the playground empty state */
   const handleUpload = async (id, meta) => {
     toast.success(`Uploaded: ${meta.name}`)
@@ -330,21 +362,52 @@ export default function PlaygroundPage() {
   const runAll = async () => {
     if (!selectedVideo) return
     const toRun = PROVIDERS.filter(p => checked[p.id] && !transcriptions[p.id])
-    for (const p of toRun) {
-      setRunning(prev => ({ ...prev, [p.id]: true }))
+    if (toRun.length === 0) return
+
+    // Mark every provider as running immediately so the UI reflects all spinners at once
+    setRunning(prev => {
+      const next = { ...prev }
+      toRun.forEach(p => { next[p.id] = true })
+      return next
+    })
+
+    // ── Step 1: Prepare (extract audio exactly once) ──────────────────────
+    // All providers share the same audio.wav — do it upfront before firing
+    // parallel requests so there is no race condition on the file write.
+    try {
+      const prepRes = await fetch(`/api/prepare/${selectedVideo.id}`, { method: 'POST' })
+      if (!prepRes.ok) throw new Error('Audio preparation failed')
+    } catch (err) {
+      toast.error(`Preparation failed: ${err.message}`)
+      setRunning(prev => {
+        const next = { ...prev }
+        toRun.forEach(p => { next[p.id] = false })
+        return next
+      })
+      return
+    }
+
+    // ── Step 2: Fire all providers in parallel ────────────────────────────
+    // Each provider gets skipExtract: true so the server reuses the prepared
+    // audio.wav instead of re-running ffmpeg N times.
+    const transcribeOne = async (p) => {
       try {
         const res = await fetch(`/api/transcribe/${selectedVideo.id}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: p.id }),
+          body: JSON.stringify({ provider: p.id, skipExtract: true }),
         })
         if (res.ok) {
           const data = await res.json()
+          // Update this provider's result as soon as it resolves — don't wait for others
           setTranscriptions(prev => ({ ...prev, [p.id]: data }))
         }
       } catch (_) {}
+      // Clear spinner for this provider independently
       setRunning(prev => ({ ...prev, [p.id]: false }))
     }
+
+    await Promise.allSettled(toRun.map(p => transcribeOne(p)))
   }
 
   const handleUse = (providerId) => {
@@ -469,20 +532,22 @@ export default function PlaygroundPage() {
           <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
             <ProviderPanel
               providerId={leftProvider}
-              onProviderChange={setLeftProvider}
+              onProviderChange={handleLeftProviderChange}
               transcription={transcriptions[leftProvider] || null}
               onUse={handleUse}
               currentTime={currentTime}
+              disabledProviderId={rightProvider}
             />
           </Panel>
           <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
           <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
             <ProviderPanel
               providerId={rightProvider}
-              onProviderChange={setRightProvider}
+              onProviderChange={handleRightProviderChange}
               transcription={transcriptions[rightProvider] || null}
               onUse={handleUse}
               currentTime={currentTime}
+              disabledProviderId={leftProvider}
             />
           </Panel>
         </Group>

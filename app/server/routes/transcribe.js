@@ -8,7 +8,7 @@ const router = express.Router()
 
 router.post('/:id', async (req, res) => {
   const { id } = req.params
-  const { provider = 'assemblyai', language } = req.body
+  const { provider = 'assemblyai', language, skipExtract = false } = req.body
 
   const videoDir = path.join(req.videosDir, id)
   if (!fs.existsSync(videoDir)) {
@@ -32,12 +32,17 @@ router.post('/:id', async (req, res) => {
   const transcriptionPath = path.join(videoDir, `transcription_${provider}.json`)
 
   try {
-    // Extract audio (always re-extract so the wav is fresh)
-    console.log(`[${id}] Extracting audio…`)
-    await extractAudio(originalPath, audioPath)
+    // Skip extraction when the caller already ran /api/prepare (parallel runs),
+    // otherwise extract fresh (single-provider calls from the editor).
+    if (skipExtract && fs.existsSync(audioPath)) {
+      console.log(`[${id}][${provider}] Skipping audio extraction (prepared)`)
+    } else {
+      console.log(`[${id}][${provider}] Extracting audio…`)
+      await extractAudio(originalPath, audioPath)
+    }
 
     // Run transcription
-    console.log(`[${id}] Running provider: ${provider}`)
+    console.log(`[${id}][${provider}] Running provider…`)
     const result = await providerFn({ audioPath, videoDir, language, videoId: id })
 
     // Separate raw API response (for debugging) from the normalized result
@@ -50,10 +55,10 @@ router.post('/:id', async (req, res) => {
     }
 
     fs.writeFileSync(transcriptionPath, JSON.stringify(normalizedResult, null, 2), 'utf8')
-    console.log(`[${id}] Transcription saved`)
+    console.log(`[${id}][${provider}] Transcription saved`)
     res.json(normalizedResult)
   } catch (err) {
-    console.error(`[${id}] Transcription error:`, err.message)
+    console.error(`[${id}][${provider}] Transcription error:`, err.message)
     res.status(500).json({ error: err.message })
   }
 })

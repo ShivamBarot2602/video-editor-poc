@@ -50,15 +50,15 @@ export default function RecentVideos({ onSelect, onPlayground }) {
             background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
             border: '1px solid var(--border)', textAlign: 'left',
             display: 'flex', flexDirection: 'column',
-            transition: 'border-color 150ms, transform 150ms',
+            outline: '1px solid transparent',
+            transition: 'outline-color 150ms',
           }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
+          onMouseEnter={e => { e.currentTarget.style.outlineColor = 'var(--accent)' }}
+          onMouseLeave={e => { e.currentTarget.style.outlineColor = 'transparent' }}
         >
-          {/* Thumbnail — click opens editor */}
+          {/* Thumbnail */}
           <div
-            style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0, cursor: 'pointer' }}
-            onClick={() => onSelect(v)}
+            style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0 }}
           >
             {!thumbErrors[v.id] ? (
               <img
@@ -75,8 +75,7 @@ export default function RecentVideos({ onSelect, onPlayground }) {
           {/* Info */}
           <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
             <div
-              style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
-              onClick={() => onSelect(v)}
+              style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
             >
               {v.filename}
             </div>
