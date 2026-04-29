@@ -15,7 +15,7 @@
 const axios = require('axios')
 const FormData = require('form-data')
 const fs = require('fs')
-const { buildMetadata, formatTranscript } = require('./utils')
+const { buildMetadata, formatTranscript, normalizeSpeaker } = require('./utils')
 
 const PROVIDER = 'mistral'
 const MODEL    = 'voxtral-mini-latest'
@@ -61,9 +61,11 @@ module.exports = async function run({ audioPath, language }) {
   const detectedLanguage = response.language || language || 'unknown'
 
   const segments = rawSegments.map(seg => {
-    const speaker = seg.speaker
-      ? `SPEAKER_${String(seg.speaker).replace(/^SPEAKER_/i, '')}`
-      : 'SPEAKER_00'
+    // Mistral diarization label currently arrives as `speaker_id` (e.g. "speaker_1").
+    // Normalize to our cross-provider format: SPEAKER_00, SPEAKER_01, ...
+    const speaker = normalizeSpeaker(
+      seg.speaker ?? seg.speaker_id ?? seg.speakerId ?? seg.speakerID
+    )
 
     const words = wantWordTimestamps
       ? (seg.words || []).map(w => ({
