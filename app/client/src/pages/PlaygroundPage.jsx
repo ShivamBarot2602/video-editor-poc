@@ -397,7 +397,7 @@ export default function PlaygroundPage() {
 
   const runAll = async () => {
     if (!selectedVideo) return
-    const toRun = PROVIDERS.filter(p => checked[p.id] && !transcriptions[p.id])
+    const toRun = PROVIDERS.filter(p => checked[p.id])
     if (toRun.length === 0) return
 
     // Mark every provider as running immediately so the UI reflects all spinners at once
