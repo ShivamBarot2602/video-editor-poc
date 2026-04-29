@@ -187,7 +187,7 @@ export default function SubtitleOverlay({ segments, currentTime, style, containe
           ))
         })() : (
           <span>
-            {getPagedText(activeSegment.text, wordsPerPage, currentTime, activeSegment.start, activeSegment.end)}
+            {getPagedText(activeSegment.text_edited ?? activeSegment.text, wordsPerPage, currentTime, activeSegment.start, activeSegment.end)}
           </span>
         )}
       </div>

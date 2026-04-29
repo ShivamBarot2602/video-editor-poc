@@ -25,18 +25,25 @@ module.exports = async function run({ audioPath, language }) {
   const apiKey = process.env.MISTRAL_API_KEY
   if (!apiKey) throw new Error('MISTRAL_API_KEY is not set')
 
-  const wantWordTimestamps = !language // incompatible with explicit language
+  const wantWordTimestamps = !language
+  const wantDiarize = true
+  const allowWordTimestamps = wantWordTimestamps && !wantDiarize
 
   const form = new FormData()
   form.append('model', MODEL)
   form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
-  form.append('diarize', 'true')
+  form.append('diarize', String(wantDiarize))
 
   if (language) {
     form.append('language', language)
-  } else {
+  }
+
+  if (wantDiarize) {
+    form.append('timestamp_granularities[]', 'segment')
+  } else if (allowWordTimestamps) {
     // Word-level timestamps only available when language is auto-detected
-    // form.append('timestamp_granularities[]', 'word')
+    form.append('timestamp_granularities[]', 'word')
+  } else if (!language) {
     form.append('timestamp_granularities[]', 'segment')
   }
 
@@ -67,7 +74,7 @@ module.exports = async function run({ audioPath, language }) {
       seg.speaker ?? seg.speaker_id ?? seg.speakerId ?? seg.speakerID
     )
 
-    const words = wantWordTimestamps
+    const words = allowWordTimestamps
       ? (seg.words || []).map(w => ({
           word:  w.word  ?? w.text ?? '',
           start: w.start ?? 0,
@@ -106,7 +113,7 @@ module.exports = async function run({ audioPath, language }) {
       confidence: null,
       speakers,
       segmentCount: segments.length,
-      wordTimestamps: wantWordTimestamps && segments.some(s => s.words.length > 0),
+      wordTimestamps: allowWordTimestamps && segments.some(s => s.words.length > 0),
     }),
     segments,
     full_transcript: formatTranscript(segments),

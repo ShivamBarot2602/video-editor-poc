@@ -163,7 +163,10 @@ module.exports = async function run({ audioPath, language }) {
     .filter(w => w.word && Number.isFinite(w.start) && Number.isFinite(w.end))
 
   // Build segments from diarized_transcript
-  const diarizedSegments = Array.isArray(result.diarized_transcript) ? result.diarized_transcript : []
+  const diarizedSegments = Array.isArray(result.diarized_transcript)
+    ? result.diarized_transcript
+    : (Array.isArray(result.diarized_transcript?.entries) ? result.diarized_transcript.entries : [])
+    
   let segments = diarizedSegments
     .map(seg => {
       const start = Number(seg.start_time_seconds ?? 0)

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Group, Panel, Separator } from 'react-resizable-panels'
+import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import toast from 'react-hot-toast'
 import { PROVIDERS } from '../providers'
 import UploadZone from '../components/UploadZone'
+import SpeakerBadge from '../components/SpeakerBadge'
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
 
@@ -17,6 +18,19 @@ function fmtSize(bytes) {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 ** 2)).toFixed(1)} MB`
   return `${(bytes / 1024).toFixed(0)} KB`
+}
+
+function scrollRowIntoView(containerEl, rowEl, padding = 12) {
+  if (!containerEl || !rowEl) return
+  const containerRect = containerEl.getBoundingClientRect()
+  const rowRect = rowEl.getBoundingClientRect()
+  const topLimit = containerRect.top + padding
+  const bottomLimit = containerRect.bottom - padding
+  if (rowRect.top < topLimit) {
+    containerEl.scrollTop = Math.max(0, containerEl.scrollTop - (topLimit - rowRect.top))
+  } else if (rowRect.bottom > bottomLimit) {
+    containerEl.scrollTop = Math.max(0, containerEl.scrollTop + (rowRect.bottom - bottomLimit))
+  }
 }
 
 function fmtDate(iso) {
@@ -34,15 +48,16 @@ function fmtDate(iso) {
 function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId }) {
   const segments = transcription?.segments || null
   const rowRefs = useRef({})
+  const listRef = useRef(null)
+  const prov = PROVIDERS.find(p => p.id === providerId)
 
   const activeIdx = segments
     ? segments.findIndex(seg => currentTime >= seg.start && currentTime < seg.end)
     : -1
 
   useEffect(() => {
-    if (activeIdx >= 0 && rowRefs.current[activeIdx]) {
-      rowRefs.current[activeIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
+    if (activeIdx < 0) return
+    scrollRowIntoView(listRef.current, rowRefs.current[activeIdx])
   }, [activeIdx])
 
   return (
@@ -69,6 +84,9 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
         </select>
         {transcription && (
           <>
+            {transcription.metadata?.word_timestamps && (
+              <span style={{ color: 'var(--accent)', fontSize: 10, whiteSpace: 'nowrap' }}>⚡</span>
+            )}
             {transcription.metadata?.confidence && (
               <span style={{ color: 'var(--success)', fontSize: 10, whiteSpace: 'nowrap' }}>
                 {(transcription.metadata.confidence * 100).toFixed(0)}%
@@ -86,7 +104,7 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
       </div>
 
       {/* Segments */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto' }}>
         {!segments ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Not yet transcribed</span>
@@ -108,6 +126,9 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
               <span style={{ color: 'var(--text-faint)', fontSize: 10, minWidth: 28, paddingTop: 1, flexShrink: 0 }}>
                 {fmtTime(seg.start)}
               </span>
+              {seg.speaker && prov?.diarization !== false && (
+                <SpeakerBadge speaker={seg.speaker} />
+              )}
               <span style={{
                 fontSize: 11, lineHeight: 1.5,
                 color: isActive ? 'var(--text-bright)' : 'var(--text-muted)',
@@ -251,7 +272,18 @@ export default function PlaygroundPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const videoParam = searchParams.get('video')
 
+  const { defaultLayout: outerDefaultLayout, onLayoutChanged: onOuterLayoutChanged } = useDefaultLayout({
+    id: 'sp-video-editor:playground-layout:v1',
+    storage: localStorage,
+  })
+
+  const { defaultLayout: innerDefaultLayout, onLayoutChanged: onInnerLayoutChanged } = useDefaultLayout({
+    id: 'sp-video-editor:playground-compare-layout:v1',
+    storage: localStorage,
+  })
+
   const videoRef = useRef(null)
+  const selectAllRef = useRef(null)
   const [allVideos, setAllVideos] = useState(null)      // all videos — for empty-state list
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [checked, setChecked] = useState({})
@@ -261,28 +293,18 @@ export default function PlaygroundPage() {
   const [rightProvider, setRightProvider] = useState('deepgram')
   const [currentTime, setCurrentTime] = useState(0)
 
-  const findAlternativeProvider = (excludeId) => {
-    const alt = PROVIDERS.find(p => p.id !== excludeId)
-    return alt ? alt.id : excludeId
-  }
-
   const handleLeftProviderChange = (nextId) => {
-    if (nextId === rightProvider) {
-      setLeftProvider(nextId)
-      setRightProvider(findAlternativeProvider(nextId))
-      return
-    }
+    if (nextId === rightProvider) setRightProvider(leftProvider)
     setLeftProvider(nextId)
   }
 
   const handleRightProviderChange = (nextId) => {
-    if (nextId === leftProvider) {
-      setRightProvider(nextId)
-      setLeftProvider(findAlternativeProvider(nextId))
-      return
-    }
+    if (nextId === leftProvider) setLeftProvider(rightProvider)
     setRightProvider(nextId)
   }
+
+  const allSelected = PROVIDERS.every(p => checked[p.id])
+  const anySelected = PROVIDERS.some(p => checked[p.id])
 
   /* Load transcriptions for a video */
   const loadTranscriptions = (video) => {
@@ -331,10 +353,16 @@ export default function PlaygroundPage() {
 
   useEffect(() => { setCurrentTime(0) }, [selectedVideo?.id])
 
-  // Safety net: if state ever ends up equal (e.g., future changes), keep them distinct.
+  useEffect(() => {
+    if (!selectAllRef.current) return
+    selectAllRef.current.indeterminate = anySelected && !allSelected
+  }, [anySelected, allSelected])
+
+  // Safety net: if state ever ends up equal, keep them distinct.
   useEffect(() => {
     if (leftProvider === rightProvider) {
-      setRightProvider(findAlternativeProvider(leftProvider))
+      const alt = PROVIDERS.find(p => p.id !== leftProvider)
+      if (alt) setRightProvider(alt.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leftProvider, rightProvider])
@@ -358,6 +386,14 @@ export default function PlaygroundPage() {
   }
 
   const toggleProvider = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
+  const toggleAllProviders = () => {
+    const nextValue = !allSelected
+    setChecked(prev => {
+      const next = { ...prev }
+      PROVIDERS.forEach(p => { next[p.id] = nextValue })
+      return next
+    })
+  }
 
   const runAll = async () => {
     if (!selectedVideo) return
@@ -427,10 +463,15 @@ export default function PlaygroundPage() {
 
   /* ── Paths A (after upload), B, C: Full comparison view ── */
   return (
-    <Group orientation="horizontal" style={{ flex: 1, height: '100%' }}>
+    <Group
+      orientation="horizontal"
+      defaultLayout={outerDefaultLayout}
+      onLayoutChanged={onOuterLayoutChanged}
+      style={{ flex: 1, height: '100%' }}
+    >
 
       {/* LEFT: sidebar */}
-      <Panel defaultSize="22%" minSize="16%" maxSize="35%"
+      <Panel id="sidebar" defaultSize="22%" minSize="16%" maxSize="35%"
         style={{ background: 'var(--surface-dark)', borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ display: 'flex', flexDirection: 'column', padding: 14, gap: 12, height: '100%', overflow: 'hidden' }}>
 
@@ -471,6 +512,16 @@ export default function PlaygroundPage() {
             <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Transcribe Providers
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer' }}>
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAllProviders}
+                style={{ accentColor: 'var(--accent)', width: 11, height: 11, flexShrink: 0 }}
+              />
+              <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>Select all</span>
+            </label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {PROVIDERS.map(p => {
                 const tx = transcriptions[p.id]
@@ -504,10 +555,10 @@ export default function PlaygroundPage() {
             <button
               className="btn btn-primary btn-full"
               onClick={runAll}
-              disabled={Object.keys(running).some(k => running[k])}
+              disabled={!anySelected || Object.keys(running).some(k => running[k])}
               style={{ fontSize: 12, padding: '7px' }}
             >
-              ▶ Run All
+              ▶ Run Selected
             </button>
             <button
               className="btn btn-outline btn-full btn-sm"
@@ -527,9 +578,14 @@ export default function PlaygroundPage() {
       <Separator className="panel-resize-handle" />
 
       {/* RIGHT: comparison panels */}
-      <Panel style={{ overflow: 'hidden' }}>
-        <Group orientation="horizontal" style={{ height: '100%', padding: 14, gap: 0 }}>
-          <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
+      <Panel id="content" defaultSize="78%" minSize="65%" style={{ overflow: 'hidden' }}>
+        <Group
+          orientation="horizontal"
+          defaultLayout={innerDefaultLayout}
+          onLayoutChanged={onInnerLayoutChanged}
+          style={{ height: '100%', padding: 14, gap: 0 }}
+        >
+          <Panel id="left" defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
             <ProviderPanel
               providerId={leftProvider}
               onProviderChange={handleLeftProviderChange}
@@ -540,7 +596,7 @@ export default function PlaygroundPage() {
             />
           </Panel>
           <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
-          <Panel defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
+          <Panel id="right" defaultSize="50%" minSize="25%" style={{ overflow: 'hidden', display: 'flex' }}>
             <ProviderPanel
               providerId={rightProvider}
               onProviderChange={handleRightProviderChange}

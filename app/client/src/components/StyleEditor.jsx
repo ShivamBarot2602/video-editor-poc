@@ -216,16 +216,6 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             />
           </Field>
 
-          <SliderField label="Quality (CRF)" value={style.quality} min={15} max={35} onChange={set('quality')} />
-
-          <Field label="Burn Mode">
-            <div style={{
-              background: 'var(--surface-2)', border: '1px solid var(--border)',
-              borderRadius: 4, padding: '5px 8px', fontSize: 11, color: 'var(--text-dim)',
-            }}>
-              Hardcode (ASS)
-            </div>
-          </Field>
 
           <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {!isDone && (

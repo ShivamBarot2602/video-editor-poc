@@ -86,6 +86,61 @@ app.get('/api/transcription/:id/:provider', (req, res) => {
   }
 })
 
+// PATCH /api/transcription/:id/:provider
+// Body: { speaker_aliases?: { [speakerId]: string }, segment_edits?: { [index]: string | null } }
+// speaker_aliases: empty string value clears the alias (reverts to raw speaker ID)
+// segment_edits: string value sets text_edited on that segment; null removes it
+app.patch('/api/transcription/:id/:provider', (req, res) => {
+  const file = path.join(VIDEOS_DIR, req.params.id, `transcription_${req.params.provider}.json`)
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Transcription not found' })
+
+  const body = req.body || {}
+  const incomingAliases = body.speaker_aliases
+  const incomingEdits   = body.segment_edits
+
+  const hasAliases = incomingAliases && typeof incomingAliases === 'object' && !Array.isArray(incomingAliases)
+  const hasEdits   = incomingEdits   && typeof incomingEdits   === 'object' && !Array.isArray(incomingEdits)
+
+  if (!hasAliases && !hasEdits) {
+    return res.status(400).json({ error: 'speaker_aliases or segment_edits required' })
+  }
+
+  try {
+    const tx = JSON.parse(fs.readFileSync(file, 'utf8'))
+
+    if (hasAliases) {
+      const prev = tx?.metadata?.speaker_aliases && typeof tx.metadata.speaker_aliases === 'object'
+        ? tx.metadata.speaker_aliases : {}
+      const next = { ...prev }
+      for (const [speakerId, aliasRaw] of Object.entries(incomingAliases)) {
+        const alias = String(aliasRaw ?? '').trim()
+        if (!alias) delete next[String(speakerId)]
+        else next[String(speakerId)] = alias
+      }
+      tx.metadata = { ...(tx.metadata || {}), speaker_aliases: next }
+    }
+
+    if (hasEdits && Array.isArray(tx.segments)) {
+      for (const [idxStr, editedText] of Object.entries(incomingEdits)) {
+        const idx = parseInt(idxStr, 10)
+        if (isNaN(idx) || idx < 0 || idx >= tx.segments.length) continue
+        if (editedText == null) {
+          delete tx.segments[idx].text_edited
+        } else {
+          const trimmed = String(editedText).trim()
+          if (trimmed) tx.segments[idx].text_edited = trimmed
+          else delete tx.segments[idx].text_edited
+        }
+      }
+    }
+
+    fs.writeFileSync(file, JSON.stringify(tx, null, 2), 'utf8')
+    res.json(tx)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Serve original video file
 app.get('/api/video/:id', (req, res) => {
   const dir = path.join(VIDEOS_DIR, req.params.id)

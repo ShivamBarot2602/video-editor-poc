@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Group, Panel, Separator } from 'react-resizable-panels'
+import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
@@ -32,6 +32,16 @@ export default function EditorPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
+  const { defaultLayout: editorDefaultLayout, onLayoutChanged: onEditorLayoutChanged } = useDefaultLayout({
+    id: 'sp-video-editor:editor-layout:v1',
+    storage: localStorage,
+  })
+
+  const { defaultLayout: editorMainDefaultLayout, onLayoutChanged: onEditorMainLayoutChanged } = useDefaultLayout({
+    id: 'sp-video-editor:editor-main-vertical-layout:v1',
+    storage: localStorage,
+  })
+
   const [videoMeta, setVideoMeta] = useState(null)
   const [transcription, setTranscription] = useState(null)
   const [isTranscribing, setIsTranscribing] = useState(false)
@@ -42,6 +52,8 @@ export default function EditorPage() {
   const [style, setStyle] = useState(DEFAULT_STYLE)
   const [burnState, setBurnState] = useState({ status: 'idle', progress: 0, burnedUrl: null })
   const [loading, setLoading] = useState(true)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [speakerAliases, setSpeakerAliases] = useState({})
 
   const videoRef = useRef(null)
 
@@ -92,6 +104,78 @@ export default function EditorPage() {
       .catch(() => {})
   }, [selectedProvider, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Initialize speaker aliases from the loaded transcription JSON (server persisted)
+  useEffect(() => {
+    const aliases = transcription?.metadata?.speaker_aliases
+    if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases)) {
+      setSpeakerAliases({})
+      return
+    }
+    setSpeakerAliases(aliases)
+  }, [transcription])
+
+  // Ensure alias map contains any speakers present in the current transcription
+  useEffect(() => {
+    const speakers = transcription?.metadata?.speakers
+      || [...new Set((transcription?.segments || []).map(s => s.speaker).filter(Boolean))]
+    if (!speakers || speakers.length === 0) return
+    setSpeakerAliases(prev => {
+      const next = { ...(prev || {}) }
+      let changed = false
+      for (const sp of speakers) {
+        if (next[sp] == null) { next[sp] = ''; changed = true }
+      }
+      return changed ? next : prev
+    })
+  }, [transcription])
+
+  const persistSpeakerAliases = useCallback(async (aliases) => {
+    if (!videoId || !selectedProvider) return
+    try {
+      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speaker_aliases: aliases || {} }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to save speaker names')
+      }
+      const updated = await res.json()
+      // Keep local transcription in sync so refresh/download reflect server state.
+      setTranscription(updated)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }, [videoId, selectedProvider])
+
+  const handleSegmentEdit = useCallback(async (segIdx, newText) => {
+    if (!videoId || !selectedProvider) return
+    try {
+      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ segment_edits: { [segIdx]: newText } }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to save edit')
+      }
+      setTranscription(await res.json())
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }, [videoId, selectedProvider])
+
+  const handleSpeakerAliasesChange = useCallback((updater) => {
+    setSpeakerAliases(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      // Fire-and-forget persistence to server
+      persistSpeakerAliases(next)
+      return next
+    })
+  }, [persistSpeakerAliases])
+
   const handleTranscribe = useCallback(async () => {
     if (!videoId) return
     setIsTranscribing(true)
@@ -117,12 +201,23 @@ export default function EditorPage() {
 
   const handleDownloadTranscription = useCallback(() => {
     if (!transcription) return
-    const blob = new Blob([JSON.stringify(transcription, null, 2)], { type: 'application/json' })
+    const payload = {
+      ...transcription,
+      metadata: {
+        ...(transcription.metadata || {}),
+        speaker_aliases: speakerAliases || {},
+      },
+      segments: (transcription.segments || []).map(seg => ({
+        ...seg,
+        speaker_display: (speakerAliases?.[seg.speaker] || '').trim() || seg.speaker,
+      })),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = `transcription_${selectedProvider}.json`; a.click()
     URL.revokeObjectURL(url)
-  }, [transcription, selectedProvider])
+  }, [transcription, selectedProvider, speakerAliases])
 
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return
@@ -199,26 +294,52 @@ export default function EditorPage() {
       </div>
 
       {/* Editor body — resizable panels */}
-      <Group orientation="horizontal" style={{ flex: 1, overflow: 'hidden' }}>
+      <Group
+        orientation="horizontal"
+        defaultLayout={editorDefaultLayout}
+        onLayoutChanged={onEditorLayoutChanged}
+        style={{ flex: 1, overflow: 'hidden' }}
+      >
 
-        {/* Left: video + transcription */}
-        <Panel defaultSize="83%" minSize="50%" style={{ overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <VideoPlayer
-              videoId={videoId}
-              transcription={transcription}
-              style={style}
-              videoRef={videoRef}
-            />
-            <TranscriptionPanel
-              transcription={transcription}
-              isTranscribing={isTranscribing}
-              selectedProvider={selectedProvider}
-              onProviderChange={setSelectedProvider}
-              onTranscribe={handleTranscribe}
-              onDownload={handleDownloadTranscription}
-              availableProviders={availableProviders}
-            />
+        {/* Left: video + transcription (vertically resizable) */}
+        <Panel id="main" defaultSize="83%" minSize="50%" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ padding: 16, flex: 1, minHeight: 0 }}>
+            <Group
+              orientation="vertical"
+              defaultLayout={editorMainDefaultLayout}
+              onLayoutChanged={onEditorMainLayoutChanged}
+              style={{ height: '100%', overflow: 'hidden' }}
+            >
+              <Panel id="video" defaultSize="68%" minSize="25%" style={{ overflow: 'hidden', minHeight: 0 }}>
+                <VideoPlayer
+                  videoId={videoId}
+                  transcription={transcription}
+                  style={style}
+                  videoRef={videoRef}
+                  onTimeChange={setCurrentTime}
+                  fillHeight
+                />
+              </Panel>
+
+              <Separator className="panel-resize-handle vertical" />
+
+              <Panel id="transcription" defaultSize="32%" minSize="20%" style={{ overflow: 'hidden', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                <TranscriptionPanel
+                  transcription={transcription}
+                  isTranscribing={isTranscribing}
+                  selectedProvider={selectedProvider}
+                  onProviderChange={setSelectedProvider}
+                  onTranscribe={handleTranscribe}
+                  onDownload={handleDownloadTranscription}
+                  availableProviders={availableProviders}
+                  currentTime={currentTime}
+                  speakerAliases={speakerAliases}
+                  onSpeakerAliasesChange={handleSpeakerAliasesChange}
+                  onSegmentEdit={handleSegmentEdit}
+                  listMaxHeight={null}
+                />
+              </Panel>
+            </Group>
           </div>
         </Panel>
 
@@ -226,7 +347,7 @@ export default function EditorPage() {
         <Separator className="panel-resize-handle" />
 
         {/* Right: tabbed sidebar */}
-        <Panel defaultSize="17%" minSize="14%" maxSize="50%"
+        <Panel id="sidebar" defaultSize="17%" minSize="14%" maxSize="50%"
           style={{ background: 'var(--surface)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <StyleEditor
             style={style}

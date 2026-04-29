@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import SubtitleOverlay from './SubtitleOverlay'
 
-export default function VideoPlayer({ videoId, transcription, style, videoRef: externalRef }) {
+export default function VideoPlayer({ videoId, transcription, style, videoRef: externalRef, onTimeChange, fillHeight = false }) {
   const internalRef = useRef(null)
   const containerRef = useRef(null)
   const videoRef = externalRef || internalRef
@@ -13,10 +13,20 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const onTime = () => setCurrentTime(video.currentTime)
+    const onTime = () => {
+      const t = video.currentTime
+      setCurrentTime(t)
+      onTimeChange?.(t)
+    }
     video.addEventListener('timeupdate', onTime)
-    return () => video.removeEventListener('timeupdate', onTime)
-  }, [videoRef])
+    video.addEventListener('seeked', onTime)
+    video.addEventListener('loadedmetadata', onTime)
+    return () => {
+      video.removeEventListener('timeupdate', onTime)
+      video.removeEventListener('seeked', onTime)
+      video.removeEventListener('loadedmetadata', onTime)
+    }
+  }, [videoRef, onTimeChange])
 
   // Track rendered video size (accounts for letterboxing)
   useEffect(() => {
@@ -34,16 +44,30 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
   const videoUrl = `/api/video/${videoId}`
 
   return (
-    <div>
+    <div style={fillHeight ? { height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' } : null}>
       <div
         ref={containerRef}
-        style={{ position: 'relative', background: '#000', borderRadius: 10, overflow: 'hidden' }}
+        style={{
+          position: 'relative',
+          background: '#000',
+          borderRadius: 10,
+          overflow: 'hidden',
+          ...(fillHeight ? { flex: 1, minHeight: 0 } : null),
+        }}
       >
         <video
           ref={videoRef}
           src={videoUrl}
           controls
-          style={{ width: '100%', display: 'block', maxHeight: '60vh', objectFit: 'contain' }}
+          style={{
+            width: '100%',
+            display: 'block',
+            objectFit: 'contain',
+            ...(fillHeight
+              ? { height: '100%', maxHeight: '100%' }
+              : { maxHeight: '60vh' }
+            ),
+          }}
           onLoadedMetadata={() => {
             const v = videoRef.current
             if (v) setVideoDimensions({ width: v.clientWidth, height: v.clientHeight })

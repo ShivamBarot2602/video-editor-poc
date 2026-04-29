@@ -48,6 +48,27 @@ router.post('/:id', async (req, res) => {
     // Separate raw API response (for debugging) from the normalized result
     const { _raw, ...normalizedResult } = result
 
+    // Preserve speaker aliases if a previous transcription exists
+    let preservedAliases = null
+    if (fs.existsSync(transcriptionPath)) {
+      try {
+        const prev = JSON.parse(fs.readFileSync(transcriptionPath, 'utf8'))
+        const prevAliases = prev?.metadata?.speaker_aliases
+        if (prevAliases && typeof prevAliases === 'object' && !Array.isArray(prevAliases)) {
+          preservedAliases = prevAliases
+        }
+      } catch (_) {
+        // ignore parse errors
+      }
+    }
+
+    if (preservedAliases) {
+      normalizedResult.metadata = {
+        ...(normalizedResult.metadata || {}),
+        speaker_aliases: preservedAliases,
+      }
+    }
+
     if (_raw !== undefined) {
       const rawPath = path.join(videoDir, `raw_${provider}.json`)
       fs.writeFileSync(rawPath, JSON.stringify(_raw, null, 2), 'utf8')

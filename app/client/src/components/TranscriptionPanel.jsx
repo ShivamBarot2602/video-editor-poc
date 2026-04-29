@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PROVIDERS } from '../providers'
+import SpeakerBadge from './SpeakerBadge'
 
 function fmtTime(s) {
   const m = Math.floor(s / 60)
@@ -7,19 +8,38 @@ function fmtTime(s) {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-function SpeakerBadge({ speaker }) {
-  const hue = (speaker.charCodeAt(speaker.length - 1) * 37 + 180) % 360
+function scrollRowIntoView(containerEl, rowEl, padding = 12) {
+  if (!containerEl || !rowEl) return
+  const containerRect = containerEl.getBoundingClientRect()
+  const rowRect = rowEl.getBoundingClientRect()
+  const topLimit = containerRect.top + padding
+  const bottomLimit = containerRect.bottom - padding
+  if (rowRect.top < topLimit) {
+    containerEl.scrollTop = Math.max(0, containerEl.scrollTop - (topLimit - rowRect.top))
+  } else if (rowRect.bottom > bottomLimit) {
+    containerEl.scrollTop = Math.max(0, containerEl.scrollTop + (rowRect.bottom - bottomLimit))
+  }
+}
+
+function SegmentWords({ words, currentTime }) {
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      padding: '1px 6px', borderRadius: 99,
-      fontSize: 9, lineHeight: 1.2,
-      fontWeight: 700, letterSpacing: '0.05em',
-      flexShrink: 0, alignSelf: 'flex-start', whiteSpace: 'nowrap',
-      background: `hsla(${hue},50%,40%,0.25)`,
-      color: `hsl(${hue},60%,65%)`,
-    }}>
-      {speaker}
+    <span style={{ fontSize: 12, lineHeight: 1.5, flex: 1, wordBreak: 'break-word' }}>
+      {words.map((w, i) => {
+        const isActive = currentTime >= w.start && currentTime <= w.end
+        const isPast   = currentTime > w.end
+        return (
+          <span
+            key={i}
+            style={{
+              color: isActive ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--text-faint)',
+              fontWeight: isActive ? 600 : 400,
+              transition: 'color 80ms linear',
+            }}
+          >
+            {w.word}{i < words.length - 1 ? ' ' : ''}
+          </span>
+        )
+      })}
     </span>
   )
 }
@@ -37,13 +57,76 @@ export default function TranscriptionPanel({
   transcription, isTranscribing,
   selectedProvider, onProviderChange, onTranscribe, onDownload,
   availableProviders = [],
+  currentTime,
+  speakerAliases = {},
+  onSpeakerAliasesChange,
+  onSegmentEdit,
+  listMaxHeight = 280,
 }) {
   const [activeSegIdx, setActiveSegIdx] = useState(null)
+  const [editingSegIdx, setEditingSegIdx] = useState(null)
+  const [editingSegText, setEditingSegText] = useState('')
+  const listRef = useRef(null)
+  const rowRefs = useRef({})
+  const editTextareaRef = useRef(null)
   const meta = transcription?.metadata
   const prov = PROVIDERS.find(p => p.id === selectedProvider)
 
+  const playingSegIdx = useMemo(() => {
+    if (!transcription?.segments || typeof currentTime !== 'number') return null
+    const segments = transcription.segments
+    for (let i = 0; i < segments.length; i++) {
+      if (currentTime >= segments[i].start && currentTime <= segments[i].end) return i
+    }
+    return null
+  }, [transcription, currentTime])
+
+  useEffect(() => {
+    if (playingSegIdx == null) return
+    scrollRowIntoView(listRef.current, rowRefs.current[playingSegIdx])
+  }, [playingSegIdx])
+
+  // Auto-focus + resize textarea when entering edit mode
+  useEffect(() => {
+    if (editingSegIdx == null || !editTextareaRef.current) return
+    const el = editTextareaRef.current
+    el.focus()
+    el.select()
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editingSegIdx])
+
+  const startSegmentEdit = (e, i) => {
+    e.stopPropagation()
+    const seg = transcription.segments[i]
+    setEditingSegIdx(i)
+    setEditingSegText(seg.text_edited ?? seg.text)
+  }
+
+  const commitSegmentEdit = () => {
+    if (editingSegIdx == null) return
+    const trimmed = editingSegText.trim()
+    if (trimmed && onSegmentEdit) {
+      const originalText = transcription.segments[editingSegIdx].text
+      // null = remove the override (revert to original transcription text)
+      onSegmentEdit(editingSegIdx, trimmed === originalText ? null : trimmed)
+    }
+    setEditingSegIdx(null)
+  }
+
+  const cancelSegmentEdit = () => setEditingSegIdx(null)
+
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+    <div style={{
+      background: 'var(--surface)',
+      borderRadius: 8,
+      overflow: 'hidden',
+      border: '1px solid var(--border)',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      minHeight: 0,
+    }}>
 
       {/* Controls row */}
       <div style={{
@@ -100,7 +183,16 @@ export default function TranscriptionPanel({
         }}>
           <span><strong style={{ color: 'var(--text-muted)' }}>{meta.provider}</strong> · {meta.model}</span>
           {meta.detected_language && <span>Lang: <strong style={{ color: 'var(--text-muted)' }}>{meta.detected_language}</strong></span>}
-          {meta.speakers?.length > 0 && <span>Speakers: <strong style={{ color: 'var(--text-muted)' }}>{meta.speakers.length}</strong></span>}
+          <span>
+            Speakers:{' '}
+            {prov && !prov.diarization
+              ? <strong style={{ color: 'var(--text-faint)' }}>N/A</strong>
+              : <strong style={{ color: 'var(--text-muted)' }}>{meta.speakers?.length ?? '—'}</strong>
+            }
+          </span>
+          {meta.word_timestamps && (
+            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>⚡ Word-level</span>
+          )}
           {meta.segment_count != null && <span>Segments: <strong style={{ color: 'var(--text-muted)' }}>{meta.segment_count}</strong></span>}
           {meta.audio_duration_s && <span>Duration: <strong style={{ color: 'var(--text-muted)' }}>{fmtTime(meta.audio_duration_s)}</strong></span>}
           {meta.confidence && <span>Conf: <strong style={{ color: 'var(--text-muted)' }}>{(meta.confidence * 100).toFixed(1)}%</strong></span>}
@@ -115,7 +207,16 @@ export default function TranscriptionPanel({
       )}
 
       {/* Segment list */}
-      <div style={{ maxHeight: 280, overflowY: 'auto', padding: '4px 0' }}>
+      <div
+        ref={listRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          padding: '4px 0',
+          ...(listMaxHeight == null ? null : { maxHeight: listMaxHeight }),
+        }}
+      >
         {!transcription && !isTranscribing && (
           <p style={{ color: 'var(--text-faint)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
             Select a provider and click Transcribe to get started.
@@ -126,25 +227,87 @@ export default function TranscriptionPanel({
             <Spinner /> Processing with {selectedProvider}…
           </div>
         )}
-        {transcription?.segments.map((seg, i) => (
-          <div
-            key={i}
-            className={`segment-row ${activeSegIdx === i ? 'active' : ''}`}
-            onClick={() => setActiveSegIdx(activeSegIdx === i ? null : i)}
-          >
-            <span style={{ color: 'var(--text-faint)', fontSize: 10, flexShrink: 0, paddingTop: 2, minWidth: 32 }}>
-              {fmtTime(seg.start)}
-            </span>
-            <SpeakerBadge speaker={seg.speaker} />
-            <span style={{ color: activeSegIdx === i ? 'var(--text-bright)' : 'var(--text-muted)', fontSize: 12, lineHeight: 1.5, flex: 1 }}>
-              {seg.text}
-            </span>
-            <div className="seg-actions">
-              <span title="Edit" style={{ color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: '0 2px' }}>✎</span>
-              <span title="Delete" style={{ color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: '0 2px' }}>✕</span>
+        {transcription?.segments.map((seg, i) => {
+          const isEditing = editingSegIdx === i
+          const isActive = activeSegIdx === i
+          const isPlaying = playingSegIdx === i
+
+          return (
+            <div
+              key={i}
+              ref={el => { rowRefs.current[i] = el }}
+              className={`segment-row ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}`}
+              onClick={() => { if (!isEditing) setActiveSegIdx(isActive ? null : i) }}
+            >
+              <span style={{ color: 'var(--text-faint)', fontSize: 10, flexShrink: 0, minWidth: 32, lineHeight: 1.2 }}>
+                {fmtTime(seg.start)}
+              </span>
+
+              {prov?.diarization !== false && (
+                <span className="speaker-slot">
+                  <SpeakerBadge
+                    speaker={seg.speaker}
+                    label={(speakerAliases?.[seg.speaker] || '').trim() || seg.speaker}
+                    onSave={onSpeakerAliasesChange ? (newLabel) => {
+                      const trimmed = newLabel.trim()
+                      onSpeakerAliasesChange(prev => ({
+                        ...(prev || {}),
+                        [seg.speaker]: trimmed === seg.speaker ? '' : trimmed,
+                      }))
+                    } : undefined}
+                  />
+                </span>
+              )}
+
+              {isEditing ? (
+                <textarea
+                  ref={editTextareaRef}
+                  value={editingSegText}
+                  onChange={e => setEditingSegText(e.target.value)}
+                  onBlur={commitSegmentEdit}
+                  onKeyDown={e => {
+                    e.stopPropagation()
+                    if (e.key === 'Escape') { e.preventDefault(); cancelSegmentEdit() }
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitSegmentEdit() }
+                  }}
+                  onInput={e => {
+                    e.target.style.height = 'auto'
+                    e.target.style.height = `${e.target.scrollHeight}px`
+                  }}
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    flex: 1, resize: 'none', overflow: 'hidden',
+                    background: 'transparent', border: 'none', outline: 'none',
+                    color: 'var(--text-bright)', fontSize: 12, lineHeight: 1.5,
+                    fontFamily: 'inherit', padding: 0, minHeight: '1.5em',
+                  }}
+                />
+              ) : isPlaying && seg.words?.length > 0 && !seg.text_edited ? (
+                <SegmentWords words={seg.words} currentTime={currentTime} />
+              ) : (
+                <span style={{
+                  color: (isActive || isPlaying) ? 'var(--text-bright)' : 'var(--text-muted)',
+                  fontSize: 12, lineHeight: 1.5, flex: 1,
+                }}>
+                  {seg.text_edited ?? seg.text}
+                  {seg.text_edited && (
+                    <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--text-faint)', fontStyle: 'italic' }}>edited</span>
+                  )}
+                </span>
+              )}
+
+              {onSegmentEdit && !isEditing && (
+                <div className="seg-actions">
+                  <span
+                    title="Edit text"
+                    onClick={(e) => startSegmentEdit(e, i)}
+                    style={{ color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: '0 2px' }}
+                  >✎</span>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
