@@ -15,6 +15,10 @@ export default function LandingPage() {
     navigate(`/editor/${video.id}`)
   }
 
+  const handleOpenPlayground = (video) => {
+    navigate(`/playground?video=${video.id}`)
+  }
+
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
 
@@ -60,7 +64,7 @@ export default function LandingPage() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px' }}>
-          <RecentVideos onSelect={handleSelect} />
+          <RecentVideos onSelect={handleSelect} onPlayground={handleOpenPlayground} />
         </div>
       </div>
     </div>

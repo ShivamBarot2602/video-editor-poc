@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
+import toast from 'react-hot-toast'
 import { PROVIDERS } from '../providers'
+import UploadZone from '../components/UploadZone'
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
 
@@ -9,6 +11,24 @@ function fmtTime(s) {
   const m = Math.floor(s / 60)
   const sec = Math.floor(s % 60)
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+function fmtSize(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 ** 2)).toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(0)} KB`
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso), now = new Date()
+  const mins = Math.floor((now - d) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return d.toLocaleDateString()
 }
 
 function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime }) {
@@ -113,10 +133,125 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
   )
 }
 
+/* ─── Empty State — Path A: direct nav to /playground ─── */
+function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
+  const [thumbErrors, setThumbErrors] = useState({})
+
+  return (
+    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
+
+      {/* Left: Upload + Recent Sessions */}
+      <div style={{
+        width: 300, flexShrink: 0,
+        background: 'var(--surface-dark)',
+        borderRight: '1px solid var(--border-sub)',
+        display: 'flex', flexDirection: 'column',
+        padding: 20, gap: 14, overflow: 'hidden',
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+          Upload Video
+        </div>
+
+        <div style={{ flexShrink: 0 }}>
+          <UploadZone onUpload={onUpload} compact />
+        </div>
+
+        {/* Recent sessions mini-list */}
+        <div style={{
+          flex: 1, minHeight: 0, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', gap: 10,
+          borderTop: '1px solid var(--border-sub)', paddingTop: 14,
+        }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+            Or pick a recent session
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {allVideos === null ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Loading…</span>
+            ) : allVideos.length === 0 ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>No sessions yet.</span>
+            ) : allVideos.map((v, i) => (
+              <button
+                key={v.id}
+                onClick={() => onSelectRecent(v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 0',
+                  borderBottom: i < allVideos.length - 1 ? '1px solid var(--border-sub)' : 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                  background: 'transparent', border: 'none', width: '100%',
+                  transition: 'opacity 150ms',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                {/* Mini thumbnail */}
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                  {!thumbErrors[v.id] ? (
+                    <img
+                      src={v.thumbnail}
+                      alt={v.filename}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))}
+                    />
+                  ) : (
+                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: 9 }}>▶</span>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {v.filename}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>
+                    {fmtSize(v.size)} · {fmtDate(v.uploadedAt)}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right: Empty comparison placeholders */}
+      <div style={{ flex: 1, display: 'flex', gap: 12, padding: 16, overflow: 'hidden' }}>
+        {['Provider A', 'Provider B'].map((label, i) => (
+          <div key={i} style={{
+            flex: 1,
+            border: '1.5px dashed var(--border)',
+            borderRadius: 8,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: 10,
+            background: 'var(--surface)',
+            opacity: 0.45,
+          }}>
+            <div style={{
+              width: 36, height: 36,
+              border: '1.5px dashed var(--border)',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: 'var(--text-faint)', fontSize: 16 }}>⛶</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-faint)', fontWeight: 500 }}>{label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center', lineHeight: 1.6, padding: '0 24px' }}>
+              Upload a video to<br />start comparing
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Main Playground Page ─── */
 export default function PlaygroundPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const videoParam = searchParams.get('video')
+
   const videoRef = useRef(null)
-  const [videos, setVideos] = useState(null)
+  const [allVideos, setAllVideos] = useState(null)      // all videos — for empty-state list
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [checked, setChecked] = useState({})
   const [transcriptions, setTranscriptions] = useState({})
@@ -125,32 +260,70 @@ export default function PlaygroundPage() {
   const [rightProvider, setRightProvider] = useState('deepgram')
   const [currentTime, setCurrentTime] = useState(0)
 
+  /* Load transcriptions for a video */
+  const loadTranscriptions = (video) => {
+    const initialChecked = {}
+    PROVIDERS.forEach(p => { initialChecked[p.id] = video.providers.includes(p.id) })
+    setChecked(initialChecked)
+    setTranscriptions({})
+    video.providers.forEach(async (pid) => {
+      try {
+        const res = await fetch(`/api/transcription/${video.id}/${pid}`)
+        if (res.ok) {
+          const data = await res.json()
+          setTranscriptions(prev => ({ ...prev, [pid]: data }))
+        }
+      } catch (_) {}
+    })
+  }
+
+  /* Select a video and load its transcriptions */
+  const selectVideo = (v) => {
+    setSelectedVideo(v)
+    setCurrentTime(0)
+    loadTranscriptions(v)
+  }
+
+  /* Initial fetch — respect ?video= param */
   useEffect(() => {
     fetch('/api/videos')
       .then(r => r.json())
       .then(vids => {
-        setVideos(vids)
-        if (vids.length > 0) {
-          const v = vids[0]
-          setSelectedVideo(v)
-          const initialChecked = {}
-          PROVIDERS.forEach(p => { initialChecked[p.id] = v.providers.includes(p.id) })
-          setChecked(initialChecked)
-          v.providers.forEach(async (pid) => {
-            try {
-              const res = await fetch(`/api/transcription/${v.id}/${pid}`)
-              if (res.ok) {
-                const data = await res.json()
-                setTranscriptions(prev => ({ ...prev, [pid]: data }))
-              }
-            } catch (_) {}
-          })
+        setAllVideos(vids)
+        if (videoParam) {
+          // Path B or C: specific video requested via URL
+          const v = vids.find(v => v.id === videoParam)
+          if (v) {
+            selectVideo(v)
+          } else {
+            toast.error('Video not found')
+            setSearchParams({}, { replace: true })
+          }
         }
+        // Path A: no param → stay in empty state (selectedVideo = null)
       })
-      .catch(() => setVideos([]))
-  }, [])
+      .catch(() => setAllVideos([]))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setCurrentTime(0) }, [selectedVideo?.id])
+
+  /* Path A: upload inside the playground empty state */
+  const handleUpload = async (id, meta) => {
+    toast.success(`Uploaded: ${meta.name}`)
+    const vids = await fetch('/api/videos').then(r => r.json())
+    setAllVideos(vids)
+    const v = vids.find(v => v.id === id)
+    if (v) {
+      selectVideo(v)
+      setSearchParams({ video: id }, { replace: true })
+    }
+  }
+
+  /* Path A: pick from recent sessions in empty state */
+  const handleSelectRecent = (v) => {
+    selectVideo(v)
+    setSearchParams({ video: v.id }, { replace: true })
+  }
 
   const toggleProvider = (id) => setChecked(prev => ({ ...prev, [id]: !prev[id] }))
 
@@ -178,6 +351,18 @@ export default function PlaygroundPage() {
     if (selectedVideo) navigate(`/editor/${selectedVideo.id}?provider=${providerId}`)
   }
 
+  /* ── Path A: No video selected → show empty / upload state ── */
+  if (!selectedVideo) {
+    return (
+      <PlaygroundEmptyState
+        allVideos={allVideos}
+        onUpload={handleUpload}
+        onSelectRecent={handleSelectRecent}
+      />
+    )
+  }
+
+  /* ── Paths A (after upload), B, C: Full comparison view ── */
   return (
     <Group orientation="horizontal" style={{ flex: 1, height: '100%' }}>
 
@@ -187,47 +372,36 @@ export default function PlaygroundPage() {
         <div style={{ display: 'flex', flexDirection: 'column', padding: 14, gap: 12, height: '100%', overflow: 'hidden' }}>
 
           {/* Video player */}
-          {selectedVideo ? (
-            <div style={{
-              width: '100%',
-              borderRadius: 6,
-              overflow: 'hidden',
-              flexShrink: 0,
-              background: '#000',
-              maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <video
-                ref={videoRef}
-                key={selectedVideo.id}
-                src={`/api/video/${selectedVideo.id}`}
-                controls
-                style={{
-                  width: '100%',
-                  maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
-                  objectFit: 'contain',
-                  display: 'block',
-                }}
-                onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
-              />
-            </div>
-          ) : (
-            <div style={{
-              position: 'relative',
-              width: '100%',
-              height: SIDEBAR_PREVIEW_MAX_HEIGHT,
-              background: 'var(--surface)',
-              borderRadius: 6,
-              flexShrink: 0,
-              border: '1px solid var(--border)',
-            }}>
-              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 11 }}>
-                {videos === null ? 'Loading…' : 'No video selected'}
-              </span>
-            </div>
-          )}
+          <div style={{
+            width: '100%',
+            borderRadius: 6,
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: '#000',
+            maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <video
+              ref={videoRef}
+              key={selectedVideo.id}
+              src={`/api/video/${selectedVideo.id}`}
+              controls
+              style={{
+                width: '100%',
+                maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
+                objectFit: 'contain',
+                display: 'block',
+              }}
+              onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
+            />
+          </div>
+
+          {/* Video name */}
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>
+            {selectedVideo.filename}
+          </div>
 
           {/* Provider checklist */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -267,17 +441,21 @@ export default function PlaygroundPage() {
             <button
               className="btn btn-primary btn-full"
               onClick={runAll}
-              disabled={!selectedVideo || Object.keys(running).some(k => running[k])}
+              disabled={Object.keys(running).some(k => running[k])}
               style={{ fontSize: 12, padding: '7px' }}
             >
               ▶ Run All
             </button>
             <button
               className="btn btn-outline btn-full btn-sm"
-              onClick={() => navigate('/')}
+              onClick={() => {
+                setSelectedVideo(null)
+                setTranscriptions({})
+                setSearchParams({}, { replace: true })
+              }}
               style={{ color: 'var(--text-dim)', fontSize: 11 }}
             >
-              ↑ Upload new video
+              ↑ Upload / Change video
             </button>
           </div>
         </div>

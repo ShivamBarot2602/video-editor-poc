@@ -189,6 +189,13 @@ export default function EditorPage() {
             {videoMeta.name}
           </span>
         )}
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => navigate(`/playground?video=${videoId}`)}
+          style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', flexShrink: 0 }}
+        >
+          ⛶ Open in Playground
+        </button>
       </div>
 
       {/* Editor body — resizable panels */}

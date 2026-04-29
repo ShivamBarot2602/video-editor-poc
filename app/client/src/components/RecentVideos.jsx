@@ -21,7 +21,7 @@ function fmtDate(iso) {
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 
-export default function RecentVideos({ onSelect }) {
+export default function RecentVideos({ onSelect, onPlayground }) {
   const [videos, setVideos] = useState(null)
   const [thumbErrors, setThumbErrors] = useState({})
 
@@ -44,20 +44,22 @@ export default function RecentVideos({ onSelect }) {
       gap: 10,
     }}>
       {videos.map(v => (
-        <button
+        <div
           key={v.id}
-          onClick={() => onSelect(v)}
           style={{
             background: 'var(--surface)', borderRadius: 8, overflow: 'hidden',
-            border: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left',
-            padding: 0, transition: 'border-color 150ms, transform 150ms',
+            border: '1px solid var(--border)', textAlign: 'left',
             display: 'flex', flexDirection: 'column',
+            transition: 'border-color 150ms, transform 150ms',
           }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)' }}
         >
-          {/* Thumbnail — 16:9 via padding-bottom intrinsic ratio */}
-          <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0 }}>
+          {/* Thumbnail — click opens editor */}
+          <div
+            style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0, cursor: 'pointer' }}
+            onClick={() => onSelect(v)}
+          >
             {!thumbErrors[v.id] ? (
               <img
                 src={v.thumbnail}
@@ -71,8 +73,11 @@ export default function RecentVideos({ onSelect }) {
           </div>
 
           {/* Info */}
-          <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            <div
+              style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+              onClick={() => onSelect(v)}
+            >
               {v.filename}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
@@ -97,7 +102,30 @@ export default function RecentVideos({ onSelect }) {
               )}
             </div>
           </div>
-        </button>
+
+          {/* Dual CTAs */}
+          <div style={{
+            padding: '6px 8px',
+            borderTop: '1px solid var(--border-sub)',
+            display: 'flex', gap: 5,
+            flexShrink: 0,
+          }}>
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ flex: 1, fontSize: 10, padding: '4px 0' }}
+              onClick={() => onSelect(v)}
+            >
+              Open in Editor
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)' }}
+              onClick={() => onPlayground && onPlayground(v)}
+            >
+              ⛶ Playground
+            </button>
+          </div>
+        </div>
       ))}
     </div>
   )

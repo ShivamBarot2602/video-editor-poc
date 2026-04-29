@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 const MAX_SIZE_MB = 500
 const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,audio/mpeg,audio/wav,audio/mp4'
 
-export default function UploadZone({ onUpload }) {
+export default function UploadZone({ onUpload, compact }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -56,7 +56,7 @@ export default function UploadZone({ onUpload }) {
   }, [upload])
 
   return (
-    <div style={{ width: '100%', maxWidth: 320 }}>
+    <div style={{ width: '100%', maxWidth: compact ? '100%' : 320 }}>
       <div
         onClick={() => !uploading && inputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -64,8 +64,8 @@ export default function UploadZone({ onUpload }) {
         onDrop={onDrop}
         style={{
           border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-          borderRadius: 12,
-          padding: '40px 32px',
+          borderRadius: 10,
+          padding: compact ? '22px 16px' : '40px 32px',
           textAlign: 'center',
           cursor: uploading ? 'default' : 'pointer',
           background: dragging ? 'var(--accent-dim)' : 'var(--surface-2)',
@@ -74,28 +74,35 @@ export default function UploadZone({ onUpload }) {
       >
         {uploading ? (
           <>
-            <p style={{ color: 'var(--text-muted)', fontWeight: 500, marginBottom: 12, fontSize: 13 }}>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500, marginBottom: 10, fontSize: compact ? 12 : 13 }}>
               Uploading… {progress}%
             </p>
-            <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', maxWidth: 200, margin: '0 auto' }}>
+            <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden', maxWidth: 180, margin: '0 auto' }}>
               <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 200ms' }} />
             </div>
           </>
         ) : (
           <>
-            <div style={{ fontSize: 32, marginBottom: 10, color: '#444' }}>▶</div>
-            <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>
-              Drop your video here
+            <div style={{ fontSize: compact ? 24 : 32, marginBottom: compact ? 8 : 10, color: '#444' }}>▶</div>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: compact ? 13 : 15, marginBottom: 4 }}>
+              {compact ? 'Drop video here' : 'Drop your video here'}
             </p>
-            <p style={{ color: 'var(--text-faint)', fontSize: 12, marginBottom: 20 }}>
+            <p style={{ color: 'var(--text-faint)', fontSize: 11, marginBottom: compact ? 12 : 20 }}>
               or click to browse
             </p>
-            <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>
-              MP4, MOV, MKV, WebM · up to {MAX_SIZE_MB} MB
-            </p>
+            {!compact && (
+              <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>
+                MP4, MOV, MKV, WebM · up to {MAX_SIZE_MB} MB
+              </p>
+            )}
+            {compact && (
+              <p style={{ color: 'var(--text-faint)', fontSize: 10, marginBottom: 10 }}>
+                MP4 · MOV · MKV · WebM
+              </p>
+            )}
             <button
               className="btn btn-primary"
-              style={{ marginTop: 20, fontSize: 12, padding: '6px 24px' }}
+              style={{ marginTop: compact ? 0 : 20, fontSize: compact ? 11 : 12, padding: compact ? '5px 20px' : '6px 24px' }}
               onClick={e => { e.stopPropagation(); inputRef.current?.click() }}
             >
               Browse Files
