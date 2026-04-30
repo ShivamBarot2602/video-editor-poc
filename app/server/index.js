@@ -3,6 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const path = require('path')
 const fs = require('fs')
+const morgan = require('morgan')
 
 const uploadRouter = require('./routes/upload')
 const transcribeRouter = require('./routes/transcribe')
@@ -19,6 +20,9 @@ fs.mkdirSync(VIDEOS_DIR, { recursive: true })
 
 app.use(cors())
 app.use(express.json())
+
+// Log incoming HTTP requests
+app.use(morgan('dev'))
 
 // Attach VIDEOS_DIR to every request so routes can access it
 app.use((req, _res, next) => {
