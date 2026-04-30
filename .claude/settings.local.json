@@ -1,5 +1,4 @@
 {
-  "enabledMcpjsonServers": ["context7"],
   "permissions": {
     "allow": [
       "WebSearch",
@@ -30,5 +29,11 @@
       "WebFetch(domain:www.gladia.io)",
       "WebFetch(domain:docs.gladia.io)"
     ]
+  },
+  "enabledMcpjsonServers": [
+    "context7"
+  ],
+  "enabledPlugins": {
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true
   }
 }
