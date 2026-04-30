@@ -2,10 +2,10 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://sp-video-editor-poc-backend.onrender.com/api/$1"
+      "destination": "https://sp-video-editor-poc-backend.onrender.com/api/:path*"
     },
     {
-      "source": "/((?!api/.*).*)",
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]
