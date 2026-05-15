@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Flame, Download, RefreshCw, Check } from 'lucide-react'
 
 const FONTS = ['Arial', 'Source Sans Pro', 'Roboto', 'Impact', 'Times New Roman', 'Courier New']
 const KARAOKE_STYLES = [
@@ -72,8 +73,7 @@ function SegmentBtns({ options, value, onChange }) {
 function Spinner() {
   return (
     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
+<circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
     </svg>
   )
 }
@@ -128,7 +128,9 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
           <SliderField label="Outline Thickness" value={style.outlineThickness} min={0} max={8} unit="px" onChange={set('outlineThickness')} />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost btn-sm" onClick={onReset}>Reset defaults</button>
+            <button className="btn btn-ghost btn-sm" onClick={onReset} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <RefreshCw size={11} /> Reset defaults
+            </button>
           </div>
         </>}
 
@@ -225,7 +227,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 disabled={isBurning || !canBurn}
                 style={{ padding: '9px', fontSize: 13 }}
               >
-                {isBurning ? <><Spinner /> Burning… {progress}%</> : '🔥 Burn Subtitles'}
+                {isBurning ? <><Spinner /> Burning… {progress}%</> : <><Flame size={14} /> Burn Subtitles</>}
               </button>
             )}
 
@@ -252,10 +254,10 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
                   borderRadius: 5, background: 'var(--success-dim)', color: 'var(--success)', fontSize: 12,
                 }}>
-                  <span>✓</span> Burned successfully
+                  <Check size={13} strokeWidth={2.5} /> Burned successfully
                 </div>
                 <a href={burnedUrl} download className="btn btn-secondary btn-full" style={{ textDecoration: 'none', fontSize: 12 }}>
-                  ⬇ Download Video
+                  <Download size={13} /> Download Video
                 </a>
                 <button className="btn btn-ghost btn-full btn-sm" onClick={onBurn}>
                   Re-burn with current style

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
+import { LayoutGrid, Play, ArrowUp, Check, Loader2, ChevronRight, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PROVIDERS } from '../providers'
 import UploadZone from '../components/UploadZone'
@@ -85,7 +86,7 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
         {transcription && (
           <>
             {transcription.metadata?.word_timestamps && (
-              <span style={{ color: 'var(--accent)', fontSize: 10, whiteSpace: 'nowrap' }}>⚡</span>
+              <Zap size={10} style={{ color: 'var(--accent)', flexShrink: 0 }} fill="currentColor" />
             )}
             {transcription.metadata?.confidence && (
               <span style={{ color: 'var(--success)', fontSize: 10, whiteSpace: 'nowrap' }}>
@@ -97,7 +98,7 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
               onClick={() => onUse(providerId)}
               style={{ color: 'var(--accent)', borderColor: 'var(--accent)', background: 'transparent', fontSize: 10 }}
             >
-              Use →
+              Use <ChevronRight size={10} />
             </button>
           </>
         )}
@@ -161,7 +162,7 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
   const [thumbErrors, setThumbErrors] = useState({})
 
   return (
-    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}>
 
       {/* Left: Upload + Recent Sessions */}
       <div style={{
@@ -218,7 +219,7 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
                       onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))}
                     />
                   ) : (
-                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: 9 }}>▶</span>
+                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}><Play size={10} /></span>
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -253,7 +254,7 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
               borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'var(--text-dim)', fontSize: 16 }}>⛶</span>
+              <LayoutGrid size={18} style={{ color: 'var(--text-dim)' }} />
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
             <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6, padding: '0 24px' }}>
@@ -467,7 +468,7 @@ export default function PlaygroundPage() {
       orientation="horizontal"
       defaultLayout={outerDefaultLayout}
       onLayoutChanged={onOuterLayoutChanged}
-      style={{ flex: 1, height: '100%' }}
+      style={{ flex: 1, height: '100%', borderRadius: 'var(--radius)', overflow: 'hidden', margin: '0 8px 8px' }}
     >
 
       {/* LEFT: sidebar */}
@@ -535,10 +536,10 @@ export default function PlaygroundPage() {
                       style={{ accentColor: 'var(--accent)', width: 11, height: 11, flexShrink: 0 }}
                     />
                     <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>{p.label}</span>
-                    {isRunning && <span style={{ color: 'var(--accent)', fontSize: 10 }}>⟳</span>}
+                    {isRunning && <Loader2 size={10} style={{ color: 'var(--accent)', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />}
                     {!isRunning && tx && (
-                      <span style={{ color: 'var(--success)', fontSize: 10 }}>
-                        ✓{tx.metadata?.confidence ? ` ${(tx.metadata.confidence * 100).toFixed(0)}%` : ''}
+                      <span style={{ color: 'var(--success)', fontSize: 10, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                        <Check size={9} strokeWidth={3} />{tx.metadata?.confidence ? ` ${(tx.metadata.confidence * 100).toFixed(0)}%` : ''}
                       </span>
                     )}
                     {!isRunning && !tx && checked[p.id] && (
@@ -556,9 +557,9 @@ export default function PlaygroundPage() {
               className="btn btn-primary btn-full"
               onClick={runAll}
               disabled={!anySelected || Object.keys(running).some(k => running[k])}
-              style={{ fontSize: 12, padding: '7px' }}
+              style={{ fontSize: 12, padding: '7px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
             >
-              ▶ Run Selected
+              <Play size={12} fill="currentColor" /> Run Selected
             </button>
             <button
               className="btn btn-outline btn-full btn-sm"
@@ -567,9 +568,9 @@ export default function PlaygroundPage() {
                 setTranscriptions({})
                 setSearchParams({}, { replace: true })
               }}
-              style={{ color: 'var(--text-dim)', fontSize: 11 }}
+              style={{ color: 'var(--text-dim)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              ↑ Upload / Change video
+              <ArrowUp size={11} /> Upload / Change
             </button>
           </div>
         </div>

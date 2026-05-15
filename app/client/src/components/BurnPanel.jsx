@@ -1,3 +1,5 @@
+import { Flame, Download, Check } from 'lucide-react'
+
 export default function BurnPanel({ canBurn, burnState, onBurn }) {
   const { status, progress, burnedUrl } = burnState
   const isBurning = status === 'burning'
@@ -28,7 +30,7 @@ export default function BurnPanel({ canBurn, burnState, onBurn }) {
             {isBurning ? (
               <><Spinner /> Burning… {progress}%</>
             ) : (
-              '🔥 Burn Subtitles'
+              <><Flame size={14} /> Burn Subtitles</>
             )}
           </button>
         )}
@@ -53,7 +55,7 @@ export default function BurnPanel({ canBurn, burnState, onBurn }) {
               background: 'rgba(34,197,94,0.1)', color: 'var(--success)',
               fontSize: 13, fontWeight: 500,
             }}>
-              <span>✓</span> Subtitles burned successfully
+              <Check size={13} strokeWidth={2.5} /> Subtitles burned successfully
             </div>
 
             <a
@@ -62,7 +64,7 @@ export default function BurnPanel({ canBurn, burnState, onBurn }) {
               className="btn btn-secondary btn-full"
               style={{ textDecoration: 'none' }}
             >
-              ⬇ Download Video
+              <Download size={13} /> Download Video
             </a>
 
             <button className="btn btn-ghost btn-full" onClick={onBurn}>
