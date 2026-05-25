@@ -10,5 +10,6 @@ const revai         = require('./revai')
 const pyannote      = require('./pyannote')
 const elevenlabs    = require('./elevenlabs')
 const sarvam        = require('./sarvam')
+const xai           = require('./xai')
 
-module.exports = { assemblyai, openai, groq, deepgram, gladia, sonix, speechmatics, mistral, revai, pyannote, elevenlabs, sarvam }
+module.exports = { assemblyai, openai, groq, deepgram, gladia, sonix, speechmatics, mistral, revai, pyannote, elevenlabs, sarvam, xai }
