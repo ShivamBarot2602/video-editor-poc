@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Download, Pencil, Check, Zap } from 'lucide-react'
 import { PROVIDERS } from '../providers'
 import SpeakerBadge from './SpeakerBadge'
 
@@ -31,7 +32,7 @@ function SegmentWords({ words, currentTime }) {
           <span
             key={i}
             style={{
-              color: isActive ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--text-faint)',
+              color: isActive ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--text-dim)',
               fontWeight: isActive ? 600 : 400,
               transition: 'color 80ms linear',
             }}
@@ -47,8 +48,7 @@ function SegmentWords({ words, currentTime }) {
 function Spinner() {
   return (
     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
+<circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
     </svg>
   )
 }
@@ -155,7 +155,7 @@ export default function TranscriptionPanel({
                   display: 'flex', alignItems: 'center', gap: 4,
                 }}
               >
-                {hasTx && <span style={{ color: 'var(--success)', fontSize: 9 }}>✓</span>}
+                {hasTx && <Check size={9} strokeWidth={3} style={{ color: 'var(--success)', flexShrink: 0 }} />}
                 {p.label}
               </button>
             )
@@ -164,8 +164,8 @@ export default function TranscriptionPanel({
 
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
           {transcription && (
-            <button className="btn btn-ghost btn-sm" onClick={onDownload}>
-              ↓ JSON
+            <button className="btn btn-ghost btn-sm" onClick={onDownload} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Download size={11} /> JSON
             </button>
           )}
           <button className="btn btn-primary btn-sm" onClick={onTranscribe} disabled={isTranscribing}>
@@ -191,7 +191,9 @@ export default function TranscriptionPanel({
             }
           </span>
           {meta.word_timestamps && (
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>⚡ Word-level</span>
+            <span style={{ color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <Zap size={10} fill="currentColor" /> Word-level
+            </span>
           )}
           {meta.segment_count != null && <span>Segments: <strong style={{ color: 'var(--text-muted)' }}>{meta.segment_count}</strong></span>}
           {meta.audio_duration_s && <span>Duration: <strong style={{ color: 'var(--text-muted)' }}>{fmtTime(meta.audio_duration_s)}</strong></span>}
@@ -201,7 +203,7 @@ export default function TranscriptionPanel({
 
       {/* Note below controls when no transcription */}
       {prov && !transcription && !isTranscribing && (
-        <div style={{ padding: '4px 12px 0', fontSize: 10, color: 'var(--text-faint)' }}>
+        <div style={{ padding: '4px 12px 0', fontSize: 10, color: 'var(--text-dim)' }}>
           {prov.note}
         </div>
       )}
@@ -218,7 +220,7 @@ export default function TranscriptionPanel({
         }}
       >
         {!transcription && !isTranscribing && (
-          <p style={{ color: 'var(--text-faint)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
+          <p style={{ color: 'var(--text-dim)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
             Select a provider and click Transcribe to get started.
           </p>
         )}
@@ -239,7 +241,7 @@ export default function TranscriptionPanel({
               className={`segment-row ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}`}
               onClick={() => { if (!isEditing) setActiveSegIdx(isActive ? null : i) }}
             >
-              <span style={{ color: 'var(--text-faint)', fontSize: 10, flexShrink: 0, minWidth: 32, lineHeight: 1.2 }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 10, flexShrink: 0, minWidth: 32, lineHeight: 1.2 }}>
                 {fmtTime(seg.start)}
               </span>
 
@@ -291,7 +293,7 @@ export default function TranscriptionPanel({
                 }}>
                   {seg.text_edited ?? seg.text}
                   {seg.text_edited && (
-                    <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--text-faint)', fontStyle: 'italic' }}>edited</span>
+                    <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--text-dim)', fontStyle: 'italic' }}>edited</span>
                   )}
                 </span>
               )}
@@ -301,8 +303,10 @@ export default function TranscriptionPanel({
                   <span
                     title="Edit text"
                     onClick={(e) => startSegmentEdit(e, i)}
-                    style={{ color: 'var(--text-faint)', fontSize: 11, cursor: 'pointer', padding: '0 2px' }}
-                  >✎</span>
+                    style={{ color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Pencil size={11} />
+                  </span>
                 </div>
               )}
             </div>

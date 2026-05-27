@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Play, LayoutGrid } from 'lucide-react'
 import { PROVIDERS } from '../providers'
 
 function fmtSize(bytes) {
@@ -68,7 +69,7 @@ export default function RecentVideos({ onSelect, onPlayground }) {
                 onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))}
               />
             ) : (
-              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333', fontSize: 10 }}>▶</span>
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}><Play size={10} /></span>
             )}
           </div>
 
@@ -118,10 +119,10 @@ export default function RecentVideos({ onSelect, onPlayground }) {
             </button>
             <button
               className="btn btn-outline btn-sm"
-              style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)' }}
+              style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
               onClick={() => onPlayground && onPlayground(v)}
             >
-              ⛶ Playground
+              <LayoutGrid size={10} /> Playground
             </button>
           </div>
         </div>

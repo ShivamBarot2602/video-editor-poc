@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, LayoutGrid } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
@@ -274,9 +275,9 @@ export default function EditorPage() {
         <button
           className="topbar-tab"
           onClick={() => navigate('/')}
-          style={{ fontSize: 13, padding: '2px 6px' }}
+          style={{ fontSize: 12, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
-          ← Back
+          <ArrowLeft size={13} /> Back
         </button>
         <span className="topbar-logo">SP Video Editor</span>
         {videoMeta && (
@@ -287,9 +288,9 @@ export default function EditorPage() {
         <button
           className="btn btn-outline btn-sm"
           onClick={() => navigate(`/playground?video=${videoId}`)}
-          style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', flexShrink: 0 }}
+          style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
-          ⛶ Open in Playground
+          <LayoutGrid size={11} /> Playground
         </button>
       </div>
 
@@ -298,7 +299,7 @@ export default function EditorPage() {
         orientation="horizontal"
         defaultLayout={editorDefaultLayout}
         onLayoutChanged={onEditorLayoutChanged}
-        style={{ flex: 1, overflow: 'hidden' }}
+        style={{ flex: 1, overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}
       >
 
         {/* Left: video + transcription (vertically resizable) */}

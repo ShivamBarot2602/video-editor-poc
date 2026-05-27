@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Flame, Download, RefreshCw, Check } from 'lucide-react'
 
 const FONTS = ['Arial', 'Source Sans Pro', 'Roboto', 'Impact', 'Times New Roman', 'Courier New']
 const KARAOKE_STYLES = [
@@ -20,7 +21,7 @@ const TABS = ['Type', 'Position', 'Effects', 'Export']
 function Field({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {label}
       </div>
       {children}
@@ -45,7 +46,7 @@ function ColorField({ label, value, onChange }) {
       <input type="color" value={value} onChange={e => onChange(e.target.value)}
         style={{ width: 18, height: 18, flexShrink: 0, border: 'none', borderRadius: 2, padding: 0, background: 'none', cursor: 'pointer' }} />
       <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>{label}</span>
-      <span style={{ color: 'var(--text-faint)', fontSize: 10, fontFamily: 'monospace' }}>{value}</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 10, fontFamily: 'monospace' }}>{value}</span>
     </div>
   )
 }
@@ -72,8 +73,7 @@ function SegmentBtns({ options, value, onChange }) {
 function Spinner() {
   return (
     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
+<circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
     </svg>
   )
 }
@@ -128,7 +128,9 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
           <SliderField label="Outline Thickness" value={style.outlineThickness} min={0} max={8} unit="px" onChange={set('outlineThickness')} />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost btn-sm" onClick={onReset}>Reset defaults</button>
+            <button className="btn btn-ghost btn-sm" onClick={onReset} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <RefreshCw size={11} /> Reset defaults
+            </button>
           </div>
         </>}
 
@@ -225,12 +227,12 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 disabled={isBurning || !canBurn}
                 style={{ padding: '9px', fontSize: 13 }}
               >
-                {isBurning ? <><Spinner /> Burning… {progress}%</> : '🔥 Burn Subtitles'}
+                {isBurning ? <><Spinner /> Burning… {progress}%</> : <><Flame size={14} /> Burn Subtitles</>}
               </button>
             )}
 
             {!canBurn && !isDone && (
-              <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
                 Transcribe the video first.
               </p>
             )}
@@ -240,7 +242,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
                   <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-faint)', textAlign: 'center' }}>
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center' }}>
                   FFmpeg rendering…
                 </p>
               </>
@@ -252,10 +254,10 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
                   borderRadius: 5, background: 'var(--success-dim)', color: 'var(--success)', fontSize: 12,
                 }}>
-                  <span>✓</span> Burned successfully
+                  <Check size={13} strokeWidth={2.5} /> Burned successfully
                 </div>
                 <a href={burnedUrl} download className="btn btn-secondary btn-full" style={{ textDecoration: 'none', fontSize: 12 }}>
-                  ⬇ Download Video
+                  <Download size={13} /> Download Video
                 </a>
                 <button className="btn btn-ghost btn-full btn-sm" onClick={onBurn}>
                   Re-burn with current style

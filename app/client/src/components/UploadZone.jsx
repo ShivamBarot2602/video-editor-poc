@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const MAX_SIZE_MB = 500
@@ -83,7 +84,9 @@ export default function UploadZone({ onUpload, compact }) {
           </>
         ) : (
           <>
-            <div style={{ fontSize: compact ? 24 : 32, marginBottom: compact ? 8 : 10, color: '#444' }}>▶</div>
+            <div style={{ marginBottom: compact ? 8 : 10, color: '#555', display: 'flex', justifyContent: 'center' }}>
+              <Upload size={compact ? 24 : 32} strokeWidth={1.5} />
+            </div>
             <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: compact ? 13 : 15, marginBottom: 4 }}>
               {compact ? 'Drop video here' : 'Drop your video here'}
             </p>
