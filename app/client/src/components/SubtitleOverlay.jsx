@@ -106,6 +106,19 @@ function KaraokeWord({ word, currentTime, primaryColor, karaokeColor, karaokeSty
   return <span style={{ color, transition: 'color 80ms linear' }}>{word.word}</span>
 }
 
+// Distribute segment duration evenly across words in edited text.
+function synthesizeWords(text, start, end) {
+  const tokens = text.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return []
+  const duration = Math.max(0.001, end - start)
+  const wordDur  = duration / tokens.length
+  return tokens.map((word, i) => ({
+    word,
+    start: start + i * wordDur,
+    end:   start + (i + 1) * wordDur,
+  }))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function SubtitleOverlay({ segments, currentTime, style, containerDimensions }) {
@@ -164,8 +177,11 @@ export default function SubtitleOverlay({ segments, currentTime, style, containe
     wordBreak: 'break-word',
   }
 
-  const allWords         = activeSegment.words || []
-  const hasWordTimestamps = allWords.length > 0 && !activeSegment.text_edited
+  const originalWords     = activeSegment.words || []
+  const allWords          = activeSegment.text_edited && originalWords.length > 0
+    ? synthesizeWords(activeSegment.text_edited, activeSegment.start, activeSegment.end)
+    : originalWords
+  const hasWordTimestamps = allWords.length > 0
 
   return (
     <div style={containerStyle}>
