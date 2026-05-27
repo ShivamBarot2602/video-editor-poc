@@ -17,7 +17,7 @@
 
 ## Pricing
 
-> Source: [sarvam.ai/api-pricing](https://www.sarvam.ai/api-pricing) — verified April 2026
+> Source: [sarvam.ai/api-pricing](https://www.sarvam.ai/api-pricing) — verified May 2026
 
 | Service | Per Hour (INR) | Per Hour (USD ~₹84/$) |
 |---|---|---|

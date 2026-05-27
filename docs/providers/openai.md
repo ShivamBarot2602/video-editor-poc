@@ -20,7 +20,7 @@
 
 ## Pricing
 
-> Source: [platform.openai.com/docs/pricing](https://platform.openai.com/docs/pricing) — verified April 2026
+> Source: [platform.openai.com/docs/pricing](https://platform.openai.com/docs/pricing) — verified May 2026
 
 | Model | Per Minute | Per Hour |
 |---|---|---|

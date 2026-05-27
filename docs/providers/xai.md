@@ -131,7 +131,7 @@ POST https://api.x.ai/v1/stt
 ## Notes
 
 - Diarization included at no extra cost — unlike AssemblyAI (+$0.02/hr) and Deepgram (+$0.12/hr)
-- At $0.10/hr it is the **second cheapest** diarization-capable provider after Mistral ($0.18/hr) and Rev AI ($0.18/hr) — but cheaper than both when diarization is required
+- At $0.10/hr it is the **cheapest diarization-capable** provider in this demo (Groq is cheaper at $0.04/hr but has no diarization) — undercuts Mistral ($0.18/hr) and Rev AI ($0.20/hr)
 - No polling required; single synchronous call simplifies integration compared to AssemblyAI, Gladia, Rev AI
 - 500 MB file limit accommodates most long-form video audio without chunking
 - Language support capped at ~25 languages — narrower than AssemblyAI Universal-2 (99) or Gladia (100+)

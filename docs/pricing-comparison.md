@@ -12,11 +12,11 @@
 | **Groq** | `whisper-large-v3-turbo` | $0.00067 | **$0.04** | Pay-as-you-go |
 | **xAI Grok** | `grok-stt` | ~$0.00167 | **$0.10** | Pay-as-you-go (REST batch) |
 | **Mistral** | `voxtral-mini-latest` | $0.003 | **$0.18** | Pay-as-you-go |
-| **Rev AI** | `reverb-asr` | $0.003 | **$0.18** | Pay-as-you-go |
+| **Rev AI** | `reverb-asr` | ~$0.0033 | **$0.20** | Pay-as-you-go |
 | **OpenAI** | `gpt-4o-transcribe-diarize` | $0.006 | **$0.36** | Pay-as-you-go |
 | **Sarvam AI** | `saaras:v3` | ~$0.006 | **~$0.36** | ₹30/hr (no diarize) |
 | **AssemblyAI** | `universal-2` | $0.0025 | **$0.15** | Pay-as-you-go |
-| **ElevenLabs** | `scribe_v2` | ~$0.0067 | **~$0.40** | Usage-based (estimated) |
+| **ElevenLabs** | `scribe_v2` | ~$0.00367 | **$0.22** | Pay-as-you-go (published; −40% Mar 2026) |
 | **Speechmatics** | `enhanced` | $0.004 | **$0.24** | Pro tier (480 min/mo included) |
 | **Deepgram** | `nova-3` | $0.0077 | **$0.462** | Pay-as-you-go |
 | **Gladia** | `solaria-1` | $0.0102 | **$0.61** | Starter tier |
@@ -32,11 +32,11 @@
 | **Groq** | ❌ Not available | N/A |
 | **xAI Grok** | Included | **$0.10** |
 | **Mistral** | Included | **$0.18** |
-| **Rev AI** | Included | **$0.18** |
+| **Rev AI** | Included | **$0.20** |
 | **OpenAI** | Included (use diarize model) | **$0.36** |
 | **Sarvam AI** | +₹15/hr | **~$0.54** (₹45/hr) |
 | **AssemblyAI** | +$0.02/hr | **$0.17** |
-| **ElevenLabs** | Included | **~$0.40** |
+| **ElevenLabs** | Included | **$0.22** |
 | **Speechmatics** | Included | **$0.24** |
 | **Deepgram** | +$0.0020/min (+$0.12/hr) | **$0.582** |
 | **Gladia** | Included | **$0.61** |
@@ -53,18 +53,19 @@
 | 2 | **xAI Grok** | $0.10 | Diarization included; synchronous |
 | 3 | **AssemblyAI** | $0.17 | +$0.02/hr add-on |
 | 4 | **Mistral** | $0.18 | Diarization included |
-| 5 | **Rev AI** | $0.18 | Diarization included |
-| 6 | **pyannoteAI** | ~$0.183 (€0.168) | Diarize-first approach |
-| 7 | **Speechmatics** | $0.24 | Diarization included |
-| 8 | **OpenAI** | $0.36 | Diarization included (same price) |
-| 9 | **ElevenLabs** | ~$0.40 | Pricing not public; estimated |
+| 5 | **pyannoteAI** | ~$0.183 (€0.168) | Diarize-first approach |
+| 6 | **Rev AI** | $0.20 | Diarization included |
+| 7 | **ElevenLabs** | $0.22 | Diarization included; published rate (−40% Mar 2026) |
+| 8 | **Speechmatics** | $0.24 | Diarization included |
+| 9 | **OpenAI** | $0.36 | Diarization included (same price) |
 | 10 | **Sarvam AI** | ~$0.54 (₹45) | Indian languages only |
 | 11 | **Deepgram** | $0.582 | +$0.12/hr add-on |
 | 12 | **Gladia** | $0.61 | Starter tier; Growth: $0.20/hr |
-| 13 | **Sonix** | $10.00 | Premium: $5.00/hr |
+| 13 | **Sonix** | $10.00 | PAYG; Pro plan ≈ $2/hr at full usage |
 
 > **xAI Grok** at **$0.10/hr** is now the cheapest diarization-capable provider with a synchronous API.  
 > **AssemblyAI** at **$0.17/hr** (universal-2 + diarization) offers the best balance of features, accuracy, and cost.  
+> **ElevenLabs** cut Scribe v2 batch ~40% in March 2026 (now **$0.22/hr**), moving it from one of the priciest options into the mid-tier.  
 > **Gladia Growth plan** (with volume commitment) drops to **$0.20/hr** — competitive with AssemblyAI.
 
 ---
@@ -116,7 +117,7 @@
 | **Gladia** | Growth plan: 67% off ($0.61 → $0.20/hr) |
 | **Speechmatics** | 20% off above 500 hrs/month |
 | **Deepgram** | Growth plan: ~15% off |
-| **Sonix** | Premium plan: 50% off ($10 → $5/hr) |
+| **Sonix** | Subscription plans: Core $25/mo (5h), Advanced $50/mo (20h), Pro $80/mo (40h) — Pro ≈ $2/hr at full usage; overage $10/hr |
 | **Rev AI** | Enterprise negotiation |
 | **AssemblyAI** | Volume pricing (contact sales) |
 | **Sarvam AI** | Pro/Business plans (rate limit tiers) |

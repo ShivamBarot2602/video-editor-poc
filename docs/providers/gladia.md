@@ -16,7 +16,7 @@
 
 ## Pricing
 
-> Source: [gladia.io/pricing](https://www.gladia.io/pricing) — verified April 2026
+> Source: [gladia.io/pricing](https://www.gladia.io/pricing) — verified May 2026
 
 | Tier | Per Hour | Notes |
 |---|---|---|

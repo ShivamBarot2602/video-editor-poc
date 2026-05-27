@@ -19,7 +19,7 @@
 
 ## Pricing
 
-> Source: [pyannote.ai](https://www.pyannote.ai/) — verified April 2026
+> Source: [pyannote.ai/pricing](https://www.pyannote.ai/pricing) — verified May 2026
 
 ### Per-Hour Rates
 
@@ -27,21 +27,22 @@
 |---|---|
 | Diarization — Precision-2 | **€0.112/hr** (~$0.122) |
 | Diarization — Community-1 | €0.035/hr (~$0.038) |
-| STT Orchestration | **€0.168/hr** (~$0.183) |
+| STT Orchestration (Precision-2) | **€0.168/hr** (~$0.183) |
+| STT Orchestration (Bring Your Own ASR) | €0.146/hr (~$0.159) |
 | Speaker Identification | €0.096/hr (~$0.105) |
 | Voice Prints | €0.015 per voiceprint |
 
-> Prices in EUR. Conversion: ~1.09 USD/EUR (April 2026).
+> Prices in EUR. Conversion: ~1.09 USD/EUR (May 2026).
 
 ### Monthly Plans
 
-| Plan | Monthly Cost | Rate Limit |
-|---|---|---|
-| Developer | €19/month | 80 requests/min |
-| Starter ⭐ | €99/month | 500 requests/min |
-| Enterprise | Custom | 500+ requests/min |
+| Plan | Monthly Cost | Included | Rate Limit |
+|---|---|---|---|
+| Developer | €19/month | 165 hrs diarization (Precision-2), 1 seat | 100 req/min, 1 concurrent job |
+| Starter ⭐ | €99/month | 3 seats | 100 req/min, 1 concurrent job |
+| Enterprise | Custom | On-prem, higher concurrency | Custom |
 
-**Free Trial:** 150 hours of audio processing — no credit card required.
+**Free Trial:** 150 hours of identification + 10 voiceprints for one month — premium models included, no credit card required.
 
 ---
 
@@ -70,8 +71,8 @@ Multilingual support without additional configuration. Specific language count a
 
 | Parameter | Value |
 |---|---|
-| Rate limit (Developer) | 80 requests/min |
-| Rate limit (Starter+) | 500+ requests/min |
+| Rate limit (Developer/Starter) | 100 requests/min, 1 concurrent batch job |
+| Rate limit (Enterprise) | Custom (higher concurrency) |
 | Max file size | Not explicitly documented |
 
 ---
