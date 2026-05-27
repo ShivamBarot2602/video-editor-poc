@@ -420,11 +420,12 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
    ════════════════════════════════════════════════ */
 .rpt-page {
   flex: 1;
+  position: relative;
   overflow-y: auto;
   background: var(--bg);
   animation: fade-in 200ms ease;
 }
-.rpt-wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px 72px; }
+.rpt-wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px 32px; }
 
 /* Hero */
 .rpt-hero {
@@ -563,7 +564,7 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
 
 @media (max-width: 600px) {
   .rpt-hero h1 { font-size: 24px; }
-  .rpt-wrap { padding: 0 16px 56px; }
+  .rpt-wrap { padding: 0 16px 24px; }
   .rpt-cards { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
