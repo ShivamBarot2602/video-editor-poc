@@ -165,7 +165,7 @@ export default function SubtitleOverlay({ segments, currentTime, style, containe
   }
 
   const allWords         = activeSegment.words || []
-  const hasWordTimestamps = allWords.length > 0
+  const hasWordTimestamps = allWords.length > 0 && !activeSegment.text_edited
 
   return (
     <div style={containerStyle}>
