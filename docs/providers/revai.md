@@ -22,11 +22,11 @@
 
 ## Pricing
 
-> Source: [rev.ai/pricing](https://www.rev.ai/pricing) — verified April 2026
+> Source: [rev.ai/pricing](https://www.rev.ai/pricing) — verified May 2026
 
 | Model | Per Minute | Per Hour | Min Charge |
 |---|---|---|---|
-| Reverb Transcription (EN) | $0.003 | **$0.18** | 15 seconds |
+| Reverb Transcription (EN) | ~$0.0033 | **$0.20** | 15 seconds |
 | Reverb Turbo (EN) | ~$0.0017 | **$0.10** | 15 seconds |
 | Reverb Foreign Language (57 langs) | $0.005 | **$0.30** | 15 seconds |
 | Whisper Fusion / Large (EN) | $0.005 | **$0.30** | 15 seconds |
@@ -160,4 +160,4 @@ GET /speechtotext/v1/jobs/{id}/transcript
 - Most permissive duration and file size limits (17 hrs, 5 TB via URL) — no chunking needed for any normal video
 - Billing is per-second with 15s minimum — efficient for short clips
 - HIPAA compliance available but must be explicitly requested/configured
-- Foreign language model is ~65% more expensive than English Reverb
+- Foreign language model ($0.30/hr) is 50% more expensive than English Reverb ($0.20/hr)

@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
+import ProviderReportPage from './pages/ProviderReportPage'
 
 function Header() {
   const location = useLocation()
@@ -9,14 +10,17 @@ function Header() {
   if (isEditor) return null
 
   const isPlayground = location.pathname === '/playground'
+  const isReport = location.pathname === '/report'
+  const isHome = !isPlayground && !isReport
 
   return (
     <header className="topbar">
       <span className="topbar-logo">SP Video Editor</span>
       <span className="topbar-poc">POC</span>
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-        <Link to="/" className={`topbar-tab ${!isPlayground ? 'active' : ''}`}>Upload New</Link>
+        <Link to="/" className={`topbar-tab ${isHome ? 'active' : ''}`}>Upload New</Link>
         <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
+        <Link to="/report" className={`topbar-tab ${isReport ? 'active' : ''}`}>Provider Report</Link>
       </nav>
     </header>
   )
@@ -31,6 +35,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
+            <Route path="/report" element={<ProviderReportPage />} />
             <Route path="/editor/:videoId" element={<EditorPage />} />
           </Routes>
         </div>

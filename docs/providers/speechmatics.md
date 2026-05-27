@@ -1,6 +1,6 @@
 # Speechmatics
 
-> Enhanced model — best-in-class claimed accuracy, 80+ languages, explicit code-mixing bilingual packs.
+> Enhanced model — best-in-class claimed accuracy, 55+ languages, explicit code-mixing bilingual packs.
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## Pricing
 
-> Source: [speechmatics.com/pricing](https://www.speechmatics.com/pricing) — verified April 2026
+> Source: [speechmatics.com/pricing](https://www.speechmatics.com/pricing) — verified May 2026
 
 | Tier | Per Hour | Notes |
 |---|---|---|
@@ -37,7 +37,7 @@
 
 | | Value |
 |---|---|
-| Count | 80+ languages and language pairs |
+| Count | 55+ languages and language pairs |
 
 Bilingual packs (2026): Arabic + English, Mandarin + English, Spanish + English, Tamil + English, Malay + English, Tagalog + English.  
 Multilingual pack: Mandarin + Malay + Tamil + English.  

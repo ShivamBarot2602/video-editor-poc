@@ -38,9 +38,9 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Groq** | 99+ | ⚠️ Whisper capability | ✅ | ISO-639-1 hint improves accuracy |
 | **xAI Grok** | 25 | ⚠️ Not specified | ⚠️ | BCP-47 language hint supported |
 | **Mistral** | 13 | ⚠️ Not specified | ✅ Hindi only | Context biasing (100 terms) |
-| **ElevenLabs** | 32+ | ⚠️ Not specified | ⚠️ | Regional endpoints (US/EU/IN) |
+| **ElevenLabs** | 90+ | ⚠️ Not specified | ⚠️ | Regional endpoints (US/EU/IN) |
 | **Rev AI** | 57 | ⚠️ Not specified | ⚠️ | — |
-| **Speechmatics** | 80+ | ✅ Bilingual packs | ✅ Tamil-EN, Malay-EN pack | 2026 bilingual packs; 35% fewer errors |
+| **Speechmatics** | 55+ | ✅ Bilingual packs | ✅ Tamil-EN, Malay-EN pack | 2026 bilingual packs; 35% fewer errors |
 | **pyannoteAI** | Multilingual | ⚠️ Not documented | ⚠️ | No config needed |
 | **Sonix** | 50+ | ❌ Speaker-boundary only | ⚠️ | Single-language detection |
 | **Sarvam AI** | 22 Indic | ✅ Optimized | ✅ All 22 Indian langs | Best for Hinglish, Tanglish, etc. |
@@ -119,9 +119,9 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Groq** | 🟢 $0.04/hr | 🟢 99+ | 🔴 ❌ | 🟡 Good | 🟡 100 MB | 🟢 Sync |
 | **xAI Grok** | 🟢 $0.10/hr | 🟡 25 | 🟢 ✅ | 🟡 Good | 🟢 500 MB | 🟢 Sync |
 | **Mistral** | 🟢 $0.18/hr | 🟡 13 | 🟢 ✅ | 🟢 High | 🟢 1 GB / 3hr | 🟢 Sync |
-| **ElevenLabs** | 🟡 ~$0.40/hr | 🟡 32+ | 🟢 ✅ | 🟢 High | 🟢 3 GB | 🟢 Sync |
-| **Rev AI** | 🟢 $0.18/hr | 🟡 57 | 🟢 ✅ | 🟢 High | 🟢 17 hr / 5 TB | 🟡 Async |
-| **Speechmatics** | 🟡 $0.24/hr | 🟢 80+ | 🟢 ✅ | 🟢 High | 🟡 2 hr | 🟡 Async |
+| **ElevenLabs** | 🟢 $0.22/hr | 🟢 90+ | 🟢 ✅ | 🟢 High | 🟢 3 GB | 🟢 Sync |
+| **Rev AI** | 🟢 $0.20/hr | 🟡 57 | 🟢 ✅ | 🟢 High | 🟢 17 hr / 5 TB | 🟡 Async |
+| **Speechmatics** | 🟡 $0.24/hr | 🟢 55+ | 🟢 ✅ | 🟢 High | 🟡 2 hr | 🟡 Async |
 | **pyannoteAI** | 🟢 €0.168/hr | 🟡 Multi | 🟢 ✅ Best | 🟢 High | 🟡 Unknown | 🟡 Async |
 | **Sonix** | 🔴 $10/hr | 🟡 50+ | 🟢 ✅ 30 speakers | 🟡 Good | 🟡 100 MB | 🟡 Async |
 | **Sarvam AI** | 🟡 ~$0.54/hr | 🔴 22 (Indic) | 🟢 ✅ Batch | 🟡 ~19% WER | 🟡 1 hr Batch | 🔴 Complex |

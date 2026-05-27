@@ -1,6 +1,6 @@
 # ElevenLabs (Scribe)
 
-> Scribe v2 — synchronous single-call STT with per-word confidence (logprob), diarization, and 32-speaker support.
+> Scribe v2 — synchronous single-call STT with per-word confidence (logprob), diarization, and up to 48-speaker support.
 
 ---
 
@@ -8,7 +8,8 @@
 
 | Model ID | Description |
 |---|---|
-| `scribe_v2` | Latest; word timestamps, 32 speakers, logprob confidence |
+| `scribe_v2` | Latest batch; word timestamps, up to 48 speakers, logprob confidence |
+| `scribe_v2_realtime` | Real-time streaming variant (~150 ms latency) |
 | `scribe_v1` | Previous version |
 
 **Used in this demo:** `scribe_v2`
@@ -17,24 +18,26 @@
 
 ## Pricing
 
-> Source: [elevenlabs.io/pricing](https://elevenlabs.io/pricing) — verified April 2026
+> Source: [elevenlabs.io/pricing/api](https://elevenlabs.io/pricing/api) — verified May 2026
 
-ElevenLabs does not publish per-minute/per-hour STT rates on their public pricing page. Speech-to-Text is billed on usage and bundled into subscription tiers (Free and above). Estimated cost based on community benchmarks: **~$0.40/hr** for base transcription.
+ElevenLabs now publishes Speech-to-Text rates (billed per audio minute). Scribe v2 batch pricing was cut ~40% in March 2026.
 
-### Surcharges (when enabled)
+| Model | Per Hour |
+|---|---|
+| `scribe_v2` (batch / pre-recorded) | **$0.22** |
+| `scribe_v2_realtime` | **$0.39** |
+
+### Add-ons (flat per-hour, when enabled)
 | Add-on | Extra Cost |
 |---|---|
-| Entity detection (PII/PHI/PCI/offensive) | +30% |
-| Speaker role detection (agent vs. customer) | +10% |
-| Keyterms biasing (>100 keyterms) | +20% |
-
-> Minimum billable duration: 20 seconds when using more than 100 keyterms.
+| Entity detection (PII/PHI/PCI/offensive) | +$0.070/hr |
+| Keyterm prompting | +$0.050/hr |
 
 ---
 
 ## Supported Languages
 
-Languages specified via ISO-639-1 or ISO-639-3 code. Auto-detection available when `language_code` is omitted. Scribe v2 supports 32+ languages.
+Languages specified via ISO-639-1 or ISO-639-3 code. Auto-detection available when `language_code` is omitted. Scribe v2 supports 90+ languages (improved accuracy across 99).
 
 ---
 
@@ -42,13 +45,13 @@ Languages specified via ISO-639-1 or ISO-639-3 code. Auto-detection available wh
 
 | Feature | Status | Notes |
 |---|---|---|
-| Speaker Diarization | ✅ | `diarize: true`; up to 32 speakers |
+| Speaker Diarization | ✅ | `diarize: true`; up to 48 speakers (~98% label accuracy) |
 | Word-Level Timestamps | ✅ | `timestamps_granularity: "word"` (default) |
 | Character-Level Timestamps | ✅ | `timestamps_granularity: "character"` |
 | Per-Word Confidence | ✅ | `logprob` field (−∞ to 0, convert via `Math.exp()`) |
 | Auto Language Detection | ✅ | Omit `language_code` param |
 | Code-Mixing | ⚠️ | Not explicitly documented |
-| Entity Detection | ✅ | PII, PHI, PCI, offensive language (+30%) |
+| Entity Detection | ✅ | PII, PHI, PCI, offensive language (+$0.070/hr) |
 | Keyterms Biasing | ✅ | Up to 1,000 terms (< 50 chars each) |
 | Multi-Channel Audio | ✅ | Up to 5 channels |
 | Data Residency | ✅ | US, EU, India endpoints |
@@ -63,7 +66,7 @@ Languages specified via ISO-639-1 or ISO-639-3 code. Auto-detection available wh
 | Max file size | **3 GB** (direct upload) or 2 GB (cloud URL) |
 | Max channels | 5 |
 | Min duration | 100 ms |
-| Max speakers (diarization) | 32 |
+| Max speakers (diarization) | 48 |
 | Max keyterms | 1,000 |
 
 ---

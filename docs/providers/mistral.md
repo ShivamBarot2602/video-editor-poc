@@ -8,23 +8,24 @@
 
 | Model ID | Description |
 |---|---|
-| `voxtral-mini-latest` | Alias for latest mini batch model |
-| `voxtral-mini-2507` | Pinned version of Voxtral Mini |
+| `voxtral-mini-latest` | Dynamic alias — resolves to the newest Voxtral Mini transcription model (recommended) |
+| `voxtral-mini-2602` | Pinned: Voxtral Mini Transcribe 2 (current target of `-latest`) |
+| `voxtral-mini-2507` | Pinned: previous Voxtral Mini (deprecates 2026-02-27) |
 | `voxtral-small-24b-2507` | Higher accuracy, larger model |
 
 **Used in this demo:** `voxtral-mini-latest`
 
-> Note: `voxtral-mini-latest` resolves to the current recommended version (`voxtral-mini-2507`).
+> Note: `voxtral-mini-latest` is a **dynamic alias** the transcription endpoint resolves to the newest Voxtral Mini transcribe model — currently `voxtral-mini-2602` (Voxtral Mini Transcribe 2), which superseded `voxtral-mini-2507` (deprecating 2026-02-27). Transcribe 2 extends the audio cap to 3 hr and adds native word-level timestamps + diarization. Pin `voxtral-mini-2602` for reproducible behaviour.
 
 ---
 
 ## Pricing
 
-> Source: [mistral.ai/technology](https://mistral.ai/technology/) — verified April 2026
+> Source: [mistral.ai/news/voxtral-transcribe-2](https://mistral.ai/news/voxtral-transcribe-2) — verified May 2026
 
 | Model | Per Minute | Per Hour |
 |---|---|---|
-| Voxtral Mini | $0.003 | **$0.18** |
+| Voxtral Mini (`voxtral-mini-latest` → Transcribe 2) | $0.003 | **$0.18** |
 | Voxtral Small 24B 2507 | $0.004 + token cost | ~$0.24+ |
 
 > Token cost for Voxtral Small: +$0.10/M input tokens, +$0.30/M output tokens (in addition to per-minute rate).

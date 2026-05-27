@@ -16,21 +16,22 @@
 
 ## Pricing
 
-> Source: [sonix.ai/pricing](https://sonix.ai/pricing) — verified April 2026
+> Source: [sonix.ai/pricing](https://sonix.ai/pricing) — verified May 2026
 
-| Tier | Per Minute | Per Hour | Monthly Cost |
-|---|---|---|---|
-| Standard (PAYG) | $0.167 | **$10.00** | None |
-| Premium | $0.083 | **$5.00** | $22/seat/month (or $16.50 annually) |
-| Enterprise | Custom | Custom | Contact sales |
+| Tier | Monthly Cost | Included Hours | Effective $/hr | Overage |
+|---|---|---|---|---|
+| Pay-as-you-go | None | — | **$10.00/hr** | $10/hr |
+| Core | $25/mo ($275/yr) | 5 hrs/mo | $5.00/hr | $10/hr |
+| Advanced | $50/mo ($550/yr) | 20 hrs/mo | $2.50/hr | $10/hr |
+| Pro | $80/mo ($880/yr) | 40 hrs/mo | $2.00/hr | $10/hr |
+| Enterprise | Custom | Custom | Custom | Contact sales |
 
-> **Standard is the most expensive option in this demo by far** — $10/hr vs $0.15–$0.61/hr for others.  
-> Premium halves the per-hour rate but requires a monthly seat subscription.
+> **PAYG at $10/hr is the most expensive option in this demo by far** — vs $0.15–$0.61/hr for others.  
+> Subscription plans lower the effective rate (Pro ≈ $2/hr at full usage) but cap included hours; overage is billed at $10/hr.
 
-**Additional services:** Translation and subtitles billed at the same rate as transcription.  
-**AI Analysis:** $5/month (Premium) or custom (Enterprise).
+**Additional services:** Translation and subtitles billed at the same rate as transcription.
 
-> ⚠️ **API access requires Premium or Enterprise tier** — Standard accounts can only use the web UI.
+> **API access is included in all subscription tiers** (RESTful API + webhooks/Zapier). PAYG also supports API access.
 
 ---
 
@@ -38,7 +39,7 @@
 
 | | Value |
 |---|---|
-| Count | 50+ languages |
+| Count | 53+ languages |
 
 Includes: English, French, German, Spanish, Arabic, Chinese (Mandarin/Cantonese), Japanese, Korean, and more.
 
@@ -78,7 +79,7 @@ Includes: English, French, German, Spanish, Arabic, Chinese (Mandarin/Cantonese)
 | | Value |
 |---|---|
 | **Auth header** | `Authorization: Bearer YOUR_API_KEY` |
-| **API key URL** | `https://my.sonix.ai/api` (Premium accounts only) |
+| **API key URL** | `https://my.sonix.ai/api` |
 | **Submit media** | `POST https://api.sonix.ai/v1/media` |
 | **Get status** | `GET https://api.sonix.ai/v1/media/{id}` |
 | **Get transcript** | `GET https://api.sonix.ai/v1/media/{id}/transcript.json` |
@@ -146,8 +147,8 @@ name:     my-recording
 
 ## Notes
 
-- $10/hr is ~17–66× more expensive than other providers in this demo
+- PAYG $10/hr is ~17–66× more expensive than other providers in this demo
 - 30 speaker labels is unique — most providers cap at 8–32
 - Code-mixing limited to speaker-boundary switching only (not mid-sentence)
-- API requires Premium subscription; Standard users have web UI access only
+- RESTful API available across PAYG and all subscription tiers (webhooks + Zapier)
 - Best suited for workflows that integrate with Sonix's own web editor/review UI

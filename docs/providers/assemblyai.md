@@ -17,7 +17,7 @@
 
 ## Pricing
 
-> Source: [assemblyai.com/pricing](https://www.assemblyai.com/pricing) — verified April 2026
+> Source: [assemblyai.com/pricing](https://www.assemblyai.com/pricing) — verified May 2026
 
 ### Pre-Recorded (Batch)
 
@@ -32,8 +32,9 @@
 |---|---|
 | Speaker Diarization | +$0.02 |
 | Medical Mode | +$0.15 |
-| Custom Prompting (U-3 Pro only) | +$0.05 |
-| Keyterms Prompting (U-3 Pro) | Included |
+| Prompting (Beta, U-3 Pro only) | +$0.05 |
+| Keyterms Prompting (U-3 Pro) | +$0.05 |
+| Keyterms Prompting (U-2) | Included |
 
 ---
 

@@ -24,7 +24,7 @@
 
 ## Pricing
 
-> Source: [deepgram.com/pricing](https://deepgram.com/pricing) — verified April 2026
+> Source: [deepgram.com/pricing](https://deepgram.com/pricing) — verified May 2026
 
 ### Pre-Recorded (Batch)
 
