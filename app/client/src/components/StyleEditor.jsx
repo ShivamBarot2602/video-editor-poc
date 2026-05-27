@@ -21,7 +21,7 @@ const TABS = ['Type', 'Position', 'Effects', 'Export']
 function Field({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <div style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+      <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
         {label}
       </div>
       {children}
@@ -46,7 +46,7 @@ function ColorField({ label, value, onChange }) {
       <input type="color" value={value} onChange={e => onChange(e.target.value)}
         style={{ width: 18, height: 18, flexShrink: 0, border: 'none', borderRadius: 2, padding: 0, background: 'none', cursor: 'pointer' }} />
       <span style={{ color: 'var(--text-muted)', fontSize: 11, flex: 1 }}>{label}</span>
-      <span style={{ color: 'var(--text-faint)', fontSize: 10, fontFamily: 'monospace' }}>{value}</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 10, fontFamily: 'monospace' }}>{value}</span>
     </div>
   )
 }
@@ -232,7 +232,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             )}
 
             {!canBurn && !isDone && (
-              <p style={{ fontSize: 11, color: 'var(--text-faint)', textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' }}>
                 Transcribe the video first.
               </p>
             )}
@@ -242,7 +242,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
                   <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
-                <p style={{ fontSize: 10, color: 'var(--text-faint)', textAlign: 'center' }}>
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center' }}>
                   FFmpeg rendering…
                 </p>
               </>

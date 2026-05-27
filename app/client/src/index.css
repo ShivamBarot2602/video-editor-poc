@@ -5,16 +5,16 @@
   --surface:      #1c1c1c;
   --surface-2:    #222222;
   --surface-dark: #111111;
-  --border:       #333333;
-  --border-sub:   #282828;
+  --border:       #484852;
+  --border-sub:   #363640;
   --accent:       #0F67EA;
   --accent-hover: #0a50c2;
   --accent-dim:   rgba(15, 103, 234, 0.12);
   --text:         #a1a1aa;
   --text-bright:  #e4e4e7;
-  --text-muted:   #71717a;
-  --text-dim:     #52525b;
-  --text-faint:   #3f3f46;
+  --text-muted:   #9c9ca5;
+  --text-dim:     #8b8b94;
+  --text-faint:   #6e6e77;
   --success:      #5CB85C;
   --success-dim:  rgba(92, 184, 92, 0.15);
   --error:        #ef4444;
@@ -233,7 +233,7 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
   transition: background var(--transition);
   position: relative;
 }
-.segment-row:hover { background: rgba(255,255,255,0.03); }
+.segment-row:hover { background: rgba(255,255,255,0.05); }
 .segment-row.playing {
   background: var(--accent-dim);
   border-color: rgba(15, 103, 234, 0.22);
@@ -245,7 +245,7 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
 .segment-row .seg-actions {
   display: flex;
   gap: 4px;
-  opacity: 0;
+  opacity: 0.35;
   transition: opacity var(--transition);
   flex-shrink: 0;
   align-items: flex-start;

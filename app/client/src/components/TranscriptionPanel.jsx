@@ -32,7 +32,7 @@ function SegmentWords({ words, currentTime }) {
           <span
             key={i}
             style={{
-              color: isActive ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--text-faint)',
+              color: isActive ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--text-dim)',
               fontWeight: isActive ? 600 : 400,
               transition: 'color 80ms linear',
             }}
@@ -203,7 +203,7 @@ export default function TranscriptionPanel({
 
       {/* Note below controls when no transcription */}
       {prov && !transcription && !isTranscribing && (
-        <div style={{ padding: '4px 12px 0', fontSize: 10, color: 'var(--text-faint)' }}>
+        <div style={{ padding: '4px 12px 0', fontSize: 10, color: 'var(--text-dim)' }}>
           {prov.note}
         </div>
       )}
@@ -220,7 +220,7 @@ export default function TranscriptionPanel({
         }}
       >
         {!transcription && !isTranscribing && (
-          <p style={{ color: 'var(--text-faint)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
+          <p style={{ color: 'var(--text-dim)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
             Select a provider and click Transcribe to get started.
           </p>
         )}
@@ -241,7 +241,7 @@ export default function TranscriptionPanel({
               className={`segment-row ${isActive ? 'active' : ''} ${isPlaying ? 'playing' : ''}`}
               onClick={() => { if (!isEditing) setActiveSegIdx(isActive ? null : i) }}
             >
-              <span style={{ color: 'var(--text-faint)', fontSize: 10, flexShrink: 0, minWidth: 32, lineHeight: 1.2 }}>
+              <span style={{ color: 'var(--text-dim)', fontSize: 10, flexShrink: 0, minWidth: 32, lineHeight: 1.2 }}>
                 {fmtTime(seg.start)}
               </span>
 
@@ -293,7 +293,7 @@ export default function TranscriptionPanel({
                 }}>
                   {seg.text_edited ?? seg.text}
                   {seg.text_edited && (
-                    <span style={{ marginLeft: 4, fontSize: 9, color: 'var(--text-faint)', fontStyle: 'italic' }}>edited</span>
+                    <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--text-dim)', fontStyle: 'italic' }}>edited</span>
                   )}
                 </span>
               )}
@@ -303,7 +303,7 @@ export default function TranscriptionPanel({
                   <span
                     title="Edit text"
                     onClick={(e) => startSegmentEdit(e, i)}
-                    style={{ color: 'var(--text-faint)', cursor: 'pointer', padding: '0 2px', display: 'flex', alignItems: 'center' }}
+                    style={{ color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center' }}
                   >
                     <Pencil size={11} />
                   </span>
