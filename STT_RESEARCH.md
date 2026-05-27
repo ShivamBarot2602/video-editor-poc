@@ -38,6 +38,7 @@ The STT layer powers two primary use cases:
 | **OpenAI** | `gpt-4o-mini-transcribe` | $0.003 | $0.18 | 25 MB | ~25 min |
 | **Groq** | Whisper Large v3 | $0.00185 | $0.111 | 100 MB | — |
 | **Groq** | Whisper Large v3 Turbo | $0.00067 | $0.04 | 100 MB | — |
+| **xAI** | `grok-stt` | ~$0.00167 | $0.10 | 500 MB | Not documented |
 | **AssemblyAI** | Universal-3 Pro | $0.0035 | $0.21 | 2.2 GB (upload) / 5 GB (URL) | 10 hr |
 | **AssemblyAI** | Universal-2 | $0.0025 | $0.15 | 2.2 GB (upload) / 5 GB (URL) | 10 hr |
 | **Deepgram** | Nova-3 | $0.0065 | $0.39 | 2 GB | 10–20 min |
@@ -56,6 +57,7 @@ The STT layer powers two primary use cases:
 | **Sonix** | Sonix AI | $0.167 | $10.00 | 16 GB | Not specified |
 | **Sarvam AI** | Saaras v3 | $0.006 | $0.36 (≈ ₹30) | Not specified | 1 hr |
 
+> **xAI** — Grok STT launched April 2026. REST batch at $0.10/hr; streaming at $0.20/hr. Diarization included at no extra charge. 500 MB file cap. Response field for word text is `text` (not `word`). `file` must be the last multipart field. No WER benchmarks published.  
 > **Groq** — max duration not explicitly documented; bounded by the 100 MB file size cap.
 > **Deepgram** — 10–20 min cap per request makes it impractical for long-form video without chunking.
 > **OpenAI** — 25 MB cap requires audio compression or chunking for most video files.
@@ -75,6 +77,7 @@ The STT layer powers two primary use cases:
 | **OpenAI** | `gpt-4o-transcribe` | Top-tier | ✅ | ✅ | 99 | ✅ | ⚠️ Limited |
 | **Groq** | Whisper Large v3 | ~8.4% WER | ❌ | ✅ | 99 | ✅ | ✅ |
 | **Groq** | Distil-Whisper | ~2.4% WER | ❌ | ✅ | 99 | ✅ | ✅ |
+| **xAI** | grok-stt | Not published | ✅ Included | ✅ | 25 | ✅ | ⚠️ Unclear |
 | **AssemblyAI** | Universal-3 Pro | Best-in-class | ✅ +add-on | ✅ | 6 | ✅ | ✅ |
 | **AssemblyAI** | Universal-2 | ~2.9% diar. error | ✅ +add-on | ✅ | 99 | ✅ | ✅ |
 | **Deepgram** | Nova-3 | ~7.6% WER | ✅ | ✅ | 57 | ✅ | ⚠️ Unclear |
@@ -99,6 +102,8 @@ Legend: ✅ Supported &nbsp;|&nbsp; ⚠️ Partial / Unclear &nbsp;|&nbsp; ❌ N
 ## Notes per Provider
 
 **OpenAI Whisper / GPT-4o Transcribe** — Three tiers: `whisper-1` (legacy, no diarization), `gpt-4o-transcribe` (top accuracy, diarization included, $0.006/min), and `gpt-4o-mini-transcribe` (half price, no diarization). All three have a 25 MB file size cap — files need to be chunked or heavily compressed. Best choice when accuracy is paramount and files are short.
+
+**xAI (Grok STT)** — Launched April 2026. Single synchronous REST call (`POST https://api.x.ai/v1/stt`) — no polling. Diarization and word-level timestamps included at the base $0.10/hr price, making it the cheapest diarization-capable option with a synchronous API. 25 languages supported (narrower than AssemblyAI or Gladia). No published WER benchmarks. 500 MB file limit comfortably handles long-form video audio. The word-level response field is named `text` (not `word`) — integration maps this internally. Multipart form requires `file` to be the last field.
 
 **Groq** — Runs Whisper models on their ultra-fast LPU inference hardware. No speaker diarization (same Whisper limitation). The 100 MB cap is still limiting for raw video audio — chunking needed for longer content. Whisper Large v3 Turbo at $0.04/hr is the cheapest option across all providers. Code-mixing works since it inherits Whisper's multilingual capabilities.
 
@@ -178,5 +183,6 @@ STT API — Batch/Async (AssemblyAI / Gladia)
 - [Speechmatics Pricing](https://www.speechmatics.com/pricing#stt_features) · [Batch Quickstart](https://docs.speechmatics.com/speech-to-text/batch/quickstart) · [Languages](https://www.speechmatics.com/languages)
 - [OpenAI Audio API FAQ](https://help.openai.com/en/articles/7031512-audio-api-faq)
 - [Groq Pricing](https://groq.com/pricing) · [Speech-to-Text Docs](https://console.groq.com/docs/speech-to-text)
+- [xAI API Pricing](https://x.ai/api) · [Speech-to-Text Docs](https://docs.x.ai/developers/models/speech-to-text) · [Grok STT Announcement](https://x.ai/news/grok-stt-and-tts-apis)
 - [Sonix Pricing](https://sonix.ai/pricing) · [Languages & File Types](https://sonix.ai/list-of-languages-and-filetypes)
 - [Sarvam AI Pricing](https://www.sarvam.ai/api-pricing) · [Saaras v3 Docs](https://www.sarvam.ai/apis/speech-to-text)

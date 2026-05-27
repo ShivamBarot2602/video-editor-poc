@@ -4,6 +4,7 @@ export const PROVIDERS = [
   { id: 'gladia',       label: 'Gladia',       diarization: true,  note: 'Solaria-1 · diarization · code-switching' },
   { id: 'openai',       label: 'OpenAI',       diarization: true,  note: 'gpt-4o-transcribe · diarize' },
   { id: 'groq',         label: 'Groq',         diarization: false, note: 'Whisper Turbo · 100 MB cap' },
+  { id: 'xai',          label: 'xAI Grok',     diarization: true,  note: 'Grok STT · 500 MB · diarization · 25 langs' },
   { id: 'mistral',      label: 'Mistral',      diarization: true,  note: 'Voxtral · $0.003/min · 3 hr cap' },
   { id: 'elevenlabs',   label: 'ElevenLabs',   diarization: true,  note: 'Scribe v2 · word timestamps · diarization' },
   { id: 'revai',        label: 'Rev AI',       diarization: true,  note: 'Reverb ASR · premium diarization' },

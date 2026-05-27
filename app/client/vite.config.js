@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development'
   const apiTarget = isDev
-    ? 'http://localhost:3001'
-    : 'https://sp-video-editor-poc-backend.onrender.com'
+    ? "http://localhost:3001"
+    : "https://sp-video-editor-poc-backend-e8oh.onrender.com";
 
   return {
     plugins: [react()],

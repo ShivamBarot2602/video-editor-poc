@@ -46,7 +46,7 @@ function fmtDate(iso) {
   return d.toLocaleDateString()
 }
 
-function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId }) {
+function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error }) {
   const segments = transcription?.segments || null
   const rowRefs = useRef({})
   const listRef = useRef(null)
@@ -107,8 +107,15 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
       {/* Segments */}
       <div ref={listRef} style={{ flex: 1, overflowY: 'auto' }}>
         {!segments ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Not yet transcribed</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: '0 16px' }}>
+            {error ? (
+              <>
+                <span style={{ color: 'var(--error, #f87171)', fontSize: 13 }}>✕</span>
+                <span style={{ color: 'var(--error, #f87171)', fontSize: 11, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-word' }}>{error}</span>
+              </>
+            ) : (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Not yet transcribed</span>
+            )}
           </div>
         ) : segments.map((seg, i) => {
           const isActive = i === activeIdx
@@ -290,6 +297,7 @@ export default function PlaygroundPage() {
   const [checked, setChecked] = useState({})
   const [transcriptions, setTranscriptions] = useState({})
   const [running, setRunning] = useState({})
+  const [errors, setErrors] = useState({})
   const [leftProvider, setLeftProvider] = useState('assemblyai')
   const [rightProvider, setRightProvider] = useState('deepgram')
   const [currentTime, setCurrentTime] = useState(0)
@@ -408,6 +416,13 @@ export default function PlaygroundPage() {
       return next
     })
 
+    // Clear any previous errors for providers we're about to re-run
+    setErrors(prev => {
+      const next = { ...prev }
+      toRun.forEach(p => { delete next[p.id] })
+      return next
+    })
+
     // ── Step 1: Prepare (extract audio exactly once) ──────────────────────
     // All providers share the same audio.wav — do it upfront before firing
     // parallel requests so there is no race condition on the file write.
@@ -438,8 +453,17 @@ export default function PlaygroundPage() {
           const data = await res.json()
           // Update this provider's result as soon as it resolves — don't wait for others
           setTranscriptions(prev => ({ ...prev, [p.id]: data }))
+        } else {
+          const data = await res.json().catch(() => ({}))
+          const msg = data?.error || `HTTP ${res.status}`
+          setErrors(prev => ({ ...prev, [p.id]: msg }))
+          toast.error(`${p.label}: ${msg}`)
         }
-      } catch (_) {}
+      } catch (err) {
+        const msg = err.message || 'Network error'
+        setErrors(prev => ({ ...prev, [p.id]: msg }))
+        toast.error(`${p.label}: ${msg}`)
+      }
       // Clear spinner for this provider independently
       setRunning(prev => ({ ...prev, [p.id]: false }))
     }
@@ -542,7 +566,10 @@ export default function PlaygroundPage() {
                         <Check size={9} strokeWidth={3} />{tx.metadata?.confidence ? ` ${(tx.metadata.confidence * 100).toFixed(0)}%` : ''}
                       </span>
                     )}
-                    {!isRunning && !tx && checked[p.id] && (
+                    {!isRunning && !tx && errors[p.id] && (
+                      <span style={{ color: 'var(--error, #f87171)', fontSize: 10 }}>✕</span>
+                    )}
+                    {!isRunning && !tx && !errors[p.id] && checked[p.id] && (
                       <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>—</span>
                     )}
                   </label>
@@ -594,6 +621,7 @@ export default function PlaygroundPage() {
               onUse={handleUse}
               currentTime={currentTime}
               disabledProviderId={rightProvider}
+              error={errors[leftProvider] || null}
             />
           </Panel>
           <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
@@ -605,6 +633,7 @@ export default function PlaygroundPage() {
               onUse={handleUse}
               currentTime={currentTime}
               disabledProviderId={leftProvider}
+              error={errors[rightProvider] || null}
             />
           </Panel>
         </Group>
