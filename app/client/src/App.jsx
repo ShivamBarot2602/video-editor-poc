@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
 import ProviderReportPage from './pages/ProviderReportPage'
+import ThumbnailsPage from './pages/ThumbnailsPage'
 
 function Header() {
   const location = useLocation()
@@ -11,7 +12,8 @@ function Header() {
 
   const isPlayground = location.pathname === '/playground'
   const isReport = location.pathname === '/report'
-  const isHome = !isPlayground && !isReport
+  const isThumbnails = location.pathname.startsWith('/thumbnails/')
+  const isHome = !isPlayground && !isReport && !isThumbnails
 
   return (
     <header className="topbar">
@@ -37,6 +39,7 @@ export default function App() {
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="/report" element={<ProviderReportPage />} />
             <Route path="/editor/:videoId" element={<EditorPage />} />
+            <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
           </Routes>
         </div>
       </div>
