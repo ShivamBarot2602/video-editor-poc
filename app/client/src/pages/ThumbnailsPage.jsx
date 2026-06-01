@@ -271,7 +271,7 @@ function LeftPane({
         </button>
         <div style={{ fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.5 }}>
           Frames + scoring are cached after first run. Re-running only redoes the
-          image-gen polish stage (~$0.20 per run).
+          image-gen polish stage.
         </div>
       </div>
 
