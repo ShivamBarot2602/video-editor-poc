@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Play, LayoutGrid } from 'lucide-react'
+import { Play, LayoutGrid, Sparkles } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { PROVIDERS } from '../providers'
 
 function fmtSize(bytes) {
@@ -103,27 +104,37 @@ export default function RecentVideos({ onSelect, onPlayground }) {
             </div>
           </div>
 
-          {/* Dual CTAs */}
+          {/* CTAs */}
           <div style={{
             padding: '6px 8px',
             borderTop: '1px solid var(--border-sub)',
-            display: 'flex', gap: 5,
+            display: 'flex', flexDirection: 'column', gap: 4,
             flexShrink: 0,
           }}>
             <button
               className="btn btn-primary btn-sm"
-              style={{ flex: 1, fontSize: 10, padding: '4px 0' }}
+              style={{ width: '100%', fontSize: 10, padding: '4px 0' }}
               onClick={() => onSelect(v)}
             >
               Open in Editor
             </button>
-            <button
-              className="btn btn-outline btn-sm"
-              style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
-              onClick={() => onPlayground && onPlayground(v)}
-            >
-              <LayoutGrid size={10} /> Playground
-            </button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                className="btn btn-outline btn-sm"
+                style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}
+                onClick={() => onPlayground && onPlayground(v)}
+              >
+                <LayoutGrid size={10} /> Playground
+              </button>
+              <Link
+                to={`/thumbnails/${v.id}`}
+                className="btn btn-outline btn-sm"
+                style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, textDecoration: 'none' }}
+                title="Generate thumbnail candidates"
+              >
+                <Sparkles size={10} /> Thumbs
+              </Link>
+            </div>
           </div>
         </div>
       ))}
