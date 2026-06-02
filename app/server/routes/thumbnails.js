@@ -261,18 +261,27 @@ router.get('/:videoId/stream', async (req, res) => {
     console.log(`${tag} Dedup: ${frames.length} → ${deduped.length} (top-K for rerank)`)
 
     // ─── Stage 2: VLM rerank (optional) ────────────────────────────────────
+    // Reranker is selectable per run (?reranker=gemini|openai). Gemini is the
+    // default. If the selected provider's call fails, fall back to the other
+    // available reranker; if none succeed, fall back to CV order.
     let reranked
-    if (process.env.GEMINI_API_KEY) {
-      sendEvent({ type: 'phase', phase: 'reranking', count: deduped.length })
-      console.log(`${tag} Rerank: calling Gemini with ${deduped.length} frames…`)
+    let usedReranker = null
+    const availRerank = rerankProviders.availableProviders()      // ordered: gemini, openai
+    const requested = String(req.query.reranker || '').toLowerCase()
+    const preferred = availRerank.includes(requested)
+      ? requested
+      : (availRerank.includes('gemini') ? 'gemini' : availRerank[0])
+    const tryOrder = preferred ? [preferred, ...availRerank.filter(p => p !== preferred)] : []
+
+    for (const provId of tryOrder) {
+      const provider = rerankProviders[provId]
+      const isFallback = provId !== preferred
+      sendEvent({ type: 'phase', phase: 'reranking', count: deduped.length, provider: provId, model: provider.MODEL, fallback: isFallback })
+      console.log(`${tag} Rerank: calling ${provId} (${provider.MODEL})${isFallback ? ' [fallback]' : ''} with ${deduped.length} frames…`)
       const t2 = Date.now()
       try {
-        const rerankResults = await rerankProviders.gemini.rerank({
-          frames: deduped,
-          filename,
-          transcriptHint,
-        })
-        console.log(`${tag} Rerank done in ${Date.now() - t2}ms (scores: ${rerankResults.map(r => r.vlmScore?.toFixed(1)).join(', ')})`)
+        const rerankResults = await provider.rerank({ frames: deduped, filename, transcriptHint })
+        console.log(`${tag} Rerank done via ${provId} in ${Date.now() - t2}ms (scores: ${rerankResults.map(r => r.vlmScore?.toFixed(1)).join(', ')})`)
         // Merge VLM score into frame records.
         const byIdx = new Map(rerankResults.map(r => [r.idx, r]))
         reranked = deduped.map(f => {
@@ -280,23 +289,51 @@ router.get('/:videoId/stream', async (req, res) => {
           return { ...f, vlmScore: r.vlmScore ?? null, rationale: r.rationale || '' }
         })
         reranked.sort((a, b) => (b.vlmScore ?? 0) - (a.vlmScore ?? 0))
+        usedReranker = provId
+        break
       } catch (e) {
-        console.error(`${tag} Rerank failed: ${e.message}`)
-        sendEvent({ type: 'warn', stage: 'rerank', message: e.message })
-        // Fall back to CV order.
-        reranked = deduped.map(f => ({ ...f, vlmScore: null, rationale: '' }))
+        console.error(`${tag} Rerank failed via ${provId}: ${e.message}`)
+        sendEvent({ type: 'warn', stage: 'rerank', message: `${provId} rerank failed: ${e.message}` })
+        // Loop continues to the next available provider (fallback).
       }
-    } else {
-      console.log(`${tag} Rerank skipped: GEMINI_API_KEY not set`)
-      sendEvent({ type: 'phase', phase: 'reranking', skipped: 'GEMINI_API_KEY not set' })
+    }
+
+    if (!usedReranker) {
+      const reason = availRerank.length ? 'all rerankers failed' : 'no rerank API key set'
+      console.log(`${tag} Rerank skipped: ${reason} — falling back to CV order`)
+      sendEvent({ type: 'phase', phase: 'reranking', skipped: reason })
       reranked = deduped.map(f => ({ ...f, vlmScore: null, rationale: '' }))
     }
 
     const topPicks = reranked.slice(0, TOP_PICK_COUNT)
     console.log(`${tag} Top picks: ${topPicks.map(p => `idx=${p.idx} t=${p.t.toFixed(2)}s vlm=${p.vlmScore ?? '-'}`).join(' | ')}`)
 
-    // ─── Stage 3: polish (image-gen, two providers in parallel) ────────────
+    const baseUrl = `/api/thumbnails/${videoId}/file/`
+    const relUrl = (absPath) => baseUrl + encodeURIComponent(path.relative(dir, absPath).split(path.sep).join('/'))
+
+    // ─── Stage 3: polish (image-gen, providers run in parallel) ────────────
     const availablePolish = polishProviders.availableProviders()
+
+    // Surface the picks (original frames + scores) NOW so the UI can render the
+    // rows immediately, each polish cell in a loading state, before any image-gen
+    // call returns. `providers` tells the client which cells to expect per pick.
+    sendEvent({
+      type: 'picks',
+      providers: availablePolish,
+      rerankProvider: usedReranker || null,
+      rerankModel: usedReranker ? rerankProviders[usedReranker].MODEL : null,
+      video: videoSize,
+      picks: topPicks.map(p => ({
+        idx: p.idx,
+        t: p.t,
+        originalUrl: relUrl(p.path),
+        cvScore: p.cvScore,
+        vlmScore: p.vlmScore,
+        rationale: p.rationale,
+        recommended: true,
+      })),
+    })
+
     sendEvent({ type: 'phase', phase: 'polishing', providers: availablePolish, picks: topPicks.length })
     console.log(`${tag} Polish: ${availablePolish.length} provider(s) × ${topPicks.length} pick(s) = ${availablePolish.length * topPicks.length} job(s) — providers=[${availablePolish.join(', ')}]`)
 
@@ -329,7 +366,8 @@ router.get('/:videoId/stream', async (req, res) => {
               model: provider.MODEL,
             }
             console.log(`${jobTag} ok in ${Date.now() - t}ms → ${outPath} (${buffer.length} bytes)`)
-            sendEvent({ type: 'polished', idx: pick.idx, provider: providerId })
+            // Stream the finished cell immediately so the UI fills it live.
+            sendEvent({ type: 'polished', idx: pick.idx, provider: providerId, url: relUrl(outPath), model: provider.MODEL })
           } catch (e) {
             polishedByIdx.get(pick.idx)[providerId] = {
               status: 'error',
@@ -345,7 +383,6 @@ router.get('/:videoId/stream', async (req, res) => {
     console.log(`${tag} Polish stage complete`)
 
     // ─── Stage 4: persist state ────────────────────────────────────────────
-    const baseUrl = `/api/thumbnails/${videoId}/file/`
     const candidates = topPicks.map(p => {
       const polishedMap = polishedByIdx.get(p.idx) || {}
       // Convert any polished refs to URL-shape too.
@@ -384,7 +421,8 @@ router.get('/:videoId/stream', async (req, res) => {
 
     const state = {
       generatedAt: new Date().toISOString(),
-      rerankModel: rerankProviders.gemini.MODEL,
+      rerankProvider: usedReranker || null,
+      rerankModel: usedReranker ? rerankProviders[usedReranker].MODEL : null,
       polishModels: availablePolish.map(id => polishProviders[id].MODEL),
       video: {
         width: videoSize.width,

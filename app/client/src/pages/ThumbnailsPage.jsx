@@ -22,6 +22,13 @@ const PROVIDER_META = {
   openai:   { label: 'OpenAI polish',  icon: Wand2,     color: '#10a37f' },
 }
 
+// Selectable rerankers. Gemini is the default; if the chosen one fails at run
+// time the server falls back to the other available provider.
+const RERANKERS = [
+  { id: 'gemini', label: 'Gemini', model: 'gemini-2.5-pro' },
+  { id: 'openai', label: 'OpenAI', model: 'gpt-4.1-mini' },
+]
+
 function fmtTime(seconds) {
   if (!Number.isFinite(seconds)) return '–'
   const m = Math.floor(seconds / 60)
@@ -53,6 +60,11 @@ export default function ThumbnailsPage() {
   const [phaseMeta, setPhaseMeta] = useState({})         // counts, warnings
   const [warnings, setWarnings] = useState([])
   const [error, setError]       = useState(null)
+  const [reranker, setReranker] = useState(() => localStorage.getItem('thumb_reranker') || 'gemini')
+  const [runCandidates, setRunCandidates] = useState(null)  // progressive picks during a live run
+  const [runMeta, setRunMeta] = useState(null)              // rerank model + video, from the `picks` event
+
+  useEffect(() => { localStorage.setItem('thumb_reranker', reranker) }, [reranker])
 
   // ─── load cached state on mount ──────────────────────────────────────────
   useEffect(() => {
@@ -79,6 +91,8 @@ export default function ThumbnailsPage() {
     setPhaseMeta({})
     setWarnings([])
     setError(null)
+    setRunCandidates([])   // enter live mode; rows appear once the `picks` event arrives
+    setRunMeta(null)
 
     // Tear down any previous stream.
     if (evtSourceRef.current) {
@@ -86,7 +100,7 @@ export default function ThumbnailsPage() {
       evtSourceRef.current = null
     }
 
-    const es = new EventSource(`/api/thumbnails/${videoId}/stream`)
+    const es = new EventSource(`/api/thumbnails/${videoId}/stream?reranker=${encodeURIComponent(reranker)}`)
     evtSourceRef.current = es
 
     es.onmessage = (msg) => {
@@ -96,14 +110,29 @@ export default function ThumbnailsPage() {
       if (event.type === 'phase') {
         setPhase(event.phase)
         setPhaseMeta(prev => ({ ...prev, [event.phase]: event }))
+      } else if (event.type === 'picks') {
+        // Rerank finished — render the rows now, each polish cell pending.
+        setRunMeta({ rerankProvider: event.rerankProvider, rerankModel: event.rerankModel, video: event.video })
+        const pending = {}
+        ;(event.providers || []).forEach(p => { pending[p] = { status: 'pending' } })
+        setRunCandidates((event.picks || []).map(p => ({ ...p, polished: { ...pending } })))
       } else if (event.type === 'polished') {
-        // Per-cell info isn't in state until the server's final `done` event
-        // saves thumbnails.json. Skip — UI fills cells on `done`.
-      } else if (event.type === 'polish_failed' || event.type === 'warn') {
+        // A polish job finished — fill that one cell live.
+        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'ok', url: event.url, model: event.model } } }
+          : c))
+      } else if (event.type === 'polish_failed') {
+        setWarnings(w => [...w, { stage: event.provider || 'polish', message: event.message }])
+        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'error', error: event.message } } }
+          : c))
+      } else if (event.type === 'warn') {
         setWarnings(w => [...w, { stage: event.stage || event.provider || 'unknown', message: event.message }])
       } else if (event.type === 'done') {
         setPhase('done')
         setState(event.state)
+        setRunCandidates(null)   // hand off to authoritative saved state
+        setRunMeta(null)
         es.close()
         evtSourceRef.current = null
         setRunning(false)
@@ -150,7 +179,11 @@ export default function ThumbnailsPage() {
   }
 
   // ─── derived ─────────────────────────────────────────────────────────────
-  const candidates = state?.candidates || []
+  // During a live run show the progressive `runCandidates`; otherwise the saved state.
+  const liveRun = runCandidates != null
+  const candidates = liveRun ? runCandidates : (state?.candidates || [])
+  const displayMeta = liveRun ? { ...(state || {}), ...(runMeta || {}) } : state
+  const aspectSource = (liveRun ? runMeta?.video : state?.video) || state?.video
   const hasCandidates = candidates.length > 0
   const activePhaseIdx = phase ? PHASES.findIndex(p => p.id === phase) : -1
 
@@ -172,6 +205,8 @@ export default function ThumbnailsPage() {
               phaseMeta={phaseMeta}
               warnings={warnings}
               error={error}
+              reranker={reranker}
+              onRerankerChange={setReranker}
               onGenerate={handleGenerate}
             />
           </Panel>
@@ -183,6 +218,8 @@ export default function ThumbnailsPage() {
               candidates={candidates}
               selectedKey={state?.selectedKey || null}
               running={running}
+              phase={phase}
+              live={liveRun}
               stateLoading={stateLoading}
               onChoose={handleChoose}
               onSeek={(t) => {
@@ -191,8 +228,8 @@ export default function ThumbnailsPage() {
                   videoRef.current.play?.().catch(() => {})
                 }
               }}
-              meta={state}
-              videoAspectRatio={resolveAspectRatio(state?.video)}
+              meta={displayMeta}
+              videoAspectRatio={resolveAspectRatio(aspectSource)}
             />
           </Panel>
         </Group>
@@ -239,7 +276,7 @@ function PageBar({ videoId, hasCandidates }) {
 /* Left pane: video preview + controls + progress                           */
 function LeftPane({
   videoId, videoRef, running, hasCandidates, phase, activePhaseIdx,
-  phaseMeta, warnings, error, onGenerate,
+  phaseMeta, warnings, error, reranker, onRerankerChange, onGenerate,
 }) {
   return (
     <div style={{
@@ -257,6 +294,7 @@ function LeftPane({
       </div>
 
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <RerankerSelect value={reranker} onChange={onRerankerChange} disabled={running} />
         <button
           className="btn btn-primary btn-full"
           onClick={onGenerate}
@@ -270,8 +308,8 @@ function LeftPane({
               : <><Sparkles size={14} /> Generate Candidates</>}
         </button>
         <div style={{ fontSize: 10, color: 'var(--text-faint)', lineHeight: 1.5 }}>
-          Frames + scoring are cached after first run. Re-running only redoes the
-          image-gen polish stage.
+          Frames + scoring are cached after first run. Re-running redoes the vision
+          rerank and the image-gen polish stage.
         </div>
       </div>
 
@@ -307,6 +345,11 @@ function LeftPane({
                 {meta?.skipped && (
                   <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-faint)', fontStyle: 'italic' }}>
                     skipped
+                  </span>
+                )}
+                {p.id === 'reranking' && meta?.model && !meta?.skipped && (
+                  <span style={{ marginLeft: meta?.count != null ? 6 : 'auto', fontSize: 9, color: meta?.fallback ? 'var(--error)' : 'var(--text-faint)' }}>
+                    {meta.model}{meta?.fallback ? ' (fallback)' : ''}
                   </span>
                 )}
               </li>
@@ -348,6 +391,59 @@ function LeftPane({
   )
 }
 
+/* Compact reranker picker: label + right-aligned segmented toggle on one row,
+   with a subtle model/fallback hint beneath. */
+function RerankerSelect({ value, onChange, disabled }) {
+  const active = RERANKERS.find(r => r.id === value) || RERANKERS[0]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Reranker</span>
+        <div
+          role="radiogroup"
+          aria-label="Vision reranker"
+          style={{
+            display: 'inline-flex', gap: 2, padding: 2,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--border-sub)',
+            borderRadius: 8,
+            opacity: disabled ? 0.5 : 1,
+          }}
+        >
+          {RERANKERS.map(r => {
+            const isActive = r.id === active.id
+            return (
+              <button
+                key={r.id}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                disabled={disabled}
+                onClick={() => onChange(r.id)}
+                title={r.model}
+                style={{
+                  padding: '3px 12px', fontSize: 12, lineHeight: 1.5,
+                  fontWeight: isActive ? 600 : 500,
+                  borderRadius: 6, border: 'none',
+                  cursor: disabled ? 'default' : 'pointer',
+                  background: isActive ? 'var(--accent)' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--text-muted)',
+                  transition: 'background 0.12s ease, color 0.12s ease',
+                }}
+              >
+                {r.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-faint)', textAlign: 'right' }}>
+        {active.model} · auto-fallback
+      </div>
+    </div>
+  )
+}
+
 function PhaseDot({ state }) {
   const size = 14
   if (state === 'done') {
@@ -378,7 +474,8 @@ function PhaseDot({ state }) {
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Right pane: candidate rows                                               */
-function RightPane({ candidates, selectedKey, running, stateLoading, onChoose, onSeek, meta, videoAspectRatio }) {
+function RightPane({ candidates, selectedKey, running, phase, live, stateLoading, onChoose, onSeek, meta, videoAspectRatio }) {
+  const phaseLabel = (PHASES.find(p => p.id === phase)?.label) || 'Generating'
   if (stateLoading) {
     return <CenteredHint><Loader2 size={14} className="spin" /> Loading…</CenteredHint>
   }
@@ -392,10 +489,12 @@ function RightPane({ candidates, selectedKey, running, stateLoading, onChoose, o
     )
   }
   if (candidates.length === 0 && running) {
+    // Pre-picks stages (extract / score / dedup / rerank) — show what's happening.
     return (
       <CenteredHint>
         <Loader2 size={20} className="spin" color="var(--accent)" />
-        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>Generating…</div>
+        <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-muted)' }}>{phaseLabel}…</div>
+        <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-faint)' }}>Picks appear as soon as the rerank finishes.</div>
       </CenteredHint>
     )
   }
@@ -411,7 +510,11 @@ function RightPane({ candidates, selectedKey, running, stateLoading, onChoose, o
             ranked by {meta.rerankModel}
           </span>
         )}
-        {meta?.generatedAt && (
+        {running ? (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Loader2 size={11} className="spin" /> {phaseLabel}…
+          </span>
+        ) : meta?.generatedAt && (
           <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto' }}>
             {new Date(meta.generatedAt).toLocaleString()}
           </span>
@@ -579,7 +682,12 @@ function ThumbCell({ cell, chosen, onChoose, timestamp, aspectRatio = '16 / 9' }
             loading="lazy"
           />
         ) : (
-          <Loader2 size={18} className="spin" color="var(--text-faint)" />
+          <div style={{ textAlign: 'center', color: 'var(--text-faint)' }}>
+            <Loader2 size={18} className="spin" />
+            {cell.providerId !== 'original' && (
+              <div style={{ marginTop: 6, fontSize: 10 }}>Polishing…</div>
+            )}
+          </div>
         )}
 
         {/* Top-left provider label */}
