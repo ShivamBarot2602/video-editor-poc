@@ -12,7 +12,7 @@ function Header() {
 
   const isPlayground = location.pathname === '/playground'
   const isReport = location.pathname === '/report'
-  const isThumbnails = location.pathname.startsWith('/thumbnails/')
+  const isThumbnails = location.pathname.startsWith('/thumbnails')
   const isHome = !isPlayground && !isReport && !isThumbnails
 
   return (
@@ -22,6 +22,7 @@ function Header() {
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
         <Link to="/" className={`topbar-tab ${isHome ? 'active' : ''}`}>Upload New</Link>
         <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
+        <Link to="/thumbnails" className={`topbar-tab ${isThumbnails ? 'active' : ''}`}>Thumbnails</Link>
         <Link to="/report" className={`topbar-tab ${isReport ? 'active' : ''}`}>Provider Report</Link>
       </nav>
     </header>
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="/report" element={<ProviderReportPage />} />
             <Route path="/editor/:videoId" element={<EditorPage />} />
+            <Route path="/thumbnails" element={<ThumbnailsPage />} />
             <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
           </Routes>
         </div>

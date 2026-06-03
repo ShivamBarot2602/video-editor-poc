@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
   ArrowLeft, Loader2, RefreshCw, Play,
 } from 'lucide-react'
 import VideoPlayer from '../components/VideoPlayer'
+import UploadZone from '../components/UploadZone'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames' },
@@ -50,8 +51,114 @@ function resolveAspectRatio(video) {
   }
 }
 
+function fmtSize(bytes) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(0)} KB`
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso), now = new Date()
+  const mins = Math.floor((now - d) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return d.toLocaleDateString()
+}
+
+/* No-video entry (`/thumbnails`): upload or pick a recent session, then route
+   to `/thumbnails/:id`. Mirrors the Playground empty state. */
+function ThumbnailsPicker() {
+  const navigate = useNavigate()
+  const [videos, setVideos] = useState(null)
+  const [thumbErrors, setThumbErrors] = useState({})
+
+  useEffect(() => {
+    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+  }, [])
+
+  const go = (id) => navigate(`/thumbnails/${id}`)
+
+  return (
+    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}>
+      {/* Left: upload + recent sessions */}
+      <div style={{
+        width: 300, flexShrink: 0, background: 'var(--surface-dark)',
+        borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column',
+        padding: 20, gap: 14, overflow: 'hidden',
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+          Upload Video
+        </div>
+        <div style={{ flexShrink: 0 }}>
+          <UploadZone onUpload={(id) => go(id)} compact />
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-sub)', paddingTop: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
+            Or pick a recent session
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {videos === null ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Loading…</span>
+            ) : videos.length === 0 ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>No sessions yet.</span>
+            ) : videos.map((v, i) => (
+              <button
+                key={v.id}
+                onClick={() => go(v.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
+                  borderBottom: i < videos.length - 1 ? '1px solid var(--border-sub)' : 'none',
+                  cursor: 'pointer', textAlign: 'left', background: 'transparent', border: 'none', width: '100%',
+                  transition: 'opacity 150ms',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                  {!thumbErrors[v.id] ? (
+                    <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
+                  ) : (
+                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}><Play size={10} /></span>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.filename}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{fmtSize(v.size)} · {fmtDate(v.uploadedAt)}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right: hint */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ border: '1.5px dashed var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--surface)', padding: '48px 64px', maxWidth: 440 }}>
+          <div style={{ width: 40, height: 40, border: '1.5px dashed var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Sparkles size={20} style={{ color: 'var(--text-dim)' }} />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Generate thumbnails</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6 }}>
+            Upload a video or pick a recent session to<br />generate ranked thumbnail candidates.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ThumbnailsPage() {
   const { videoId } = useParams()
+  // No video in the URL (global `/thumbnails` entry) → show the picker.
+  if (!videoId) return <ThumbnailsPicker />
+  return <ThumbnailsEditor key={videoId} videoId={videoId} />
+}
+
+function ThumbnailsEditor({ videoId }) {
   const videoRef = useRef(null)
   const [state, setState]       = useState(null)         // server-side thumbnails.json
   const [stateLoading, setStateLoading] = useState(true)
