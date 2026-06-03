@@ -46,7 +46,7 @@ async function polish({
   styleBrief,
   aspect = 'unknown',
   size,
-  quality = 'medium',
+  quality = 'high',
   outputFormat = 'png',
   timeoutMs = 120000,
 }) {
