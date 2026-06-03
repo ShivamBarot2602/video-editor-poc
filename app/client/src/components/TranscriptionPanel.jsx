@@ -143,21 +143,31 @@ export default function TranscriptionPanel({
             const hasTx = availableProviders.includes(p.id)
             const isSelected = p.id === selectedProvider
             return (
-              <button
+              // Wrapper carries the title: disabled buttons swallow pointer
+              // events, so a tooltip on the button itself never shows.
+              <span
                 key={p.id}
-                onClick={() => onProviderChange(p.id)}
-                style={{
-                  padding: '2px 9px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
-                  fontFamily: 'inherit', border: '1px solid', transition: 'all 150ms',
-                  borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
-                  background: isSelected ? 'var(--accent-dim)' : 'var(--surface-2)',
-                  color: isSelected ? 'var(--accent)' : 'var(--text-dim)',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}
+                title={isTranscribing ? 'Cannot switch provider while transcribing' : undefined}
+                style={{ display: 'inline-flex', cursor: isTranscribing ? 'not-allowed' : 'default' }}
               >
-                {hasTx && <Check size={9} strokeWidth={3} style={{ color: 'var(--success)', flexShrink: 0 }} />}
-                {p.label}
-              </button>
+                <button
+                  onClick={() => onProviderChange(p.id)}
+                  disabled={isTranscribing}
+                  style={{
+                    padding: '2px 9px', borderRadius: 4, fontSize: 11,
+                    cursor: isTranscribing ? 'not-allowed' : 'pointer',
+                    opacity: isTranscribing && !isSelected ? 0.5 : 1,
+                    fontFamily: 'inherit', border: '1px solid', transition: 'all 150ms',
+                    borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                    background: isSelected ? 'var(--accent-dim)' : 'var(--surface-2)',
+                    color: isSelected ? 'var(--accent)' : 'var(--text-dim)',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  {hasTx && <Check size={9} strokeWidth={3} style={{ color: 'var(--success)', flexShrink: 0 }} />}
+                  {p.label}
+                </button>
+              </span>
             )
           })}
         </div>
