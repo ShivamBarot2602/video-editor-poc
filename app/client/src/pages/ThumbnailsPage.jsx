@@ -3,18 +3,18 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
-  ArrowLeft, Loader2, RefreshCw, Play,
+  ArrowLeft, Loader2, RefreshCw, Play, Info,
 } from 'lucide-react'
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
 
 const PHASES = [
-  { id: 'extracting', label: 'Extracting frames' },
-  { id: 'scoring',    label: 'Scoring frames' },
-  { id: 'dedup',      label: 'Deduplicating' },
-  { id: 'reranking',  label: 'Vision rerank' },
-  { id: 'polishing',  label: 'Image-gen polish' },
-  { id: 'done',       label: 'Done' },
+  { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
+  { id: 'scoring',    label: 'Scoring frames',    hint: 'Rate each snapshot for sharpness and lighting' },
+  { id: 'dedup',      label: 'Deduplicating',     hint: 'Drop near-identical snapshots, keep the variety' },
+  { id: 'reranking',  label: 'Vision rerank',     hint: 'AI picks the 3 best-looking frames' },
+  { id: 'polishing',  label: 'Image-gen polish',  hint: 'AI turns each pick into a finished thumbnail' },
+  { id: 'done',       label: 'Done',              hint: 'Thumbnails ready — choose your favorite' },
 ]
 
 const PROVIDER_META = {
@@ -439,6 +439,7 @@ function LeftPane({
                 }}>
                   {p.label}
                 </span>
+                <StepInfo hint={p.hint} />
                 {meta?.count != null && (
                   <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-faint)' }}>
                     {meta.count}
@@ -548,6 +549,48 @@ function RerankerSelect({ value, onChange, disabled }) {
         {active.model} · auto-fallback
       </div>
     </div>
+  )
+}
+
+/* Info icon with a hover tooltip (fixed-positioned so it never clips inside the
+   scrollable pipeline list). Plain-English explanation of the step. */
+function StepInfo({ hint }) {
+  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (r) setPos({ x: r.right + 8, y: r.top + r.height / 2 })
+  }
+  const hide = () => setPos(null)
+  return (
+    <>
+      <span
+        ref={ref}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        tabIndex={0}
+        onFocus={show}
+        onBlur={hide}
+        aria-label={hint}
+        style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help', color: 'var(--text-faint)', flexShrink: 0 }}
+      >
+        <Info size={12} />
+      </span>
+      {pos && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'fixed', left: pos.x, top: pos.y, transform: 'translateY(-50%)',
+            zIndex: 1000, maxWidth: 220, padding: '6px 9px',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 6, boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+            fontSize: 11, lineHeight: 1.45, color: 'var(--text-bright)', pointerEvents: 'none',
+          }}
+        >
+          {hint}
+        </div>
+      )}
+    </>
   )
 }
 
