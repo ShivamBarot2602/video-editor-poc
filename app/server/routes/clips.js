@@ -171,6 +171,8 @@ router.post('/:id/suggest', async (req, res) => {
     try { filename = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).filename } catch (_) {}
 
     const language = tx?.metadata?.detected_language
+    // One debug log per provider, overwritten each run — prompts + raw response.
+    const debugPath = path.join(dir, `clip_debug_${suggestProvider}.log`)
     const result = await clipSuggest.REGISTRY[suggestProvider].suggest({
       segments: tx.segments,
       bucket,
@@ -178,6 +180,7 @@ router.post('/:id/suggest', async (req, res) => {
       videoDuration,
       language,
       filename,
+      debugPath,
     })
 
     const { clips, warnings } = normalizeClips(result.clips, {

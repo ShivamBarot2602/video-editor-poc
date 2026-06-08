@@ -1,7 +1,9 @@
 const axios = require('axios')
-const { buildClipPrompt } = require('../../lib/clipPrompt')
+const { buildClipSystemPrompt, buildClipUserPrompt } = require('../../lib/clipPrompt')
+const { writeClipDebug } = require('../../lib/clipDebug')
 
-const MODEL = 'gpt-4.1-mini'
+// const MODEL = 'gpt-4.1-mini'
+const MODEL = 'gpt-5.4-mini'
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
 // Strict Structured Outputs: root must be an object, every property listed in
@@ -43,21 +45,26 @@ const RESPONSE_FORMAT = {
  * Suggest engaging clips from a transcript using OpenAI gpt-4.1-mini.
  * Direct REST call via axios — Chat Completions with strict Structured Outputs.
  *
- * @param {object} opts - see buildClipPrompt (segments, bucket, count, videoDuration, language, filename)
+ * @param {object} opts - prompt inputs (segments, bucket, count, videoDuration, language, filename)
+ * @param {string} [opts.debugPath] - if set, write prompts + raw response here (overwritten each run)
  * @param {number} [opts.timeoutMs=90000]
  * @returns {Promise<{ model:string, clips:Array, truncated:boolean }>} raw, un-clamped clips
  */
-async function suggest({ segments, bucket, count, videoDuration, language, filename, timeoutMs = 90000 }) {
+async function suggest({ segments, bucket, count, videoDuration, language, filename, debugPath, timeoutMs = 90000 }) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY not set')
   }
 
-  const { prompt, truncated } = buildClipPrompt({ segments, bucket, count, videoDuration, language, filename })
-  console.log(`[clipSuggest:openai] model=${MODEL} count=${count} bucket=${bucket} promptChars=${prompt.length} truncated=${truncated}`)
+  const system = buildClipSystemPrompt()
+  const { text: user, truncated } = buildClipUserPrompt({ segments, bucket, count, videoDuration, language, filename })
+  console.log(`[clipSuggest:openai] model=${MODEL} count=${count} bucket=${bucket} sysChars=${system.length} userChars=${user.length} truncated=${truncated}`)
 
   const body = {
     model: MODEL,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
     response_format: RESPONSE_FORMAT,
   }
 
@@ -82,11 +89,16 @@ async function suggest({ segments, bucket, count, videoDuration, language, filen
   if (response.status < 200 || response.status >= 300) {
     const detail = typeof response.data === 'string'
       ? response.data
-      : JSON.stringify(response.data).slice(0, 600)
-    console.error(`[clipSuggest:openai] HTTP ${response.status} in ${Date.now() - t0}ms: ${detail}`)
+      : JSON.stringify(response.data)
+    console.error(`[clipSuggest:openai] HTTP ${response.status} in ${Date.now() - t0}ms: ${detail.slice(0, 600)}`)
+    writeClipDebug(debugPath, { provider: 'openai', model: MODEL, system, user, raw: response.data, error: `HTTP ${response.status}` })
     throw new Error(`clipSuggest (openai) HTTP ${response.status}: ${detail.slice(0, 400)}`)
   }
   console.log(`[clipSuggest:openai] API call ok in ${Date.now() - t0}ms`)
+
+  // Persist prompts + the FULL response body now — captures both success and a
+  // parse failure below (the whole response.data is what we'd need for either).
+  writeClipDebug(debugPath, { provider: 'openai', model: MODEL, system, user, raw: response.data })
 
   const choice = response.data?.choices?.[0]
   if (choice?.message?.refusal) {

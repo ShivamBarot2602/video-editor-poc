@@ -53,7 +53,45 @@ function buildSegmentLines(segments) {
 }
 
 /**
- * Build the clip-suggestion prompt.
+ * Static SYSTEM prompt — role, rules, edge-case guidance, output shape.
+ * No per-request numbers live here so it stays byte-identical across calls,
+ * which lets OpenAI prefix-cache and Gemini implicit-cache it. The actual
+ * COUNT / LENGTH RANGE / DURATION arrive in the user message.
+ *
+ * @returns {string}
+ */
+function buildClipSystemPrompt() {
+  return [
+    'You are a **short-form video editor**. You read a long video\'s transcript and pick its most **engaging** clips for Reels / Shorts / TikTok.',
+    '',
+    '**GOAL** — pick clips a viewer would stop scrolling for. Each clip must:',
+    '- open with a **scroll-stopping hook** in its first seconds,',
+    '- **stand alone** (make sense without the rest of the video),',
+    '- carry a clear emotional or curiosity payload, or a quotable line.',
+    '',
+    '**HARD RULES**',
+    '- Return **exactly** the COUNT given in the user message, ranked **best first**.',
+    '- `start`/`end` are in **seconds**. Enforce `0 <= start < end <= DURATION`.',
+    '- Each clip length (`end - start`) must fall inside the given **LENGTH RANGE**.',
+    '- Clips must **not overlap**.',
+    '- **Snap** `start`/`end` to the segment boundaries (`[index] start-end`) in the transcript — never cut mid-sentence.',
+    '- `transcript_excerpt` must be the **verbatim** transcript text inside the range — never invent words.',
+    '- `score` is an integer **1-10** for expected engagement.',
+    '',
+    '**EDGE CASES** (follow these, do not guess):',
+    '- Too few strong moments, or transcript shorter than the range → return **fewer** clips. Never pad weak ones, never exceed DURATION.',
+    '- Whole video already short → **one tight clip** beats three filler ones.',
+    '- Sparse or empty transcript → return `{"clips":[]}`.',
+    '- Unsure where a clip should end → prefer the **wider** segment-aligned cut so the thought is complete.',
+    '- Hook lives mid-segment → still start the clip at the **segment boundary**, not mid-word.',
+    '',
+    '**OUTPUT** — return **only** this JSON. No prose. No markdown fences.',
+    '{"clips":[{"start":<sec>,"end":<sec>,"title":"<=60 chars","hook":"opening line","rationale":"why it is engaging","transcript_excerpt":"verbatim text in range","score":<1-10>}]}',
+  ].join('\n')
+}
+
+/**
+ * Dynamic USER prompt — per-request constraints + the transcript itself.
  *
  * @param {object} opts
  * @param {Array}  opts.segments      - transcription segments [{start,end,speaker,text,text_edited}]
@@ -62,42 +100,28 @@ function buildSegmentLines(segments) {
  * @param {number} opts.videoDuration - total video duration in seconds
  * @param {string} [opts.language]
  * @param {string} [opts.filename]
- * @returns {{ prompt: string, truncated: boolean }}
+ * @returns {{ text: string, truncated: boolean }}
  */
-function buildClipPrompt({ segments, bucket, count, videoDuration, language, filename } = {}) {
+function buildClipUserPrompt({ segments, bucket, count, videoDuration, language, filename } = {}) {
   const b = resolveBucket(bucket)
   const maxLen = Math.min(b.max, Math.max(2, Math.floor(videoDuration)))
   const { lines, truncated } = buildSegmentLines(segments)
 
-  const context = []
-  if (filename) context.push(`Source video: "${filename}".`)
-  if (language) context.push(`Spoken language: ${language}.`)
+  const ctx = [`duration ${videoDuration.toFixed(1)}s`]
+  if (language) ctx.push(`language ${language}`)
 
-  const prompt = [
-    `You are a short-form video editor. From the transcript of a ${videoDuration.toFixed(1)}-second video, select the ${count} MOST engaging clips for social platforms (Reels / Shorts / TikTok).`,
-    'Each clip must be self-contained and start with a scroll-stopping hook in its first seconds.',
-    context.length ? '\n' + context.join(' ') : '',
+  const text = [
+    filename ? `**VIDEO**: "${filename}" · ${ctx.join(' · ')}` : `**VIDEO**: ${ctx.join(' · ')}`,
+    `**COUNT**: ${count} clips`,
+    `**LENGTH RANGE**: ${b.min}-${maxLen} seconds per clip`,
+    `**DURATION**: ${videoDuration.toFixed(1)} seconds (never exceed)`,
+    truncated ? '_(transcript down-sampled to fit — gaps in indices are expected)_' : '',
     '',
-    'Hard requirements:',
-    `- Return EXACTLY ${count} clips, ranked best first.`,
-    `- start and end are in SECONDS. Enforce 0 <= start < end <= ${videoDuration.toFixed(1)}.`,
-    `- Each clip duration (end - start) MUST be between ${b.min} and ${maxLen} seconds.`,
-    '- Snap start/end to the [index] segment boundaries below whenever possible.',
-    '- Clips must NOT overlap each other.',
-    '- transcript_excerpt must be the verbatim transcript text covered by the clip range.',
-    '- score is an integer 1-10 rating expected engagement.',
-    '',
-    'Selection guidance: prioritise a strong hook, emotional or curiosity payload, a clear standalone point, and quotable lines. You only have the transcript (no video), so infer engaging moments from what is said.',
-    '',
-    'Transcript (one line per segment: [index] start-end speaker: text):',
+    '**TRANSCRIPT** — one line per segment, `[index] start-end speaker: text`:',
     lines,
-    '',
-    'Return ONLY a JSON object of the form:',
-    '{"clips":[{"start":<sec>,"end":<sec>,"title":"<<=60 chars>","hook":"<the scroll-stopping opening line>","rationale":"<why this clip is engaging>","transcript_excerpt":"<verbatim text in range>","score":<1-10>}]}',
-    'No prose outside the JSON. No markdown fences.',
   ].filter(Boolean).join('\n')
 
-  return { prompt, truncated }
+  return { text, truncated }
 }
 
-module.exports = { BUCKETS, resolveBucket, buildClipPrompt, TRANSCRIPT_CHAR_CAP }
+module.exports = { BUCKETS, resolveBucket, buildClipSystemPrompt, buildClipUserPrompt, TRANSCRIPT_CHAR_CAP }

@@ -1,5 +1,6 @@
 const axios = require('axios')
-const { buildClipPrompt } = require('../../lib/clipPrompt')
+const { buildClipSystemPrompt, buildClipUserPrompt } = require('../../lib/clipPrompt')
+const { writeClipDebug } = require('../../lib/clipDebug')
 
 const MODEL = 'gemini-2.5-pro'
 
@@ -19,20 +20,25 @@ const ENDPOINT = (model) =>
  * this model, so we instruct JSON-only in the prompt and defensively strip any
  * stray markdown fences / prose before parsing (same approach as the rerank wrapper).
  *
- * @param {object} opts - see buildClipPrompt (segments, bucket, count, videoDuration, language, filename)
+ * @param {object} opts - prompt inputs (segments, bucket, count, videoDuration, language, filename)
+ * @param {string} [opts.debugPath] - if set, write prompts + raw response here (overwritten each run)
  * @param {number} [opts.timeoutMs=120000]
  * @returns {Promise<{ model:string, clips:Array, truncated:boolean }>} raw, un-clamped clips
  */
-async function suggest({ segments, bucket, count, videoDuration, language, filename, timeoutMs = 120000 }) {
+async function suggest({ segments, bucket, count, videoDuration, language, filename, debugPath, timeoutMs = 120000 }) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not set')
   }
 
-  const { prompt, truncated } = buildClipPrompt({ segments, bucket, count, videoDuration, language, filename })
-  console.log(`[clipSuggest:gemini] model=${MODEL} count=${count} bucket=${bucket} promptChars=${prompt.length} truncated=${truncated}`)
+  const system = buildClipSystemPrompt()
+  const { text: user, truncated } = buildClipUserPrompt({ segments, bucket, count, videoDuration, language, filename })
+  console.log(`[clipSuggest:gemini] model=${MODEL} count=${count} bucket=${bucket} sysChars=${system.length} userChars=${user.length} truncated=${truncated}`)
 
   const body = {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    // Top-level system_instruction (v1-supported for 2.x models); the
+    // transcript-bearing user turn goes in contents.
+    system_instruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: user }] }],
     generationConfig: {
       temperature: 0.3,
     },
@@ -65,11 +71,16 @@ async function suggest({ segments, bucket, count, videoDuration, language, filen
   if (response.status < 200 || response.status >= 300) {
     const detail = typeof response.data === 'string'
       ? response.data
-      : JSON.stringify(response.data).slice(0, 600)
-    console.error(`[clipSuggest:gemini] HTTP ${response.status} in ${Date.now() - t0}ms: ${detail}`)
+      : JSON.stringify(response.data)
+    console.error(`[clipSuggest:gemini] HTTP ${response.status} in ${Date.now() - t0}ms: ${detail.slice(0, 600)}`)
+    writeClipDebug(debugPath, { provider: 'gemini', model: MODEL, system, user, raw: response.data, error: `HTTP ${response.status}` })
     throw new Error(`clipSuggest (gemini) HTTP ${response.status}: ${detail.slice(0, 400)}`)
   }
   console.log(`[clipSuggest:gemini] API call ok in ${Date.now() - t0}ms`)
+
+  // Persist prompts + the FULL response body now — captures both success and a
+  // parse failure below.
+  writeClipDebug(debugPath, { provider: 'gemini', model: MODEL, system, user, raw: response.data })
 
   // Stitch all text parts from candidate 0.
   const cand = response.data?.candidates?.[0]

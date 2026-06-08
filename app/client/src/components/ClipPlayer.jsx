@@ -4,6 +4,10 @@ import { Play, Pause, Volume2, VolumeX } from 'lucide-react'
 // Small epsilon to beat frame-time granularity at the window boundary.
 const EPS = 0.03
 
+// Every mounted ClipPlayer's <video> registers here so that starting one can
+// pause all the others — only a single clip ever plays at a time.
+const activePlayers = new Set()
+
 function fmtClock(s) {
   if (!Number.isFinite(s) || s < 0) s = 0
   const m = Math.floor(s / 60)
@@ -74,7 +78,13 @@ export default function ClipPlayer({ videoId, start, end, loop = true, aspectRat
       else if (v.currentTime < start) v.currentTime = start
     }
 
-    const onPlay = () => setPlaying(true)
+    const onPlay = () => {
+      // Pause every other clip so only one plays at a time.
+      for (const other of activePlayers) {
+        if (other !== v && !other.paused) { try { other.pause() } catch (_) {} }
+      }
+      setPlaying(true)
+    }
     const onPause = () => setPlaying(false)
     const onEnded = () => {
       if (loop) { v.currentTime = start; v.play().catch(() => {}) }
@@ -88,11 +98,13 @@ export default function ClipPlayer({ videoId, start, end, loop = true, aspectRat
     v.addEventListener('play', onPlay)
     v.addEventListener('pause', onPause)
     v.addEventListener('ended', onEnded)
+    activePlayers.add(v)
 
     // Metadata may already be loaded (StrictMode double-mount / cached) — seek now.
     if (v.readyState >= 1) onMeta()
 
     return () => {
+      activePlayers.delete(v)
       v.removeEventListener('loadedmetadata', onMeta)
       v.removeEventListener('timeupdate', onTime)
       v.removeEventListener('seeking', onSeeking)
