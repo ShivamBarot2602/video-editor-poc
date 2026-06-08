@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, LayoutGrid, Sparkles } from 'lucide-react'
+import { ArrowLeft, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
@@ -292,6 +292,14 @@ export default function EditorPage() {
           title="Generate thumbnail candidates"
         >
           <Sparkles size={11} /> Thumbnails
+        </button>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => navigate(`/clips/${videoId}${selectedProvider ? `?transcriptProvider=${selectedProvider}` : ''}`)}
+          style={{ fontSize: 11, color: 'var(--text-dim)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          title="Suggest short clips"
+        >
+          <Scissors size={11} /> Clips
         </button>
         <button
           className="btn btn-outline btn-sm"
