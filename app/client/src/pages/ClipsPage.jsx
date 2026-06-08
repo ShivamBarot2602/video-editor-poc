@@ -1,0 +1,501 @@
+import { useEffect, useRef, useState } from 'react'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { Scissors, ArrowLeft, Loader2, Sparkles, AlertTriangle, FileText, Bookmark } from 'lucide-react'
+import toast from 'react-hot-toast'
+import UploadZone from '../components/UploadZone'
+import ClipCard from '../components/ClipCard'
+import ClipControlsBar from '../components/ClipControlsBar'
+
+const IDLE = { status: 'idle', progress: 0 }
+
+function resolveAspectRatio(meta) {
+  if (meta?.video_width && meta?.video_height) return `${meta.video_width} / ${meta.video_height}`
+  return '16 / 9'
+}
+
+function seedExportStates(clips) {
+  const out = {}
+  for (const c of clips || []) {
+    out[c.id] = c.exported && c.clipUrl ? { status: 'done', progress: 100, url: c.clipUrl } : IDLE
+  }
+  return out
+}
+
+// Mirror of the server's computeSavedId — lets a suggested card know whether its
+// clip is already in the saved library.
+function computeSavedId(clip) {
+  return `saved-${clip.suggestProvider || 'clip'}-${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}`
+}
+
+function triggerDownload(url) {
+  const a = document.createElement('a')
+  a.href = url
+  a.setAttribute('download', '')
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+function fmtSize(bytes) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  return `${(bytes / 1024).toFixed(0)} KB`
+}
+
+/* `/clips` entry with no video — upload or pick a recent session. */
+function ClipsPicker() {
+  const navigate = useNavigate()
+  const [videos, setVideos] = useState(null)
+  const [thumbErrors, setThumbErrors] = useState({})
+  const go = (id) => navigate(`/clips/${id}`)
+
+  useEffect(() => {
+    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}>
+      <div style={{
+        width: 300, flexShrink: 0, background: 'var(--surface-dark)',
+        borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column',
+        padding: 20, gap: 14, overflow: 'hidden',
+      }}>
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Upload Video
+        </div>
+        <UploadZone onUpload={(id) => go(id)} compact />
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-sub)', paddingTop: 14 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Or pick a recent session
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {videos === null ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Loading…</span>
+            ) : videos.length === 0 ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>No sessions yet.</span>
+            ) : videos.map((v, i) => (
+              <button
+                key={v.id}
+                onClick={() => go(v.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
+                  borderBottom: i < videos.length - 1 ? '1px solid var(--border-sub)' : 'none',
+                  cursor: 'pointer', textAlign: 'left', background: 'transparent', border: 'none', width: '100%',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden' }}>
+                  {!thumbErrors[v.id] && (
+                    <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.filename}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>
+                    {fmtSize(v.size)} · {v.providers?.length ? `${v.providers.length} transcript${v.providers.length > 1 ? 's' : ''}` : 'no transcript'}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+        <div style={{ border: '1.5px dashed var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: 'var(--surface)', padding: '48px 64px', maxWidth: 440 }}>
+          <div style={{ width: 40, height: 40, border: '1.5px dashed var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Scissors size={20} style={{ color: 'var(--text-dim)' }} />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Find engaging clips</div>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6 }}>
+            Upload a video or pick a recent session.<br />A transcript is required to suggest clips.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ClipsPage() {
+  const { videoId } = useParams()
+  if (!videoId) return <ClipsPicker />
+  return <ClipsEditor key={videoId} videoId={videoId} />
+}
+
+function ClipsEditor({ videoId }) {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const [video, setVideo] = useState(null)
+  const [transcriptProviders, setTranscriptProviders] = useState(null) // null = discovering
+  const [selectedTranscriptProvider, setSelectedTranscriptProvider] = useState(searchParams.get('transcriptProvider') || '')
+  const [suggestProvider, setSuggestProvider] = useState(
+    () => searchParams.get('suggestProvider') || localStorage.getItem('clip_suggest_provider') || 'gemini'
+  )
+  const [bucket, setBucket] = useState(searchParams.get('bucket') || 'auto')
+  const [count, setCount] = useState(parseInt(searchParams.get('count'), 10) || 3)
+
+  const [clips, setClips] = useState(null)          // null = none yet
+  const [metadata, setMetadata] = useState(null)
+  const [loadingSaved, setLoadingSaved] = useState(true)
+  const [suggesting, setSuggesting] = useState(false)
+  const [error, setError] = useState(null)
+  const [exportStates, setExportStates] = useState({})
+  const [savedClips, setSavedClips] = useState([])
+
+  const esMapRef = useRef(new Map())
+
+  // ── deep-link + persistence ──────────────────────────────────────────────
+  useEffect(() => {
+    const next = { suggestProvider, bucket, count: String(count) }
+    if (selectedTranscriptProvider) next.transcriptProvider = selectedTranscriptProvider
+    setSearchParams(next, { replace: true })
+    localStorage.setItem('clip_suggest_provider', suggestProvider)
+  }, [suggestProvider, selectedTranscriptProvider, bucket, count]) // eslint-disable-line
+
+  // ── discover the video + its transcript providers ──────────────────────────
+  useEffect(() => {
+    let cancel = false
+    fetch('/api/videos').then(r => r.json()).then(list => {
+      if (cancel) return
+      const v = (list || []).find(x => x.id === videoId)
+      if (!v) { toast.error('Video not found'); navigate('/'); return }
+      setVideo(v)
+      setTranscriptProviders(v.providers || [])
+      setSelectedTranscriptProvider(prev => (prev && v.providers?.includes(prev)) ? prev : (v.providers?.[0] || ''))
+    }).catch(() => { if (!cancel) setTranscriptProviders([]) })
+    return () => { cancel = true }
+  }, [videoId, navigate])
+
+  // ── load saved clips for the chosen suggest provider ───────────────────────
+  useEffect(() => {
+    let cancel = false
+    setLoadingSaved(true)
+    setError(null)
+    fetch(`/api/clips/${videoId}/${suggestProvider}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancel) return
+        if (d) { setMetadata(d.metadata); setClips(d.clips || []); setExportStates(p => ({ ...p, ...seedExportStates(d.clips) })) }
+        else { setMetadata(null); setClips(null) }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancel) setLoadingSaved(false) })
+    return () => { cancel = true }
+  }, [videoId, suggestProvider])
+
+  // ── load the persistent saved-clips library (cross-provider, survives runs) ──
+  useEffect(() => {
+    let cancel = false
+    fetch(`/api/clips/${videoId}/saved`)
+      .then(r => r.ok ? r.json() : { clips: [] })
+      .then(d => {
+        if (cancel) return
+        const list = d.clips || []
+        setSavedClips(list)
+        setExportStates(p => ({ ...p, ...seedExportStates(list) }))
+      })
+      .catch(() => {})
+    return () => { cancel = true }
+  }, [videoId])
+
+  // ── tear down any open export streams on unmount ───────────────────────────
+  useEffect(() => () => {
+    for (const es of esMapRef.current.values()) { try { es.close() } catch (_) {} }
+    esMapRef.current.clear()
+  }, [])
+
+  async function handleSuggest() {
+    if (suggesting) return
+    if (!selectedTranscriptProvider) { toast.error('Pick a transcript source first'); return }
+    setSuggesting(true)
+    setError(null)
+    const tid = toast.loading('Suggesting clips…')
+    try {
+      const res = await fetch(`/api/clips/${videoId}/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestProvider, transcriptProvider: selectedTranscriptProvider, bucket, count }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to suggest clips')
+      setMetadata(data.metadata)
+      setClips(data.clips || [])
+      setExportStates(p => ({ ...p, ...seedExportStates(data.clips) }))
+      toast.success(`Found ${data.clips?.length || 0} clips`, { id: tid })
+      ;(data.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
+    } catch (e) {
+      setError(e.message)
+      toast.error(e.message, { id: tid })
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  async function handleSave(clip) {
+    try {
+      const res = await fetch(`/api/clips/${videoId}/saved`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clip, transcriptProvider: selectedTranscriptProvider, bucket }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+      setSavedClips(data.clips || [])
+      toast.success('Saved to your library')
+    } catch (e) {
+      toast.error(e.message)
+    }
+  }
+
+  async function handleRemoveSaved(savedId) {
+    try {
+      const res = await fetch(`/api/clips/${videoId}/saved/${savedId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Remove failed')
+      setSavedClips(data.clips || [])
+      const es = esMapRef.current.get(savedId)
+      if (es) { try { es.close() } catch (_) {} esMapRef.current.delete(savedId) }
+      toast.success('Removed from saved')
+    } catch (e) {
+      toast.error(e.message)
+    }
+  }
+
+  // Download = ffmpeg-cut on demand (SSE progress) then trigger a browser
+  // download. Re-download is instant once the clip is cut. `source` selects
+  // which library the clip lives in ('suggest' = current results, 'saved').
+  function handleDownload(clip, source = 'suggest') {
+    const id = clip.id
+    const cur = exportStates[id]
+    if (cur?.status === 'done' && cur.url) { triggerDownload(cur.url); return }
+
+    const prev = esMapRef.current.get(id)
+    if (prev) { try { prev.close() } catch (_) {} esMapRef.current.delete(id) }
+
+    setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
+    const params = new URLSearchParams({ clipId: id })
+    if (source === 'saved') params.set('source', 'saved')
+    else params.set('suggestProvider', suggestProvider)
+    const es = new EventSource(`/api/clips/${videoId}/export/stream?${params.toString()}`)
+    esMapRef.current.set(id, es)
+
+    es.onmessage = (msg) => {
+      let ev
+      try { ev = JSON.parse(msg.data) } catch { return }
+      if (ev.type === 'start') {
+        setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
+      } else if (ev.type === 'progress') {
+        setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: ev.percent ?? 0 } }))
+      } else if (ev.type === 'done') {
+        setExportStates(p => ({ ...p, [id]: { status: 'done', progress: 100, url: ev.clipUrl } }))
+        try { es.close() } catch (_) {}
+        esMapRef.current.delete(id)
+        triggerDownload(ev.clipUrl)
+      } else if (ev.type === 'error') {
+        setExportStates(p => ({ ...p, [id]: { status: 'error', error: ev.message } }))
+        try { es.close() } catch (_) {}
+        esMapRef.current.delete(id)
+        toast.error(ev.message || 'Download failed')
+      }
+    }
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) return // benign close after done/error
+      setExportStates(p => {
+        const c = p[id]
+        if (c?.status === 'done') return p
+        return { ...p, [id]: { status: 'error', error: 'Connection lost' } }
+      })
+      try { es.close() } catch (_) {}
+      esMapRef.current.delete(id)
+    }
+  }
+
+  const discovering = transcriptProviders === null
+  const noTranscript = !discovering && transcriptProviders.length === 0
+  const aspectRatio = resolveAspectRatio(metadata)
+  const hasClips = Array.isArray(clips) && clips.length > 0
+  const savedIds = new Set(savedClips.map(c => c.id))
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg)' }}>
+      <PageBar videoId={videoId} filename={video?.filename} count={hasClips ? clips.length : 0} />
+
+      {discovering ? (
+        <Centered><Loader2 size={16} className="spin" /> Loading…</Centered>
+      ) : noTranscript ? (
+        <Centered>
+          <FileText size={22} color="var(--text-faint)" />
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>No transcript yet</div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-faint)', lineHeight: 1.6, textAlign: 'center' }}>
+            Clip suggestions read the transcript.<br />Transcribe this video first.
+          </div>
+          <Link to={`/editor/${videoId}`} className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
+            Go to editor
+          </Link>
+        </Centered>
+      ) : (
+        <>
+          <ClipControlsBar
+            transcriptProviders={transcriptProviders}
+            transcriptProvider={selectedTranscriptProvider}
+            onTranscriptProvider={setSelectedTranscriptProvider}
+            suggestProvider={suggestProvider}
+            onSuggestProvider={setSuggestProvider}
+            bucket={bucket}
+            onBucket={setBucket}
+            count={count}
+            onCount={setCount}
+            onSuggest={handleSuggest}
+            suggesting={suggesting}
+          />
+
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '18px 20px 32px' }}>
+            {error && (
+              <div style={{
+                marginBottom: 16, padding: 10,
+                background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.3)',
+                borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--error)',
+                display: 'flex', gap: 8, alignItems: 'flex-start',
+              }}>
+                <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {savedClips.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <Bookmark size={14} color="var(--accent)" />
+                  <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-bright)' }}>Saved clips</h2>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{savedClips.length} kept across runs</span>
+                </div>
+                <div className="clips-grid">
+                  {savedClips.map(c => (
+                    <ClipCard
+                      key={c.id}
+                      videoId={videoId}
+                      clip={c}
+                      aspectRatio={aspectRatio}
+                      variant="saved"
+                      exportState={exportStates[c.id] || IDLE}
+                      onDownload={(clip) => handleDownload(clip, 'saved')}
+                      onRemove={handleRemoveSaved}
+                    />
+                  ))}
+                </div>
+                <div className="divider" style={{ marginTop: 20 }} />
+              </div>
+            )}
+
+            {suggesting ? (
+              <div className="clips-grid">
+                {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} aspectRatio={aspectRatio} />)}
+              </div>
+            ) : loadingSaved ? (
+              <Centered><Loader2 size={16} className="spin" /> Loading saved clips…</Centered>
+            ) : hasClips ? (
+              <>
+                {metadata?.model && (
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 12 }}>
+                    {clips.length} clips · suggested by {metadata.model} · from {metadata.transcriptProvider} transcript
+                  </div>
+                )}
+                <div className="clips-grid">
+                  {clips.map(c => (
+                    <ClipCard
+                      key={c.id}
+                      videoId={videoId}
+                      clip={c}
+                      aspectRatio={aspectRatio}
+                      variant="suggested"
+                      isSaved={savedIds.has(computeSavedId(c))}
+                      exportState={exportStates[c.id] || IDLE}
+                      onSave={handleSave}
+                      onDownload={(clip) => handleDownload(clip, 'suggest')}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <Centered>
+                <Sparkles size={22} color="var(--text-faint)" />
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No clips yet.</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Pick your options above and click "Suggest clips".</div>
+              </Centered>
+            )}
+          </div>
+        </>
+      )}
+
+      <style>{`
+        .clips-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+        @media (max-width: 980px) { .clips-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 640px) { .clips-grid { grid-template-columns: 1fr; } }
+        .spin { animation: spin 1s linear infinite; }
+        .clip-shimmer {
+          background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 37%, var(--surface-2) 63%);
+          background-size: 400% 100%; animation: clip-shimmer 1.4s ease infinite;
+        }
+        @keyframes clip-shimmer { 0% { background-position: 100% 0 } 100% { background-position: 0 0 } }
+        @media (prefers-reduced-motion: reduce) { .clip-shimmer { animation: none } .spin { animation: none } }
+      `}</style>
+    </div>
+  )
+}
+
+function PageBar({ videoId, filename, count }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 16px', borderBottom: '1px solid var(--border-sub)',
+      background: 'var(--surface-dark)', flexShrink: 0,
+    }}>
+      <Link to={`/editor/${videoId}`} className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+        <ArrowLeft size={14} /> Editor
+      </Link>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Scissors size={14} color="var(--accent)" /> Video Clips
+      </div>
+      {filename && (
+        <span style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
+          {filename}
+        </span>
+      )}
+      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }}>
+        {videoId}
+      </code>
+      {count > 0 && (
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
+          Preview, then export the ones you want.
+        </span>
+      )}
+    </div>
+  )
+}
+
+function Centered({ children }) {
+  return (
+    <div style={{
+      flex: 1, minHeight: 240, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 8,
+      color: 'var(--text-muted)', fontSize: 13, padding: 24,
+    }}>{children}</div>
+  )
+}
+
+function SkeletonCard({ aspectRatio }) {
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border-sub)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+      <div className="clip-shimmer" style={{ width: '100%', aspectRatio }} />
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="clip-shimmer" style={{ height: 14, width: '80%', borderRadius: 4 }} />
+        <div className="clip-shimmer" style={{ height: 11, width: '95%', borderRadius: 4 }} />
+        <div className="clip-shimmer" style={{ height: 11, width: '40%', borderRadius: 4 }} />
+        <div className="clip-shimmer" style={{ height: 30, width: '100%', borderRadius: 6, marginTop: 4 }} />
+      </div>
+    </div>
+  )
+}

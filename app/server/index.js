@@ -10,6 +10,7 @@ const transcribeRouter = require('./routes/transcribe')
 const prepareRouter = require('./routes/prepare')
 const burnRouter = require('./routes/burn')
 const thumbnailsRouter = require('./routes/thumbnails')
+const clipsRouter = require('./routes/clips')
 const { extractThumbnail } = require('./lib/ffmpeg')
 const { getFormat, pathFor, writeFormat, writeAll } = require('./lib/subtitleFormats')
 
@@ -37,6 +38,7 @@ app.use('/api/prepare', prepareRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/burn', burnRouter)
 app.use('/api/thumbnails', thumbnailsRouter)
+app.use('/api/clips', clipsRouter)
 
 // List all video sessions with metadata
 app.get('/api/videos', (req, res) => {
@@ -64,11 +66,17 @@ app.get('/api/videos', (req, res) => {
         .filter(f => f.startsWith('transcription_') && f.endsWith('.json'))
         .map(f => f.slice('transcription_'.length, -'.json'.length))
 
+      const clipProviders = files
+        .filter(f => f.startsWith('clips_') && f.endsWith('.json'))
+        .map(f => f.slice('clips_'.length, -'.json'.length))
+
       videos.push({
         id,
         filename: meta.filename || originalFile,
         size: meta.size ?? originalStat.size,
         providers,
+        clipProviders,
+        hasClips: clipProviders.length > 0,
         hasBurned: files.some(f => f.startsWith('burned.')),
         uploadedAt: meta.uploadedAt || originalStat.mtime.toISOString(),
         thumbnail: `/api/video/${id}/thumbnail?v=2`,
@@ -200,6 +208,15 @@ app.get('/api/video/:id/burned', (req, res) => {
   if (!burned) return res.status(404).json({ error: 'Burned video not ready' })
 
   res.sendFile(path.join(dir, burned))
+})
+
+// Serve an exported clip file
+app.get('/api/video/:id/clip/:clipId', (req, res) => {
+  const { id, clipId } = req.params
+  if (!/^[A-Za-z0-9_-]+$/.test(clipId)) return res.status(400).json({ error: 'Invalid clip id' })
+  const file = path.join(VIDEOS_DIR, id, 'clips', `${clipId}.mp4`)
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Clip not exported yet' })
+  res.sendFile(file)
 })
 
 // Generate and serve thumbnail for a video

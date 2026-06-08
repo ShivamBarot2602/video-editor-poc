@@ -86,4 +86,45 @@ function extractThumbnail(inputPath, outputPath) {
   })
 }
 
-module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail }
+/**
+ * Cut a [start, start+duration] segment out of a video, re-encoding for a
+ * frame-accurate trim (-c copy would snap to keyframes and miss the requested
+ * start by seconds). Streams progress (0–100) via the onProgress callback.
+ *
+ * Note: fluent-ffmpeg reports `percent` against the FULL input duration, so for
+ * a short clip cut from a long source the value can read low/jumpy — we clamp
+ * to [0,99] then emit 100 on end. Good enough for a progress bar.
+ *
+ * @param {string} inputPath
+ * @param {string} outputPath
+ * @param {number} start    - clip start in seconds
+ * @param {number} duration - clip length in seconds
+ * @param {(percent:number)=>void} [onProgress]
+ */
+function cutClip(inputPath, outputPath, start, duration, onProgress) {
+  return new Promise((resolve, reject) => {
+    // Delete existing output so ffmpeg doesn't prompt for overwrite
+    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
+
+    ffmpeg(inputPath)
+      .setStartTime(start) // output seek → frame-accurate
+      .setDuration(duration)
+      .videoCodec('libx264')
+      .audioCodec('aac')
+      .outputOptions(['-preset', 'veryfast', '-movflags', '+faststart'])
+      .output(outputPath)
+      .on('progress', ({ percent }) => {
+        if (typeof onProgress === 'function' && percent != null) {
+          onProgress(Math.max(0, Math.min(99, Math.round(percent))))
+        }
+      })
+      .on('end', () => {
+        onProgress?.(100)
+        resolve()
+      })
+      .on('error', reject)
+      .run()
+  })
+}
+
+module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail, cutClip }
