@@ -28,6 +28,16 @@ export const DEFAULT_STYLE = {
   quality: 23,              // CRF value
 }
 
+// Transcription export formats shown in the Export menu.
+// `kind: 'json'` is rendered client-side; `kind: 'subtitle'` downloads the
+// server-rendered file at /api/transcription/:id/:provider/:id (kept in sync
+// with edits). Add VTT/ASS later by registering it here AND in the server's
+// lib/subtitleFormats.js — no other client changes needed.
+export const EXPORT_FORMATS = [
+  { id: 'json', label: 'JSON', description: 'Full transcript and metadata', kind: 'json' },
+  { id: 'srt',  label: 'SRT',  description: 'SubRip subtitles',           kind: 'subtitle' },
+]
+
 export default function EditorPage() {
   const { videoId } = useParams()
   const navigate = useNavigate()
@@ -200,25 +210,37 @@ export default function EditorPage() {
     }
   }, [videoId, selectedProvider])
 
-  const handleDownloadTranscription = useCallback(() => {
-    if (!transcription) return
-    const payload = {
-      ...transcription,
-      metadata: {
-        ...(transcription.metadata || {}),
-        speaker_aliases: speakerAliases || {},
-      },
-      segments: (transcription.segments || []).map(seg => ({
-        ...seg,
-        speaker_display: (speakerAliases?.[seg.speaker] || '').trim() || seg.speaker,
-      })),
+  // JSON is built client-side (enriched with speaker_display); subtitle formats
+  // (srt, future vtt/ass) download the server-rendered file, which the server
+  // keeps in sync with edits.
+  const handleExport = useCallback((formatId) => {
+    if (!transcription || !videoId || !selectedProvider) return
+
+    if (formatId === 'json') {
+      const payload = {
+        ...transcription,
+        metadata: {
+          ...(transcription.metadata || {}),
+          speaker_aliases: speakerAliases || {},
+        },
+        segments: (transcription.segments || []).map(seg => ({
+          ...seg,
+          speaker_display: (speakerAliases?.[seg.speaker] || '').trim() || seg.speaker,
+        })),
+      }
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `transcription_${selectedProvider}.json`; a.click()
+      URL.revokeObjectURL(url)
+      return
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
+
     const a = document.createElement('a')
-    a.href = url; a.download = `transcription_${selectedProvider}.json`; a.click()
-    URL.revokeObjectURL(url)
-  }, [transcription, selectedProvider, speakerAliases])
+    a.href = `/api/transcription/${videoId}/${selectedProvider}/${formatId}`
+    a.download = `transcription_${selectedProvider}.${formatId}`
+    a.click()
+  }, [transcription, videoId, selectedProvider, speakerAliases])
 
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return
@@ -347,7 +369,8 @@ export default function EditorPage() {
                   selectedProvider={selectedProvider}
                   onProviderChange={setSelectedProvider}
                   onTranscribe={handleTranscribe}
-                  onDownload={handleDownloadTranscription}
+                  exportFormats={EXPORT_FORMATS}
+                  onExport={handleExport}
                   availableProviders={availableProviders}
                   currentTime={currentTime}
                   speakerAliases={speakerAliases}

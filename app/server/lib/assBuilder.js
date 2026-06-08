@@ -164,7 +164,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
 
   const events = []
   for (const seg of (transcription.segments || [])) {
-    for (const page of paginateSegment(seg, wordsPerPage)) {
+    // When the user edited the text, per-word timings (seg.words) no longer
+    // align with the new wording. Use the edited text and drop words so both
+    // pagination and buildKaraokeText fall back to plain (non-karaoke) text —
+    // mirrors the editor preview (TranscriptionPanel), which also disables
+    // karaoke for edited segments.
+    const effSeg = seg.text_edited
+      ? { ...seg, text: seg.text_edited, words: [] }
+      : seg
+    for (const page of paginateSegment(effSeg, wordsPerPage)) {
       const start = assTime(page.start)
       const end   = assTime(page.end)
       const text  = buildKaraokeText(page, karaokeStyle)

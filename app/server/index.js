@@ -12,6 +12,7 @@ const burnRouter = require('./routes/burn')
 const thumbnailsRouter = require('./routes/thumbnails')
 const clipsRouter = require('./routes/clips')
 const { extractThumbnail } = require('./lib/ffmpeg')
+const { getFormat, pathFor, writeFormat, writeAll } = require('./lib/subtitleFormats')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -149,7 +150,37 @@ app.patch('/api/transcription/:id/:provider', (req, res) => {
     }
 
     fs.writeFileSync(file, JSON.stringify(tx, null, 2), 'utf8')
+
+    // Regenerate every export format so downloads reflect the latest edits.
+    writeAll(path.join(VIDEOS_DIR, req.params.id), req.params.provider, tx)
+
     res.json(tx)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/transcription/:id/:provider/:format
+// Streams a registered export format (e.g. srt) as a download. Builds the file
+// lazily from the saved transcription JSON if it doesn't exist yet (older sessions).
+app.get('/api/transcription/:id/:provider/:format', (req, res) => {
+  const { id, provider, format } = req.params
+  const fmt = getFormat(format)
+  if (!fmt) return res.status(404).json({ error: `Unknown export format: ${format}` })
+
+  const videoDir = path.join(VIDEOS_DIR, id)
+  const jsonFile = path.join(videoDir, `transcription_${provider}.json`)
+  if (!fs.existsSync(jsonFile)) return res.status(404).json({ error: 'Transcription not found' })
+
+  try {
+    let filePath = pathFor(videoDir, provider, format)
+    if (!fs.existsSync(filePath)) {
+      const tx = JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
+      filePath = writeFormat(videoDir, provider, format, tx)
+    }
+    res.setHeader('Content-Type', fmt.contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="transcription_${provider}.${fmt.ext}"`)
+    res.sendFile(filePath)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
