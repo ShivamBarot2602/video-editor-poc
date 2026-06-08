@@ -2,6 +2,7 @@ const express = require('express')
 const path = require('path')
 const fs = require('fs')
 const { extractAudio } = require('../lib/ffmpeg')
+const { writeAll } = require('../lib/subtitleFormats')
 const providers = require('../providers')
 
 const router = express.Router()
@@ -77,6 +78,11 @@ router.post('/:id', async (req, res) => {
 
     fs.writeFileSync(transcriptionPath, JSON.stringify(normalizedResult, null, 2), 'utf8')
     console.log(`[${id}][${provider}] Transcription saved`)
+
+    // Persist all registered export formats (e.g. .srt) next to the JSON.
+    writeAll(videoDir, provider, normalizedResult)
+    console.log(`[${id}][${provider}] Export formats saved`)
+
     res.json(normalizedResult)
   } catch (err) {
     console.error(`[${id}][${provider}] Transcription error:`, err.message)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Pencil, Check, Zap } from 'lucide-react'
+import { Download, Pencil, Check, Zap, FileText, ChevronDown } from 'lucide-react'
 import { PROVIDERS } from '../providers'
 import SpeakerBadge from './SpeakerBadge'
 
@@ -55,7 +55,8 @@ function Spinner() {
 
 export default function TranscriptionPanel({
   transcription, isTranscribing,
-  selectedProvider, onProviderChange, onTranscribe, onDownload,
+  selectedProvider, onProviderChange, onTranscribe,
+  exportFormats = [], onExport,
   availableProviders = [],
   currentTime,
   speakerAliases = {},
@@ -66,11 +67,39 @@ export default function TranscriptionPanel({
   const [activeSegIdx, setActiveSegIdx] = useState(null)
   const [editingSegIdx, setEditingSegIdx] = useState(null)
   const [editingSegText, setEditingSegText] = useState('')
+  const [providerMenuOpen, setProviderMenuOpen] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const listRef = useRef(null)
   const rowRefs = useRef({})
   const editTextareaRef = useRef(null)
+  const providerMenuRef = useRef(null)
+  const exportMenuRef = useRef(null)
   const meta = transcription?.metadata
   const prov = PROVIDERS.find(p => p.id === selectedProvider)
+  const readyCount = PROVIDERS.filter(p => availableProviders.includes(p.id)).length
+
+  // Close any open header menu on outside click or Escape.
+  useEffect(() => {
+    if (!providerMenuOpen && !exportMenuOpen) return
+    const onPointerDown = (e) => {
+      if (providerMenuRef.current && !providerMenuRef.current.contains(e.target)) setProviderMenuOpen(false)
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) setExportMenuOpen(false)
+    }
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') { setProviderMenuOpen(false); setExportMenuOpen(false) }
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [providerMenuOpen, exportMenuOpen])
+
+  // Transcribing locks provider switching — make sure any open menu closes.
+  useEffect(() => {
+    if (isTranscribing) setProviderMenuOpen(false)
+  }, [isTranscribing])
 
   const playingSegIdx = useMemo(() => {
     if (!transcription?.segments || typeof currentTime !== 'number') return null
@@ -137,46 +166,154 @@ export default function TranscriptionPanel({
           TRANSCRIPTION
         </span>
 
-        {/* Provider pills */}
-        <div style={{ display: 'flex', gap: 5, flex: 1, flexWrap: 'wrap' }}>
-          {PROVIDERS.map(p => {
-            const hasTx = availableProviders.includes(p.id)
-            const isSelected = p.id === selectedProvider
-            return (
-              // Wrapper carries the title: disabled buttons swallow pointer
-              // events, so a tooltip on the button itself never shows.
-              <span
-                key={p.id}
-                title={isTranscribing ? 'Cannot switch provider while transcribing' : undefined}
-                style={{ display: 'inline-flex', cursor: isTranscribing ? 'not-allowed' : 'default' }}
-              >
-                <button
-                  onClick={() => onProviderChange(p.id)}
-                  disabled={isTranscribing}
-                  style={{
-                    padding: '2px 9px', borderRadius: 4, fontSize: 11,
-                    cursor: isTranscribing ? 'not-allowed' : 'pointer',
-                    opacity: isTranscribing && !isSelected ? 0.5 : 1,
-                    fontFamily: 'inherit', border: '1px solid', transition: 'all 150ms',
-                    borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
-                    background: isSelected ? 'var(--accent-dim)' : 'var(--surface-2)',
-                    color: isSelected ? 'var(--accent)' : 'var(--text-dim)',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}
-                >
-                  {hasTx && <Check size={9} strokeWidth={3} style={{ color: 'var(--success)', flexShrink: 0 }} />}
-                  {p.label}
-                </button>
+        {/* Provider selector */}
+        <div ref={providerMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <span
+            title={isTranscribing ? 'Cannot switch provider while transcribing' : undefined}
+            style={{ display: 'inline-flex', cursor: isTranscribing ? 'not-allowed' : 'default' }}
+          >
+            <button
+              type="button"
+              onClick={() => setProviderMenuOpen(o => !o)}
+              disabled={isTranscribing}
+              aria-haspopup="listbox"
+              aria-expanded={providerMenuOpen}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 8px', minWidth: 150, borderRadius: 6, fontSize: 12,
+                fontFamily: 'inherit', border: '1px solid var(--border)',
+                background: 'var(--surface-2)', color: 'var(--text)',
+                cursor: isTranscribing ? 'not-allowed' : 'pointer',
+                opacity: isTranscribing ? 0.6 : 1, transition: 'border-color 150ms',
+              }}
+            >
+              {availableProviders.includes(selectedProvider) && (
+                <Check size={11} strokeWidth={3} style={{ color: 'var(--success)', flexShrink: 0 }} />
+              )}
+              <span style={{ flex: 1, textAlign: 'left', whiteSpace: 'nowrap' }}>
+                {prov?.label || selectedProvider}
               </span>
-            )
-          })}
+              {readyCount > 0 && (
+                <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>
+                  {readyCount} ready
+                </span>
+              )}
+              <ChevronDown
+                size={13}
+                style={{ flexShrink: 0, transition: 'transform 150ms', transform: providerMenuOpen ? 'rotate(180deg)' : 'none' }}
+              />
+            </button>
+          </span>
+
+          {providerMenuOpen && (
+            <div
+              role="listbox"
+              style={{
+                position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 50,
+                minWidth: 280, maxHeight: 320, overflowY: 'auto',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: 4,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+              }}
+            >
+              {PROVIDERS.map(p => {
+                const hasTx = availableProviders.includes(p.id)
+                const isSelected = p.id === selectedProvider
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => { onProviderChange(p.id); setProviderMenuOpen(false) }}
+                    style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%',
+                      padding: '6px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                      fontFamily: 'inherit', textAlign: 'left', transition: 'background 120ms',
+                      background: isSelected ? 'var(--accent-dim)' : 'transparent',
+                    }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-2)' }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    <span style={{ width: 12, flexShrink: 0, paddingTop: 2 }}>
+                      {hasTx && <Check size={12} strokeWidth={3} style={{ color: 'var(--success)' }} />}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        display: 'block', fontSize: 12, fontWeight: isSelected ? 600 : 500,
+                        color: isSelected ? 'var(--accent)' : 'var(--text)',
+                      }}>
+                        {p.label}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 10, color: 'var(--text-dim)', marginTop: 1 }}>
+                        {p.note}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
-          {transcription && (
-            <button className="btn btn-ghost btn-sm" onClick={onDownload} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <Download size={11} /> JSON
-            </button>
+          {transcription && exportFormats.length > 0 && (
+            <div ref={exportMenuRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setExportMenuOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <Download size={11} /> Export
+                <ChevronDown
+                  size={12}
+                  style={{ transition: 'transform 150ms', transform: exportMenuOpen ? 'rotate(180deg)' : 'none' }}
+                />
+              </button>
+
+              {exportMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
+                    minWidth: 220, background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  {exportFormats.map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { onExport?.(f.id); setExportMenuOpen(false) }}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 8, width: '100%',
+                        padding: '6px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                        fontFamily: 'inherit', textAlign: 'left', background: 'transparent',
+                        transition: 'background 120ms',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <FileText size={13} style={{ color: 'var(--text-dim)', flexShrink: 0, marginTop: 1 }} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>
+                          {f.label}
+                        </span>
+                        {f.description && (
+                          <span style={{ display: 'block', fontSize: 10, color: 'var(--text-dim)', marginTop: 1 }}>
+                            {f.description}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <button className="btn btn-primary btn-sm" onClick={onTranscribe} disabled={isTranscribing}>
             {isTranscribing ? <><Spinner /> Transcribing…</> : transcription ? 'Re-transcribe' : 'Transcribe'}
