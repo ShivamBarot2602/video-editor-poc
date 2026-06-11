@@ -4,6 +4,16 @@ const cors = require('cors')
 const path = require('path')
 const fs = require('fs')
 const morgan = require('morgan')
+const Sentry = require('@sentry/node')
+
+// Initialize Sentry (if DSN is configured)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  })
+}
 
 const uploadRouter = require('./routes/upload')
 const transcribeRouter = require('./routes/transcribe')
@@ -39,6 +49,11 @@ app.use('/api/transcribe', transcribeRouter)
 app.use('/api/burn', burnRouter)
 app.use('/api/thumbnails', thumbnailsRouter)
 app.use('/api/clips', clipsRouter)
+
+// health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
 
 // List all video sessions with metadata
 app.get('/api/videos', (req, res) => {
@@ -247,6 +262,11 @@ app.get('/api/video/:id/thumbnail', async (req, res) => {
     res.status(500).json({ error: 'Failed to generate thumbnail' })
   }
 })
+
+// Sentry error handler (must be after all routes, before other error handlers)
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app)
+}
 
 // Global error handler
 app.use((err, _req, res, _next) => {

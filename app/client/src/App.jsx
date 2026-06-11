@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
 import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
@@ -34,22 +35,75 @@ function Header() {
 
 export default function App() {
   return (
-    <Router>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <Header />
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/playground" element={<PlaygroundPage />} />
-            <Route path="/report" element={<ProviderReportPage />} />
-            <Route path="/editor/:videoId" element={<EditorPage />} />
-            <Route path="/thumbnails" element={<ThumbnailsPage />} />
-            <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
-            <Route path="/clips" element={<ClipsPage />} />
-            <Route path="/clips/:videoId" element={<ClipsPage />} />
-          </Routes>
+    <Sentry.ErrorBoundary fallback={<ErrorFallback />} showDialog>
+      <Router>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+          <Header />
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/playground" element={<PlaygroundPage />} />
+              <Route path="/report" element={<ProviderReportPage />} />
+              <Route path="/editor/:videoId" element={<EditorPage />} />
+              <Route path="/thumbnails" element={<ThumbnailsPage />} />
+              <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
+              <Route path="/clips" element={<ClipsPage />} />
+              <Route path="/clips/:videoId" element={<ClipsPage />} />
+            </Routes>
+          </div>
         </div>
-      </div>
-    </Router>
+      </Router>
+    </Sentry.ErrorBoundary>
+  )
+}
+
+function ErrorFallback({ error, resetError }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      gap: '20px',
+      padding: '20px',
+      backgroundColor: '#1a1a1a',
+      color: '#e4e4e7',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>Something went wrong</h1>
+      <p style={{ color: '#a1a1a1', marginBottom: '20px', textAlign: 'center', maxWidth: '500px' }}>
+        We've been notified about this error. Please try refreshing the page.
+      </p>
+      {error && (
+        <pre style={{
+          backgroundColor: '#2a2a2a',
+          padding: '12px',
+          borderRadius: '4px',
+          overflow: 'auto',
+          maxHeight: '200px',
+          maxWidth: '600px',
+          fontSize: '12px',
+          border: '1px solid #404040',
+        }}>
+          {error.toString()}
+        </pre>
+      )}
+      <button
+        onClick={resetError}
+        style={{
+          padding: '10px 20px',
+          backgroundColor: '#7c3aed',
+          color: 'white',
+          border: 'none',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          marginTop: '10px',
+        }}
+      >
+        Try Again
+      </button>
+    </div>
   )
 }
