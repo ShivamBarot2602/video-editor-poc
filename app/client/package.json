@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/react": "^8.13.0",
     "lucide-react": "^1.14.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
