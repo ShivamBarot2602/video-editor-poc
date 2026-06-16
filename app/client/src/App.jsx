@@ -1,11 +1,14 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
-import ProviderReportPage from './pages/ProviderReportPage'
 import ThumbnailsPage from './pages/ThumbnailsPage'
 import ClipsPage from './pages/ClipsPage'
+import DocsHubPage from './pages/docs/DocsHubPage'
+import SubtitlesDocPage from './pages/docs/SubtitlesDocPage'
+import ThumbnailsDocPage from './pages/docs/ThumbnailsDocPage'
+import ClipsDocPage from './pages/docs/ClipsDocPage'
 
 function Header() {
   const location = useLocation()
@@ -13,21 +16,21 @@ function Header() {
   if (isEditor) return null
 
   const isPlayground = location.pathname === '/playground'
-  const isReport = location.pathname === '/report'
+  const isDocs = location.pathname.startsWith('/docs') || location.pathname === '/report'
   const isThumbnails = location.pathname.startsWith('/thumbnails')
   const isClips = location.pathname.startsWith('/clips')
-  const isHome = !isPlayground && !isReport && !isThumbnails && !isClips
+  const isHome = !isPlayground && !isDocs && !isThumbnails && !isClips
 
   return (
     <header className="topbar">
-      <span className="topbar-logo">SP Video Editor</span>
+      <Link to="/" className="topbar-logo" style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>SP Video Editor</Link>
       <span className="topbar-poc">POC</span>
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
         <Link to="/" className={`topbar-tab ${isHome ? 'active' : ''}`}>Upload New</Link>
         <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
         <Link to="/thumbnails" className={`topbar-tab ${isThumbnails ? 'active' : ''}`}>Thumbnails</Link>
         <Link to="/clips" className={`topbar-tab ${isClips ? 'active' : ''}`}>Clips</Link>
-        <Link to="/report" className={`topbar-tab ${isReport ? 'active' : ''}`}>Provider Report</Link>
+        <Link to="/docs" className={`topbar-tab ${isDocs ? 'active' : ''}`}>Docs</Link>
       </nav>
     </header>
   )
@@ -43,7 +46,11 @@ export default function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/playground" element={<PlaygroundPage />} />
-              <Route path="/report" element={<ProviderReportPage />} />
+              <Route path="/docs" element={<DocsHubPage />} />
+              <Route path="/docs/subtitles" element={<SubtitlesDocPage />} />
+              <Route path="/docs/thumbnails" element={<ThumbnailsDocPage />} />
+              <Route path="/docs/clips" element={<ClipsDocPage />} />
+              <Route path="/report" element={<Navigate to="/docs/subtitles" replace />} />
               <Route path="/editor/:videoId" element={<EditorPage />} />
               <Route path="/thumbnails" element={<ThumbnailsPage />} />
               <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
