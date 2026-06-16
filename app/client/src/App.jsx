@@ -20,7 +20,7 @@ function Header() {
 
   return (
     <header className="topbar">
-      <span className="topbar-logo">SP Video Editor</span>
+      <Link to="/" className="topbar-logo" style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>SP Video Editor</Link>
       <span className="topbar-poc">POC</span>
       <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
         <Link to="/" className={`topbar-tab ${isHome ? 'active' : ''}`}>Upload New</Link>

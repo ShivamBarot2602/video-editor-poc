@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Play, LayoutGrid, Sparkles } from 'lucide-react'
+import { Play, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PROVIDERS } from '../providers'
 
@@ -133,6 +133,14 @@ export default function RecentVideos({ onSelect, onPlayground }) {
                 title="Generate thumbnail candidates"
               >
                 <Sparkles size={10} /> Thumbs
+              </Link>
+              <Link
+                to={`/clips/${v.id}`}
+                className="btn btn-outline btn-sm"
+                style={{ flex: 1, fontSize: 10, padding: '4px 0', color: 'var(--text-dim)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3, textDecoration: 'none' }}
+                title="Suggest & export clips"
+              >
+                <Scissors size={10} /> Clips
               </Link>
             </div>
           </div>
