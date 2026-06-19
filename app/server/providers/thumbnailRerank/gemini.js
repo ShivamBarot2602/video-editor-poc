@@ -1,12 +1,15 @@
 const fs = require('fs')
 const axios = require('axios')
-const { buildRerankPrompt } = require('../../lib/thumbnailPolishPrompt')
+const { buildRerankSystemPrompt, buildRerankUserPrompt } = require('../../lib/thumbnailPolishPrompt')
 
 const MODEL = 'gemini-2.5-pro'
 
+// NOTE: v1 (stable) has no systemInstruction field — sending it 400s with
+// "Unknown name system_instruction". Use v1beta for any model where we pass a
+// system_instruction (verified June 2026).
 const MODEL_ENDPOINT_VERSION_MAP = {
-  'gemini-2.5-pro': 'v1',
-  'gemini-2.5-flash': 'v1',
+  'gemini-2.5-pro': 'v1beta',
+  'gemini-2.5-flash': 'v1beta',
   'gemini-3.1-pro-preview': 'v1beta',
   'gemini-3-flash-preview': 'v1beta',
   'gemini-3-flash': 'v1beta' ,
@@ -37,10 +40,17 @@ async function rerank({ frames, filename, transcriptHint, timeoutMs = 60000 }) {
     return []
   }
 
-  const prompt = buildRerankPrompt({ count: frames.length, filename, transcriptHint })
-  console.log(`[rerank:gemini] model=${MODEL} frames=${frames.length} promptChars=${prompt.length}`)
+  // Static rules → system_instruction; per-run context + images → user turn.
+  // Gemini wants a bare JSON array, so append that shape line to the system.
+  const system =
+    buildRerankSystemPrompt() +
+    '\n\nReturn ONLY a JSON array, one object per image:\n' +
+    '[{"label":"A","score":<1-10 number>,"rationale":"<one short sentence>"}, ...]\n' +
+    'No prose outside the JSON. No markdown fences.'
+  const user = buildRerankUserPrompt({ count: frames.length, filename, transcriptHint })
+  console.log(`[rerank:gemini] model=${MODEL} frames=${frames.length} sysChars=${system.length} userChars=${user.length}`)
 
-  const parts = [{ text: prompt }]
+  const parts = [{ text: user }]
   let totalBytes = 0
   for (const f of frames) {
     const buf = fs.readFileSync(f.path)
@@ -54,6 +64,7 @@ async function rerank({ frames, filename, transcriptHint, timeoutMs = 60000 }) {
   // ("No prose outside the JSON. No markdown fences.") and the parser below
   // strips stray markdown fences as a safety net.
   const body = {
+    system_instruction: { parts: [{ text: system }] },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       temperature: 0.2,

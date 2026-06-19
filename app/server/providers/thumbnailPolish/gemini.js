@@ -52,7 +52,7 @@ async function polish({
   // The official docs cURL example posts only `contents`. The model is image-out
   // by design, so modality declaration is unnecessary.
   // Aspect-ratio hint is delivered via the text prompt (see buildPolishPrompt).
-  const prompt = buildPolishPrompt({ filename, transcriptHint, styleBrief, aspect })
+  const prompt = buildPolishPrompt({ provider: 'gemini', filename, transcriptHint, styleBrief, aspect })
   const frameBuf = fs.readFileSync(framePath)
   const aspectRatio = aspectRatioFor(aspect)
   console.log(`[polish:gemini] model=${MODEL} aspect=${aspect} aspectRatio=${aspectRatio ?? '(omit)'} input=${framePath} (${frameBuf.length} bytes) promptChars=${prompt.length}`)
