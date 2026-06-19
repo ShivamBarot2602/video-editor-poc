@@ -5,8 +5,8 @@ const { writeClipDebug } = require('../../lib/clipDebug')
 const MODEL = 'gemini-2.5-pro'
 
 const MODEL_ENDPOINT_VERSION_MAP = {
-  'gemini-2.5-pro': 'v1',
-  'gemini-2.5-flash': 'v1',
+  'gemini-2.5-pro': 'v1beta',
+  'gemini-2.5-flash': 'v1beta',
 }
 
 const ENDPOINT = (model) =>
@@ -35,9 +35,8 @@ async function suggest({ segments, bucket, count, videoDuration, language, filen
   console.log(`[clipSuggest:gemini] model=${MODEL} count=${count} bucket=${bucket} sysChars=${system.length} userChars=${user.length} truncated=${truncated}`)
 
   const body = {
-    // Top-level system_instruction (v1-supported for 2.x models); the
-    // transcript-bearing user turn goes in contents.
-    system_instruction: { parts: [{ text: system }] },
+    // Top-level systemInstruction (camelCase — REST API v1 rejects snake_case).
+    systemInstruction: { parts: [{ text: system }] },
     contents: [{ role: 'user', parts: [{ text: user }] }],
     generationConfig: {
       temperature: 0.3,
