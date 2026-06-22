@@ -53,7 +53,7 @@ async function polish({
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set')
 
   const resolvedSize = size || sizeForAspect(aspect)
-  const prompt = buildPolishPrompt({ filename, transcriptHint, styleBrief, aspect })
+  const prompt = buildPolishPrompt({ provider: 'openai', filename, transcriptHint, styleBrief, aspect })
   console.log(`[polish:openai] model=${MODEL} aspect=${aspect} size=${resolvedSize} quality=${quality} input_fidelity=high output_format=${outputFormat} input=${framePath} promptChars=${prompt.length}`)
 
   const form = new FormData()
