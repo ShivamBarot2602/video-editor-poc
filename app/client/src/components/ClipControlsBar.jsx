@@ -1,4 +1,4 @@
-import { Sparkles, Loader2, Scissors } from 'lucide-react'
+import { Sparkles, Loader2, Film } from 'lucide-react'
 import { PROVIDERS } from '../providers'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
@@ -13,8 +13,15 @@ export const BUCKETS = [
 
 export const SUGGEST_PROVIDERS = [
   { id: 'gemini', label: 'Gemini', model: 'gemini-2.5-pro' },
-  { id: 'openai', label: 'OpenAI', model: 'gpt-4.1-mini' },
+  { id: 'openai', label: 'OpenAI', model: 'gpt-5.4-mini' },
 ]
+
+// Top-level method: read the transcript, or have Gemini watch the raw video.
+export const METHODS = [
+  { id: 'subtitles', label: 'Subtitles' },
+  { id: 'video',     label: 'Video understanding' },
+]
+export const VIDEO_MODEL = 'gemini-2.5-flash'
 
 const COUNTS = [3, 4, 5]
 
@@ -98,12 +105,15 @@ function Chips({ options, value, onChange, disabled, ariaLabel }) {
  * bucket, clip count, and the Suggest action.
  */
 export default function ClipControlsBar({
+  method = 'subtitles', onMethod,
   transcriptProviders, transcriptProvider, onTranscriptProvider,
   suggestProvider, onSuggestProvider,
   bucket, onBucket, count, onCount,
   onSuggest, suggesting, disabled,
 }) {
   const countOpts = COUNTS.map(n => ({ id: n, label: String(n) }))
+  const isVideo = method === 'video'
+  const busy = disabled || suggesting
 
   return (
     <div style={{
@@ -111,46 +121,77 @@ export default function ClipControlsBar({
       padding: '14px 20px', borderBottom: '1px solid var(--border-sub)',
       background: 'var(--surface-dark)',
     }}>
-      <Field label="Transcript source">
-        <select
-          value={transcriptProvider || ''}
-          onChange={e => onTranscriptProvider(e.target.value)}
-          disabled={disabled || suggesting}
-          style={{ width: 'auto', minWidth: 150 }}
-        >
-          {(transcriptProviders || []).map(id => (
-            <option key={id} value={id}>{PROVIDER_LABELS[id] || id}</option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Suggested by">
+      <Field label="Method">
         <Segmented
-          options={SUGGEST_PROVIDERS}
-          value={suggestProvider}
-          onChange={onSuggestProvider}
-          disabled={disabled || suggesting}
-          ariaLabel="Clip suggestion provider"
+          options={METHODS}
+          value={method}
+          onChange={onMethod}
+          disabled={busy}
+          ariaLabel="Suggestion method"
         />
       </Field>
 
+      {isVideo ? (
+        // Video understanding is Gemini-only — no transcript/provider pickers.
+        <Field label="Model">
+          <div
+            title="Gemini watches the raw video (audio + frames)"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, height: 30,
+              padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-sub)',
+              background: 'rgba(255,255,255,0.04)', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap',
+            }}
+          >
+            <Film size={13} color="var(--accent)" /> {VIDEO_MODEL}
+            <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>· ~$0.03 / 5 min</span>
+          </div>
+        </Field>
+      ) : (
+        <>
+          <Field label="Transcript source">
+            <select
+              value={transcriptProvider || ''}
+              onChange={e => onTranscriptProvider(e.target.value)}
+              disabled={busy}
+              style={{ width: 'auto', minWidth: 150 }}
+            >
+              {(transcriptProviders || []).map(id => (
+                <option key={id} value={id}>{PROVIDER_LABELS[id] || id}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Suggested by">
+            <Segmented
+              options={SUGGEST_PROVIDERS}
+              value={suggestProvider}
+              onChange={onSuggestProvider}
+              disabled={busy}
+              ariaLabel="Clip suggestion provider"
+            />
+          </Field>
+        </>
+      )}
+
       <Field label="Clip length">
-        <Chips options={BUCKETS} value={bucket} onChange={onBucket} disabled={disabled || suggesting} ariaLabel="Clip duration bucket" />
+        <Chips options={BUCKETS} value={bucket} onChange={onBucket} disabled={busy} ariaLabel="Clip duration bucket" />
       </Field>
 
       <Field label="How many">
-        <Chips options={countOpts} value={count} onChange={onCount} disabled={disabled || suggesting} ariaLabel="Number of clips" />
+        <Chips options={countOpts} value={count} onChange={onCount} disabled={busy} ariaLabel="Number of clips" />
       </Field>
 
       <button
         className="btn btn-primary"
         onClick={onSuggest}
-        disabled={disabled || suggesting}
+        disabled={busy}
         style={{ gap: 8, marginLeft: 'auto' }}
       >
         {suggesting
-          ? <><Loader2 size={14} className="spin" /> Suggesting…</>
-          : <><Sparkles size={14} /> Suggest clips</>}
+          ? <><Loader2 size={14} className="spin" /> {isVideo ? 'Analyzing…' : 'Suggesting…'}</>
+          : isVideo
+            ? <><Film size={14} /> Analyze video</>
+            : <><Sparkles size={14} /> Suggest clips</>}
       </button>
     </div>
   )

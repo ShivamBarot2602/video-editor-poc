@@ -4,12 +4,23 @@ const fs = require('fs')
 const clipSuggest = require('../providers/clipSuggest')
 const { resolveBucket } = require('../lib/clipPrompt')
 const { getVideoDuration, getVideoSize } = require('../lib/frameExtraction')
-const { cutClip } = require('../lib/ffmpeg')
+const { cutClip, extractFrameAt } = require('../lib/ffmpeg')
 
 const router = express.Router()
 
 // Only allow simple tokens in path-segment params (provider, clipId) to block traversal.
 const SAFE = /^[A-Za-z0-9_-]+$/
+
+// Provider id for the video-understanding method (Gemini watches the raw video).
+// Stored separately from the transcript providers so both can coexist.
+const VIDEO_PROVIDER = 'geminivideo'
+
+// Default-res Gemini handles ~1h of video; low-res reaches ~3h. Past this we
+// force low-res so long uploads still work.
+const DEFAULT_RES_MAX_S = 3600
+
+// In-flight lock for the (expensive) video-understanding run, keyed by videoId.
+const runningVideo = new Set()
 
 function videoDirOf(req, id) {
   return path.join(req.videosDir, id)
@@ -46,10 +57,18 @@ function computeSavedId(provider, start, end) {
 function cleanStaleSuggestionFiles(dir, provider) {
   try {
     const cdir = path.join(dir, 'clips')
-    if (!fs.existsSync(cdir)) return
-    for (const f of fs.readdirSync(cdir)) {
-      if (f.startsWith(`${provider}-clip-`) && f.endsWith('.mp4')) {
-        fs.unlinkSync(path.join(cdir, f))
+    if (fs.existsSync(cdir)) {
+      for (const f of fs.readdirSync(cdir)) {
+        if (f.startsWith(`${provider}-clip-`) && f.endsWith('.mp4')) {
+          fs.unlinkSync(path.join(cdir, f))
+        }
+      }
+    }
+    // Stale thumbnail frames from a previous run of this provider.
+    const tdir = path.join(dir, 'clips', 'thumbs')
+    if (fs.existsSync(tdir)) {
+      for (const f of fs.readdirSync(tdir)) {
+        if (f.startsWith(`${provider}-clip-`)) fs.unlinkSync(path.join(tdir, f))
       }
     }
   } catch (_) {}
@@ -92,15 +111,34 @@ function normalizeClips(raw, { videoDuration, count, segments, provider }) {
     end = Math.min(videoDuration, snap(end))
     if (end - start < 1) continue
     const score = Math.max(1, Math.min(10, Math.round(Number(c.score)) || 1))
-    cleaned.push({
+    const clip = {
       start, end,
       duration: +(end - start).toFixed(2),
       title: String(c.title || '').trim().slice(0, 120),
       hook: String(c.hook || '').trim(),
-      rationale: String(c.rationale || '').trim(),
+      // video method emits `reason`; transcript method emits `rationale`.
+      rationale: String(c.rationale ?? c.reason ?? '').trim(),
       transcript_excerpt: String(c.transcript_excerpt || '').trim(),
       score,
-    })
+    }
+
+    // Video-understanding extras — only attached when present, so transcript
+    // clips keep their existing shape.
+    const caption = String(c.caption || '').trim()
+    if (caption) clip.caption = caption
+
+    const rawThumbs = Array.isArray(c.thumbnails) ? c.thumbnails : []
+    const thumbs = []
+    for (const rt of rawThumbs) {
+      let tt = Number(rt && typeof rt === 'object' ? rt.t : rt)
+      if (!Number.isFinite(tt)) continue
+      tt = Math.max(start, Math.min(end, tt)) // clamp inside the (clamped) clip
+      thumbs.push({ t: +tt.toFixed(2) })
+      if (thumbs.length >= 3) break
+    }
+    if (thumbs.length) clip.thumbnails = thumbs
+
+    cleaned.push(clip)
   }
 
   // Rank best-first, then drop any clip overlapping an already-accepted one.
@@ -384,6 +422,137 @@ router.get('/:id/export/stream', async (req, res) => {
       res.end()
     } catch (_) {}
   }
+})
+
+// GET /api/clips/:id/suggest/stream?method=video&count=&bucket=&res=
+// Video-understanding method (SSE): upload the raw video to Gemini → analyze →
+// extract thumbnail frames. Long-running, so it streams phase events and holds
+// an in-flight lock per video.
+router.get('/:id/suggest/stream', async (req, res) => {
+  const { id } = req.params
+  const { method, bucket = 'auto', count, res: resParam } = req.query
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders?.()
+  const sendEvent = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`)
+
+  if (method !== 'video') {
+    sendEvent({ type: 'error', message: 'Unsupported method for streaming suggest' })
+    return res.end()
+  }
+  if (runningVideo.has(id)) {
+    sendEvent({ type: 'error', message: 'A video analysis is already running for this video. Wait for it to finish or refresh the page.' })
+    return res.end()
+  }
+
+  runningVideo.add(id)
+  try {
+    const dir = videoDirOf(req, id)
+    const originalPath = findOriginal(dir)
+    if (!originalPath) { sendEvent({ type: 'error', message: 'Video not found' }); return res.end() }
+    if (!clipSuggest.videoMethodAvailable()) {
+      sendEvent({ type: 'error', message: 'GEMINI_API_KEY not set on the server' }); return res.end()
+    }
+
+    const wantCount = Math.max(3, Math.min(5, parseInt(count, 10) || 3))
+    const b = resolveBucket(bucket)
+    const videoDuration = await getVideoDuration(originalPath)
+    if (!videoDuration || videoDuration < b.min) {
+      sendEvent({ type: 'error', message: 'Video is too short for clip suggestions' }); return res.end()
+    }
+    let size = { width: 0, height: 0 }
+    try { size = await getVideoSize(originalPath) } catch (_) {}
+
+    const warnings = []
+    let mediaResolution = 'low'
+    // let mediaResolution = resParam === 'low' ? 'low' : 'default'
+    // if (videoDuration > DEFAULT_RES_MAX_S && mediaResolution !== 'low') {
+    //   mediaResolution = 'low'
+    //   warnings.push(`Video over ${Math.round(DEFAULT_RES_MAX_S / 60)} min — using low media resolution.`)
+    // }
+
+    let filename
+    try { filename = JSON.parse(fs.readFileSync(path.join(dir, 'meta.json'), 'utf8')).filename } catch (_) {}
+
+    console.log(`[${id}] video suggest start: count=${wantCount} bucket=${bucket} res=${mediaResolution} dur=${videoDuration.toFixed(1)}s`)
+    sendEvent({ type: 'start' })
+
+    const debugPath = path.join(dir, `clip_debug_${VIDEO_PROVIDER}.log`)
+    const result = await clipSuggest.geminiVideo.suggestFromVideo({
+      videoPath: originalPath, dir, count: wantCount, bucket, videoDuration,
+      filename, language: null, debugPath, mediaResolution,
+      onPhase: (phase, data) => sendEvent({ type: 'phase', phase, ...(data || {}) }),
+    })
+
+    const { clips, warnings: normWarnings } = normalizeClips(result.clips, {
+      videoDuration, count: wantCount, segments: [], provider: VIDEO_PROVIDER,
+    })
+    warnings.push(...normWarnings)
+
+    // Extract the suggested thumbnail frames; a failed extract just drops that
+    // one thumb (the clip stays valid).
+    sendEvent({ type: 'phase', phase: 'extracting' })
+    cleanStaleSuggestionFiles(dir, VIDEO_PROVIDER)
+    const thumbsDir = path.join(dir, 'clips', 'thumbs')
+    fs.mkdirSync(thumbsDir, { recursive: true })
+    for (const clip of clips) {
+      if (!Array.isArray(clip.thumbnails)) continue
+      const kept = []
+      for (let n = 0; n < clip.thumbnails.length; n++) {
+        const t = clip.thumbnails[n].t
+        try {
+          await extractFrameAt(originalPath, t, path.join(thumbsDir, `${clip.id}-${n}.jpg`))
+          kept.push({ t, url: `/api/clips/${id}/thumb/${clip.id}/${n}` })
+        } catch (e) {
+          console.error(`[${id}] thumb extract failed (${clip.id}#${n} @${t}s): ${e.message}`)
+        }
+      }
+      clip.thumbnails = kept
+    }
+
+    const obj = {
+      metadata: {
+        method: 'video',
+        suggestProvider: VIDEO_PROVIDER,
+        model: result.model,
+        bucket,
+        bucketSeconds: { min: b.min, max: b.max },
+        requestedCount: wantCount,
+        video_duration_s: +videoDuration.toFixed(2),
+        video_width: size.width,
+        video_height: size.height,
+        mediaResolution,
+        language: null,
+        timestamp: new Date().toISOString(),
+        warnings,
+      },
+      clips,
+    }
+    fs.writeFileSync(clipsFile(dir, VIDEO_PROVIDER), JSON.stringify(obj, null, 2), 'utf8')
+    console.log(`[${id}] video suggest done: ${clips.length} clips, ${warnings.length} warnings → clips_${VIDEO_PROVIDER}.json`)
+
+    sendEvent({ type: 'done', data: obj })
+    res.end()
+  } catch (err) {
+    console.error(`[${id}] video suggest error:`, err.message)
+    try { sendEvent({ type: 'error', message: err.message }); res.end() } catch (_) {}
+  } finally {
+    runningVideo.delete(id)
+  }
+})
+
+// GET /api/clips/:id/thumb/:clipId/:n  → a clip's extracted thumbnail frame
+router.get('/:id/thumb/:clipId/:n', (req, res) => {
+  const { id, clipId, n } = req.params
+  if (!SAFE.test(clipId)) return res.status(400).json({ error: 'Invalid clip id' })
+  const idx = parseInt(n, 10)
+  if (!Number.isInteger(idx) || idx < 0 || idx > 9) return res.status(400).json({ error: 'Invalid index' })
+  const file = path.join(videoDirOf(req, id), 'clips', 'thumbs', `${clipId}-${idx}.jpg`)
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'Thumbnail not found' })
+  res.sendFile(file)
 })
 
 module.exports = router

@@ -1,5 +1,8 @@
-import { Bookmark, Check, Download, Trash2, Loader2, AlertTriangle, Sparkles, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { Bookmark, Check, Download, Trash2, Loader2, AlertTriangle, Sparkles, Clock, Copy } from 'lucide-react'
+import toast from 'react-hot-toast'
 import ClipPlayer from './ClipPlayer'
+import ClipThumbnails from './ClipThumbnails'
 
 function fmtRange(s) {
   if (!Number.isFinite(s) || s < 0) s = 0
@@ -51,6 +54,21 @@ export default function ClipCard({
   const degenerate = !(clip.end > clip.start)
   const busy = status === 'exporting'
 
+  const [copied, setCopied] = useState(false)
+  const [thumbIdx, setThumbIdx] = useState(0)
+  const hasThumbs = Array.isArray(clip.thumbnails) && clip.thumbnails.length > 0
+
+  const copyCaption = async () => {
+    try {
+      await navigator.clipboard.writeText(clip.caption || '')
+      setCopied(true)
+      toast.success('Caption copied')
+      setTimeout(() => setCopied(false), 1500)
+    } catch (_) {
+      toast.error('Copy failed')
+    }
+  }
+
   return (
     <div style={{
       background: 'var(--surface)',
@@ -95,6 +113,37 @@ export default function ClipCard({
             <span style={{ color: 'var(--text-faint)' }}>· {clip.suggestProvider}{clip.bucket ? ` · ${clip.bucket}` : ''}</span>
           )}
         </div>
+
+        {clip.caption && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
+                Caption
+              </span>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={copyCaption}
+                style={{ gap: 5, padding: '2px 8px', fontSize: 10.5 }}
+                aria-live="polite"
+                title="Copy caption to clipboard"
+              >
+                {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+              </button>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {clip.caption}
+            </div>
+          </div>
+        )}
+
+        {hasThumbs && (
+          <ClipThumbnails
+            thumbnails={clip.thumbnails}
+            selectedIdx={thumbIdx}
+            onSelect={setThumbIdx}
+            aspectRatio={aspectRatio}
+          />
+        )}
 
         {clip.rationale && (
           <div style={{ fontSize: 11.5, color: 'var(--text-faint)', fontStyle: 'italic', lineHeight: 1.5 }}>
