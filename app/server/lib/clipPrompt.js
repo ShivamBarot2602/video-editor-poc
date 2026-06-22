@@ -124,4 +124,85 @@ function buildClipUserPrompt({ segments, bucket, count, videoDuration, language,
   return { text, truncated }
 }
 
-module.exports = { BUCKETS, resolveBucket, buildClipSystemPrompt, buildClipUserPrompt, TRANSCRIPT_CHAR_CAP }
+// ── Video-understanding method ───────────────────────────────────────────────
+// The model watches the actual video (audio + frames) instead of reading a
+// transcript. Same system/user split convention as the thumbnail rerank/polish
+// prompts: the SYSTEM builder holds only static rules (no per-request numbers),
+// and the geminiVideo wrapper appends the JSON-shape line so the system text
+// stays byte-identical (implicit-cacheable). COUNT / LENGTH RANGE / DURATION
+// arrive in the user message.
+
+/**
+ * Static SYSTEM prompt for the video-understanding clip method — role, rules,
+ * field meanings, edge cases AND the output-shape line. Whole thing is built
+ * here so providers never concatenate prompt strings. No per-request values, so
+ * it stays byte-identical across calls (implicit-cacheable).
+ * @returns {string}
+ */
+function buildVideoClipSystemPrompt() {
+  return [
+    'You are a **short-form video editor**. You **watch** a long video — its visuals AND its audio — and pick the most **engaging** clips for Reels / Shorts / TikTok.',
+    '',
+    '**GOAL** — pick clips a viewer would stop scrolling for. Each clip must:',
+    '- open with a **scroll-stopping hook** in its first seconds (spoken line OR a striking visual),',
+    '- **stand alone** (make sense without the rest of the video),',
+    '- carry a clear emotional or curiosity payload, a quotable line, or strong visual action.',
+    '',
+    '**HARD RULES**',
+    '- Return **exactly** the COUNT given in the user message, ranked **best first**.',
+    '- `start`/`end` are **numbers in seconds** (not "MM:SS"). Enforce `0 <= start < end <= DURATION`.',
+    '- Each clip length (`end - start`) must fall inside the given **LENGTH RANGE**.',
+    '- Clips must **not overlap**.',
+    '- End a clip on a natural beat (sentence/scene end) — never cut mid-word.',
+    '- `thumbnails` = **exactly 3 numbers in seconds**, each **inside that clip\'s `[start, end]`**, at the most visually striking moments (clear face / peak action / on-screen text). Spread them across the clip; do not return identical times.',
+    '- `score` is an integer **1-10** for expected engagement.',
+    '',
+    '**FIELD MEANINGS**',
+    '- `title` — punchy label, <=60 chars.',
+    '- `hook` — the on-screen / caption hook line that makes someone stop (1 sentence).',
+    '- `caption` — a ready-to-post social caption (1-2 sentences, optional hashtags).',
+    '- `reason` — why this moment stops the scroll (visual + audio cues you saw).',
+    '',
+    '**EDGE CASES** (follow these, do not guess):',
+    '- Too few strong moments → return **fewer** clips. Never pad weak ones, never exceed DURATION.',
+    '- Whole video already short → **one tight clip** beats three filler ones.',
+    '- Nothing engaging at all → return an empty clips list.',
+    '- Unsure where a clip should end → prefer the **wider** cut so the thought/action is complete.',
+    '',
+    '**OUTPUT** — return **only** this JSON object. No prose. No markdown fences.',
+    '{"clips":[{"start":<sec>,"end":<sec>,"title":"<=60 chars","hook":"opening line","caption":"ready-to-post caption","reason":"why it stops the scroll","score":<1-10>,"thumbnails":[<sec>,<sec>,<sec>]}]}',
+  ].join('\n')
+}
+
+/**
+ * Dynamic USER prompt for the video-understanding method — per-request only.
+ * The video file part is appended to the same user turn by the wrapper.
+ *
+ * @param {object} opts
+ * @param {string} opts.bucket        - bucket key (auto|short|medium|long)
+ * @param {number} opts.count         - desired clip count (3-5)
+ * @param {number} opts.videoDuration - total video duration in seconds
+ * @param {string} [opts.language]
+ * @param {string} [opts.filename]
+ * @returns {string}
+ */
+function buildVideoClipUserPrompt({ bucket, count, videoDuration, language, filename } = {}) {
+  const b = resolveBucket(bucket)
+  const maxLen = Math.min(b.max, Math.max(2, Math.floor(videoDuration)))
+  const ctx = [`duration ${videoDuration.toFixed(1)}s`]
+  if (language) ctx.push(`language ${language}`)
+
+  return [
+    filename ? `**VIDEO**: "${filename}" · ${ctx.join(' · ')}` : `**VIDEO**: ${ctx.join(' · ')}`,
+    `**COUNT**: ${count} clips`,
+    `**LENGTH RANGE**: ${b.min}-${maxLen} seconds per clip`,
+    `**DURATION**: ${videoDuration.toFixed(1)} seconds (never exceed)`,
+    '',
+    'Watch the attached video and return the clips now.',
+  ].join('\n')
+}
+
+module.exports = {
+  BUCKETS, resolveBucket, buildClipSystemPrompt, buildClipUserPrompt, TRANSCRIPT_CHAR_CAP,
+  buildVideoClipSystemPrompt, buildVideoClipUserPrompt,
+}

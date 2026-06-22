@@ -1,16 +1,17 @@
 const gemini = require('./gemini')
 const openai = require('./openai')
+const geminiVideo = require('./geminiVideo')
 
 /**
- * Registry of LLM providers for the clip-suggestion stage.
+ * Registry of LLM providers for the transcript-based clip-suggestion method.
  * Order matters for `availableProviders()` — Gemini is the canonical default
- * (long-context, bridges to future video understanding), OpenAI the alternative.
+ * (long-context), OpenAI the alternative.
  */
 const REGISTRY = { gemini, openai }
 
 /**
- * Which clip-suggest providers have their API key set in env? Returns provider
- * ids, Gemini first (default), then OpenAI.
+ * Which transcript-method clip-suggest providers have their API key set? Returns
+ * provider ids, Gemini first (default), then OpenAI.
  */
 function availableProviders() {
   const out = []
@@ -19,4 +20,12 @@ function availableProviders() {
   return out
 }
 
-module.exports = { gemini, openai, REGISTRY, availableProviders }
+/**
+ * The video-understanding method (watch the raw video) is Gemini-only and needs
+ * a billing-enabled key (Files API + video tokens).
+ */
+function videoMethodAvailable() {
+  return !!process.env.GEMINI_API_KEY
+}
+
+module.exports = { gemini, openai, geminiVideo, REGISTRY, availableProviders, videoMethodAvailable }

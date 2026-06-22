@@ -127,4 +127,29 @@ function cutClip(inputPath, outputPath, start, duration, onProgress) {
   })
 }
 
-module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail, cutClip }
+/**
+ * Grab a single frame at timestamp `t` (seconds) as a JPEG — used for clip
+ * thumbnail candidates the LLM points at. Seeks before decode (fast), scales to
+ * `width` keeping aspect. Unlike extractCandidateFrames (scene-detection), this
+ * is a direct seek to one known moment.
+ *
+ * @param {string} inputPath
+ * @param {number} t          - timestamp in seconds
+ * @param {string} outputPath
+ * @param {{width?:number}} [opts]
+ */
+function extractFrameAt(inputPath, t, outputPath, { width = 640 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath) } catch (_) {} }
+    ffmpeg(inputPath)
+      .seekInput(Math.max(0, Number(t) || 0)) // input seek → fast, frame near t
+      .frames(1)
+      .outputOptions(['-vf', `scale=${width}:-2`, '-qscale:v', '3', '-an'])
+      .output(outputPath)
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
+      .run()
+  })
+}
+
+module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail, cutClip, extractFrameAt }

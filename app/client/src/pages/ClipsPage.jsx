@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Scissors, ArrowLeft, Loader2, Sparkles, AlertTriangle, FileText, Bookmark } from 'lucide-react'
+import { Group, Panel, Separator } from 'react-resizable-panels'
+import { Scissors, ArrowLeft, Loader2, Sparkles, AlertTriangle, FileText, Bookmark, Film, VideoOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import UploadZone from '../components/UploadZone'
 import ClipCard from '../components/ClipCard'
 import ClipControlsBar from '../components/ClipControlsBar'
+import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
+import SourceVideoPlayer from '../components/SourceVideoPlayer'
 
 const IDLE = { status: 'idle', progress: 0 }
 
@@ -133,6 +136,9 @@ function ClipsEditor({ videoId }) {
   const [suggestProvider, setSuggestProvider] = useState(
     () => searchParams.get('suggestProvider') || localStorage.getItem('clip_suggest_provider') || 'gemini'
   )
+  const [method, setMethod] = useState(
+    () => searchParams.get('method') || localStorage.getItem('clip_method') || 'subtitles'
+  )
   const [bucket, setBucket] = useState(searchParams.get('bucket') || 'auto')
   const [count, setCount] = useState(parseInt(searchParams.get('count'), 10) || 3)
 
@@ -140,19 +146,23 @@ function ClipsEditor({ videoId }) {
   const [metadata, setMetadata] = useState(null)
   const [loadingSaved, setLoadingSaved] = useState(true)
   const [suggesting, setSuggesting] = useState(false)
+  const [analyzePhase, setAnalyzePhase] = useState(null) // {phase, percent} during a video run
+  const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState(null)
   const [exportStates, setExportStates] = useState({})
   const [savedClips, setSavedClips] = useState([])
 
-  const esMapRef = useRef(new Map())
+  const esMapRef = useRef(new Map())     // per-clip export streams
+  const analyzeEsRef = useRef(null)      // the single video-analysis stream
 
   // ── deep-link + persistence ──────────────────────────────────────────────
   useEffect(() => {
-    const next = { suggestProvider, bucket, count: String(count) }
+    const next = { method, suggestProvider, bucket, count: String(count) }
     if (selectedTranscriptProvider) next.transcriptProvider = selectedTranscriptProvider
     setSearchParams(next, { replace: true })
     localStorage.setItem('clip_suggest_provider', suggestProvider)
-  }, [suggestProvider, selectedTranscriptProvider, bucket, count]) // eslint-disable-line
+    localStorage.setItem('clip_method', method)
+  }, [method, suggestProvider, selectedTranscriptProvider, bucket, count]) // eslint-disable-line
 
   // ── discover the video + its transcript providers ──────────────────────────
   useEffect(() => {
@@ -160,7 +170,7 @@ function ClipsEditor({ videoId }) {
     fetch('/api/videos').then(r => r.json()).then(list => {
       if (cancel) return
       const v = (list || []).find(x => x.id === videoId)
-      if (!v) { toast.error('Video not found'); navigate('/'); return }
+      if (!v) { setNotFound(true); setTranscriptProviders([]); return }
       setVideo(v)
       setTranscriptProviders(v.providers || [])
       setSelectedTranscriptProvider(prev => (prev && v.providers?.includes(prev)) ? prev : (v.providers?.[0] || ''))
@@ -168,12 +178,13 @@ function ClipsEditor({ videoId }) {
     return () => { cancel = true }
   }, [videoId, navigate])
 
-  // ── load saved clips for the chosen suggest provider ───────────────────────
+  // ── load previously-saved suggestions for the active method/provider ───────
+  const loadProvider = method === 'video' ? 'geminivideo' : suggestProvider
   useEffect(() => {
     let cancel = false
     setLoadingSaved(true)
     setError(null)
-    fetch(`/api/clips/${videoId}/${suggestProvider}`)
+    fetch(`/api/clips/${videoId}/${loadProvider}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (cancel) return
@@ -183,7 +194,7 @@ function ClipsEditor({ videoId }) {
       .catch(() => {})
       .finally(() => { if (!cancel) setLoadingSaved(false) })
     return () => { cancel = true }
-  }, [videoId, suggestProvider])
+  }, [videoId, loadProvider])
 
   // ── load the persistent saved-clips library (cross-provider, survives runs) ──
   useEffect(() => {
@@ -204,10 +215,17 @@ function ClipsEditor({ videoId }) {
   useEffect(() => () => {
     for (const es of esMapRef.current.values()) { try { es.close() } catch (_) {} }
     esMapRef.current.clear()
+    if (analyzeEsRef.current) { try { analyzeEsRef.current.close() } catch (_) {} analyzeEsRef.current = null }
   }, [])
 
-  async function handleSuggest() {
+  function handleSuggest() {
     if (suggesting) return
+    if (method === 'video') return analyzeVideo()
+    return suggestFromTranscript()
+  }
+
+  // Subtitles method — quick POST, returns JSON.
+  async function suggestFromTranscript() {
     if (!selectedTranscriptProvider) { toast.error('Pick a transcript source first'); return }
     setSuggesting(true)
     setError(null)
@@ -231,6 +249,64 @@ function ClipsEditor({ videoId }) {
     } finally {
       setSuggesting(false)
     }
+  }
+
+  // Video-understanding method — long-running SSE (upload → analyze → extract).
+  function analyzeVideo() {
+    const prev = analyzeEsRef.current
+    if (prev) { try { prev.close() } catch (_) {} analyzeEsRef.current = null }
+
+    setSuggesting(true)
+    setError(null)
+    setAnalyzePhase({ phase: 'start', percent: 0 })
+    const tid = toast.loading('Analyzing video…')
+
+    const params = new URLSearchParams({ method: 'video', bucket, count: String(count) })
+    const es = new EventSource(`/api/clips/${videoId}/suggest/stream?${params.toString()}`)
+    analyzeEsRef.current = es
+
+    const finish = () => {
+      try { es.close() } catch (_) {}
+      if (analyzeEsRef.current === es) analyzeEsRef.current = null
+      setSuggesting(false)
+      setAnalyzePhase(null)
+    }
+
+    es.onmessage = (msg) => {
+      let ev
+      try { ev = JSON.parse(msg.data) } catch { return }
+      if (ev.type === 'start') {
+        setAnalyzePhase({ phase: 'start', percent: 0 })
+      } else if (ev.type === 'phase') {
+        setAnalyzePhase({ phase: ev.phase, percent: ev.percent ?? 0 })
+      } else if (ev.type === 'done') {
+        setMetadata(ev.data?.metadata)
+        setClips(ev.data?.clips || [])
+        setExportStates(p => ({ ...p, ...seedExportStates(ev.data?.clips) }))
+        toast.success(`Found ${ev.data?.clips?.length || 0} clips`, { id: tid })
+        ;(ev.data?.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
+        finish()
+      } else if (ev.type === 'error') {
+        setError(ev.message)
+        toast.error(ev.message || 'Analysis failed', { id: tid })
+        finish()
+      }
+    }
+
+    es.onerror = () => {
+      if (analyzeEsRef.current !== es) return // already finished/cancelled
+      setError('Connection lost during analysis')
+      toast.error('Connection lost during analysis', { id: tid })
+      finish()
+    }
+  }
+
+  function cancelAnalyze() {
+    const es = analyzeEsRef.current
+    if (es) { try { es.close() } catch (_) {} analyzeEsRef.current = null }
+    setSuggesting(false)
+    setAnalyzePhase(null)
+    toast('Analysis cancelled')
   }
 
   async function handleSave(clip) {
@@ -277,7 +353,7 @@ function ClipsEditor({ videoId }) {
     setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
     const params = new URLSearchParams({ clipId: id })
     if (source === 'saved') params.set('source', 'saved')
-    else params.set('suggestProvider', suggestProvider)
+    else params.set('suggestProvider', clip.suggestProvider || suggestProvider)
     const es = new EventSource(`/api/clips/${videoId}/export/stream?${params.toString()}`)
     esMapRef.current.set(id, es)
 
@@ -313,8 +389,9 @@ function ClipsEditor({ videoId }) {
     }
   }
 
-  const discovering = transcriptProviders === null
-  const noTranscript = !discovering && transcriptProviders.length === 0
+  const discovering = !notFound && transcriptProviders === null
+  const noTranscript = !discovering && Array.isArray(transcriptProviders) && transcriptProviders.length === 0
+  const isVideo = method === 'video'
   const aspectRatio = resolveAspectRatio(metadata)
   const hasClips = Array.isArray(clips) && clips.length > 0
   const savedIds = new Set(savedClips.map(c => c.id))
@@ -323,22 +400,24 @@ function ClipsEditor({ videoId }) {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg)' }}>
       <PageBar videoId={videoId} filename={video?.filename} count={hasClips ? clips.length : 0} />
 
-      {discovering ? (
-        <Centered><Loader2 size={16} className="spin" /> Loading…</Centered>
-      ) : noTranscript ? (
+      {notFound ? (
         <Centered>
-          <FileText size={22} color="var(--text-faint)" />
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>No transcript yet</div>
+          <VideoOff size={24} color="var(--text-faint)" />
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Video not found</div>
           <div style={{ fontSize: 11.5, color: 'var(--text-faint)', lineHeight: 1.6, textAlign: 'center' }}>
-            Clip suggestions read the transcript.<br />Transcribe this video first.
+            This video id doesn’t exist or was removed.
           </div>
-          <Link to={`/editor/${videoId}`} className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
-            Go to editor
+          <Link to="/" className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
+            <ArrowLeft size={14} /> Back home
           </Link>
         </Centered>
+      ) : discovering ? (
+        <Centered><Loader2 size={16} className="spin" /> Loading…</Centered>
       ) : (
         <>
           <ClipControlsBar
+            method={method}
+            onMethod={setMethod}
             transcriptProviders={transcriptProviders}
             transcriptProvider={selectedTranscriptProvider}
             onTranscriptProvider={setSelectedTranscriptProvider}
@@ -352,7 +431,31 @@ function ClipsEditor({ videoId }) {
             suggesting={suggesting}
           />
 
-          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '18px 20px 32px' }}>
+          <Group orientation="horizontal" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+            {/* LEFT — full source video, plays independently. Resizable. */}
+            <Panel id="clips-source" defaultSize="42%" minSize="28%" maxSize="60%" style={{ overflow: 'hidden', display: 'flex' }}>
+              <div style={{
+                flex: 1, minWidth: 0,
+                padding: '18px 20px', overflowY: 'auto',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                background: 'var(--surface-dark)',
+              }}>
+                <SourceVideoPlayer
+                  videoId={videoId}
+                  filename={video?.filename}
+                  size={video?.size}
+                  durationS={metadata?.video_duration_s}
+                  width={metadata?.video_width}
+                  height={metadata?.video_height}
+                />
+              </div>
+            </Panel>
+
+            <Separator className="panel-resize-handle" />
+
+            {/* RIGHT — clip results (scrolls independently) */}
+            <Panel id="clips-results" defaultSize="58%" minSize="40%" style={{ overflow: 'hidden', display: 'flex' }}>
+            <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '18px 20px 32px' }}>
             {error && (
               <div style={{
                 marginBottom: 16, padding: 10,
@@ -390,17 +493,42 @@ function ClipsEditor({ videoId }) {
               </div>
             )}
 
-            {suggesting ? (
+            {isVideo && suggesting ? (
+              <>
+                <ClipAnalyzeProgress
+                  phase={analyzePhase?.phase || 'start'}
+                  percent={analyzePhase?.percent || 0}
+                  onCancel={cancelAnalyze}
+                />
+                <div className="clips-grid">
+                  {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} aspectRatio={aspectRatio} />)}
+                </div>
+              </>
+            ) : (!isVideo && noTranscript) ? (
+              <Centered>
+                <FileText size={22} color="var(--text-faint)" />
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>No transcript for the Subtitles method</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-faint)', lineHeight: 1.6, textAlign: 'center', maxWidth: 320 }}>
+                  Transcribe this video first, or switch to{' '}
+                  <strong style={{ color: 'var(--text-muted)' }}>Video understanding</strong> above (no transcript needed).
+                </div>
+                <Link to={`/editor/${videoId}`} className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
+                  Go to editor
+                </Link>
+              </Centered>
+            ) : suggesting ? (
               <div className="clips-grid">
                 {Array.from({ length: count }).map((_, i) => <SkeletonCard key={i} aspectRatio={aspectRatio} />)}
               </div>
             ) : loadingSaved ? (
-              <Centered><Loader2 size={16} className="spin" /> Loading saved clips…</Centered>
+              <Centered><Loader2 size={16} className="spin" /> Loading clips…</Centered>
             ) : hasClips ? (
               <>
                 {metadata?.model && (
                   <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 12 }}>
-                    {clips.length} clips · suggested by {metadata.model} · from {metadata.transcriptProvider} transcript
+                    {clips.length} clips · {metadata.model} · {(isVideo || metadata.method === 'video')
+                      ? 'video understanding'
+                      : `from ${metadata.transcriptProvider} transcript`}
                   </div>
                 )}
                 <div className="clips-grid">
@@ -421,19 +549,21 @@ function ClipsEditor({ videoId }) {
               </>
             ) : (
               <Centered>
-                <Sparkles size={22} color="var(--text-faint)" />
+                {isVideo ? <Film size={22} color="var(--text-faint)" /> : <Sparkles size={22} color="var(--text-faint)" />}
                 <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No clips yet.</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Pick your options above and click "Suggest clips".</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>
+                  {isVideo ? 'Click “Analyze video” to find clips.' : 'Pick your options above and click “Suggest clips”.'}
+                </div>
               </Centered>
             )}
-          </div>
+            </div>
+            </Panel>
+          </Group>
         </>
       )}
 
       <style>{`
-        .clips-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
-        @media (max-width: 980px) { .clips-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 640px) { .clips-grid { grid-template-columns: 1fr; } }
+        .clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; align-items: start; }
         .spin { animation: spin 1s linear infinite; }
         .clip-shimmer {
           background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 37%, var(--surface-2) 63%);
