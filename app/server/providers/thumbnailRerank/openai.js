@@ -1,6 +1,6 @@
 const fs = require('fs')
 const axios = require('axios')
-const { buildRerankPrompt } = require('../../lib/thumbnailPolishPrompt')
+const { buildRerankSystemPrompt, buildRerankUserPrompt } = require('../../lib/thumbnailPolishPrompt')
 
 const MODEL = 'gpt-4.1-mini'
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
@@ -62,13 +62,14 @@ async function rerank({ frames, filename, transcriptHint, timeoutMs = 60000 }) {
     return []
   }
 
-  // Shared prompt builder asks for a bare JSON array; the strict schema needs an
-  // object, so steer the model to wrap it under `scores` (matches RESPONSE_FORMAT).
-  const prompt =
-    buildRerankPrompt({ count: frames.length, filename, transcriptHint }) +
-    '\nReturn a JSON object of the form {"scores": [ ... ]} containing one entry per image.'
+  // Static rules → system message; per-run context + images → user message.
+  // The strict schema needs an object, so steer the model to wrap under `scores`.
+  const system =
+    buildRerankSystemPrompt() +
+    '\n\nReturn a JSON object of the form {"scores":[{"label":"A","score":<1-10 number>,"rationale":"<one short sentence>"}, ...]} containing one entry per image.'
+  const user = buildRerankUserPrompt({ count: frames.length, filename, transcriptHint })
 
-  const content = [{ type: 'text', text: prompt }]
+  const content = [{ type: 'text', text: user }]
   let totalBytes = 0
   for (const f of frames) {
     const buf = fs.readFileSync(f.path)
@@ -80,11 +81,14 @@ async function rerank({ frames, filename, transcriptHint, timeoutMs = 60000 }) {
       image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}`, detail: 'low' },
     })
   }
-  console.log(`[rerank:openai] model=${MODEL} frames=${frames.length} promptChars=${prompt.length} images=${(totalBytes / 1024).toFixed(1)}kb raw`)
+  console.log(`[rerank:openai] model=${MODEL} frames=${frames.length} sysChars=${system.length} userChars=${user.length} images=${(totalBytes / 1024).toFixed(1)}kb raw`)
 
   const body = {
     model: MODEL,
-    messages: [{ role: 'user', content }],
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content },
+    ],
     response_format: RESPONSE_FORMAT,
   }
 

@@ -43,28 +43,27 @@ function getVideoSize(inputPath) {
 }
 
 /**
- * Extract candidate frames for thumbnail selection.
+ * Extract MEANINGFUL candidate frames for thumbnail selection — ffmpeg-only.
  *
- * Uses ffmpeg's `select` filter to pick:
- *   - frames at scene cuts (scene > 0.3), AND
- *   - one frame per second as a safety net for static videos.
+ * One `select` pass picks a frame when ANY of these hold (inside the trimmed
+ * window, skipping first/last 0.5s to dodge fades/black):
+ *   1. it is the first in-window frame                 (isnan(prev_selected_t))
+ *   2. a scene cut AND >= `minGapS` since the last pick (gt(scene,TH) * gate)
+ *   3. >= `timeFloorS` since the last pick             (coverage on static video)
  *
- * Skips first/last 0.5s to dodge fades/black frames.
- * Caps total output at `maxFrames` (default 60) by sampling evenly if needed.
+ * vs the old blind `fps=1`: shot-aware, and on a long/static video it emits
+ * ~duration/timeFloor frames instead of one-per-second (no 600-write-then-delete).
  *
- * Output: JPEG, 640px wide (aspect preserved), into outputDir.
- * Filename pattern: frame_<NNN>_t<seconds>.jpg
+ * `metadata=print` writes each selected frame's real `pts_time` to a sidecar, so
+ * timestamps are EXACT (the previous even-spacing approximation is wrong once
+ * frames are unevenly spaced by scene cuts).
  *
+ * Output: JPEG, 640px wide (aspect preserved). Capped at `maxFrames` by even
+ * sampling (real timestamps preserved). Filename: frame_<NNN>_t<seconds>.jpg
  * Returns: [{ idx, t, path, filename }]
- *
- * Note: ffmpeg `select` runs once; we don't get per-frame timestamps in node-land.
- * We rely on `-frame_pts true` + `-vsync vfr` and parse timestamps from filenames
- * via the `%t` printf trick — but fluent-ffmpeg doesn't expose that directly,
- * so we use a 2-step approach: extract with `-frame_pts 1` writing PTS as the
- * filename, then re-list and parse.
  */
 function extractCandidateFrames(inputPath, outputDir, opts = {}) {
-  const { maxFrames = 60, sceneThreshold = 0.3 } = opts
+  const { maxFrames = 60, sceneThreshold = 0.3, minGapS = 1, timeFloorS = 6, minFrames = 8 } = opts
 
   return new Promise(async (resolve, reject) => {
     try {
@@ -73,78 +72,98 @@ function extractCandidateFrames(inputPath, outputDir, opts = {}) {
       const duration = await getVideoDuration(inputPath)
       const startT = 0.5
       const endT = Math.max(startT + 1, duration - 0.5)
+      const span = Math.max(0.1, endT - startT)
 
-      // Sampling strategy: 1 frame per second via `fps=1` filter.
-      //
-      // We previously used `select='gt(scene,T)+eq(mod(t,1),0)'` (scene change OR
-      // 1 fps fallback), but the `eq(mod(t,1),0)` half is a float equality on PTS
-      // — almost never true with VFR sources — and the result is 0 emitted frames.
-      // `fps=1` is deterministic across all codecs/framerates and good enough for
-      // POC: the CV scorer + VLM rerank pick the best frames anyway, and scene-cut
-      // sampling can be added back later via a dedicated `scdet` pass if needed.
-      //
-      // sceneThreshold kept in the function signature for forward-compatibility.
-      void sceneThreshold
-
+      const ptsFile = path.join(outputDir, '_pts.txt')
       const tmpPattern = path.join(outputDir, 'raw_%05d.jpg')
 
-      ffmpeg(inputPath)
-        .videoFilters([
-          // Sample at 1 fps inside the trimmed window.
-          `fps=1`,
-          `scale=640:-2`,
-          // Force JPEG full-range pixel format. Some sources (e.g. H.264 with
-          // color_range=tv) trip ffmpeg 8.x's mjpeg encoder:
-          //   "Non full-range YUV is non-standard… ff_frame_thread_encoder_init failed"
-          // Converting here sidesteps that without needing -strict unofficial.
-          `format=yuvj420p`,
-        ])
-        .outputOptions([
-          '-qscale:v', '3',
-          '-ss', String(startT),
-          '-to', String(endT),
-        ])
-        .output(tmpPattern)
-        .on('end', () => {
-          try {
-            // List extracted frames, build canonical names with timestamps.
-            const files = fs.readdirSync(outputDir)
-              .filter(f => f.startsWith('raw_') && f.endsWith('.jpg'))
-              .sort()
+      // Commas inside select() args MUST be escaped (\,) — at filtergraph level a
+      // bare comma separates filters. Passed as a single argv (no shell), so only
+      // ffmpeg's own escaping applies. format=yuvj420p: some H.264 sources
+      // (color_range=tv) trip ffmpeg's mjpeg encoder — convert here to sidestep.
+      const expr =
+        `between(t\\,${startT}\\,${endT})*` +
+        `(isnan(prev_selected_t)` +
+        `+gt(scene\\,${sceneThreshold})*gte(t-prev_selected_t\\,${minGapS})` +
+        `+gte(t-prev_selected_t\\,${timeFloorS}))`
+      const selectGraph = `select=${expr},metadata=print:file=${ptsFile},scale=640:-2,format=yuvj420p`
+      // Fallback for huge-GOP sources: adaptive fps for even coverage (~maxFrames).
+      const fps = Math.min(1, maxFrames / span)
+      const fpsGraph = `fps=${fps.toFixed(5)},metadata=print:file=${ptsFile},scale=640:-2,format=yuvj420p`
 
-            // Without PTS in filename, approximate timestamps by even spacing
-            // between startT and endT. Good enough for POC UI.
-            const totalSpan = Math.max(0.1, endT - startT)
-            let kept = files
-            // Cap if too many extracted
-            if (kept.length > maxFrames) {
-              const step = kept.length / maxFrames
-              kept = Array.from({ length: maxFrames }, (_, i) => kept[Math.floor(i * step)])
-            }
+      const wipe = () => {
+        for (const f of fs.readdirSync(outputDir)) {
+          if (f.startsWith('raw_')) fs.unlinkSync(path.join(outputDir, f))
+        }
+        try { fs.unlinkSync(ptsFile) } catch (_) {}
+      }
 
-            const results = []
-            for (let i = 0; i < kept.length; i++) {
-              const raw = kept[i]
-              const t = startT + (kept.length === 1 ? totalSpan / 2 : (totalSpan * i) / (kept.length - 1))
-              const tStr = t.toFixed(2)
-              const filename = `frame_${String(i).padStart(3, '0')}_t${tStr}.jpg`
-              const dst = path.join(outputDir, filename)
-              fs.renameSync(path.join(outputDir, raw), dst)
-              results.push({ idx: i, t, path: dst, filename })
-            }
+      // One ffmpeg pass → { files, times } (raw frame names + real pts_time).
+      const runPass = (inputOpts, graph) => new Promise((res, rej) => {
+        wipe()
+        const cmd = ffmpeg(inputPath)
+        if (inputOpts?.length) cmd.inputOptions(inputOpts)
+        cmd
+          // -fps_mode vfr: emit only selected frames (no duplicate-PTS padding).
+          .outputOptions(['-vf', graph, '-fps_mode', 'vfr', '-qscale:v', '3', '-an'])
+          .output(tmpPattern)
+          .on('end', () => {
+            try {
+              let times = []
+              try {
+                const txt = fs.readFileSync(ptsFile, 'utf8')
+                times = (txt.match(/pts_time:([0-9.]+)/g) || []).map(s => parseFloat(s.split(':')[1]))
+              } catch (_) { /* fall back to even spacing below */ }
+              const files = fs.readdirSync(outputDir)
+                .filter(f => f.startsWith('raw_') && f.endsWith('.jpg'))
+                .sort()
+              res({ files, times })
+            } catch (e) { rej(e) }
+          })
+          .on('error', rej)
+          .run()
+      })
 
-            // Delete any leftover raw_ files (shouldn't be any after rename).
-            for (const f of fs.readdirSync(outputDir)) {
-              if (f.startsWith('raw_')) fs.unlinkSync(path.join(outputDir, f))
-            }
+      // Fast path: decode I-frames only (`-skip_frame nokey`) — ~50× fewer decodes
+      // on long videos. Keyframes are clean and encoder-placed near cuts, so the
+      // scene+time-floor select on top is meaningful. Fall back to a full-decode
+      // adaptive-fps pass only when a huge-GOP source yields too few keyframes.
+      let { files, times } = await runPass(['-skip_frame', 'nokey'], selectGraph)
+      if (files.length < minFrames) {
+        ({ files, times } = await runPass([], fpsGraph))
+      }
 
-            resolve(results)
-          } catch (e) {
-            reject(e)
-          }
-        })
-        .on('error', reject)
-        .run()
+      // Pair each frame with its pts_time (same post-select order); even-spacing
+      // only if the sidecar is missing/short.
+      let pairs = files.map((f, i) => ({
+        raw: f,
+        t: Number.isFinite(times[i])
+          ? times[i]
+          : startT + span * (files.length > 1 ? i / (files.length - 1) : 0.5),
+      }))
+
+      // Cap by even sampling if too many; keeps real timestamps.
+      if (pairs.length > maxFrames) {
+        const step = pairs.length / maxFrames
+        pairs = Array.from({ length: maxFrames }, (_, i) => pairs[Math.floor(i * step)])
+      }
+
+      const results = []
+      for (let i = 0; i < pairs.length; i++) {
+        const tStr = pairs[i].t.toFixed(2)
+        const filename = `frame_${String(i).padStart(3, '0')}_t${tStr}.jpg`
+        const dst = path.join(outputDir, filename)
+        fs.renameSync(path.join(outputDir, pairs[i].raw), dst)
+        results.push({ idx: i, t: pairs[i].t, path: dst, filename })
+      }
+
+      // Drop unsampled raw_ frames + the sidecar.
+      for (const f of fs.readdirSync(outputDir)) {
+        if (f.startsWith('raw_')) fs.unlinkSync(path.join(outputDir, f))
+      }
+      try { fs.unlinkSync(ptsFile) } catch (_) {}
+
+      resolve(results)
     } catch (e) {
       reject(e)
     }
