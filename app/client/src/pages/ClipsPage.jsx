@@ -11,7 +11,7 @@ import SourceVideoPlayer from '../components/SourceVideoPlayer'
 import { fmtSize } from '../lib/format'
 import { triggerDownload } from '../lib/dom'
 import { listVideos } from '../api/videos'
-import { getClips, getSavedClips, suggestClips, saveClip, removeSavedClip } from '../api/clips'
+import { getClips, getSavedClips, suggestClips, saveClip, removeSavedClip, openSuggestStream, openExportStream } from '../api/clips'
 
 const IDLE = { status: 'idle', progress: 0 }
 
@@ -242,10 +242,7 @@ function ClipsEditor({ videoId }) {
     setAnalyzePhase({ phase: 'start', percent: 0 })
     const tid = toast.loading('Analyzing video…')
 
-    const params = new URLSearchParams({ method: 'video', bucket, count: String(count) })
-    const es = new EventSource(`/api/clips/${videoId}/suggest/stream?${params.toString()}`)
-    analyzeEsRef.current = es
-
+    let es
     const finish = () => {
       try { es.close() } catch (_) {}
       if (analyzeEsRef.current === es) analyzeEsRef.current = null
@@ -253,33 +250,33 @@ function ClipsEditor({ videoId }) {
       setAnalyzePhase(null)
     }
 
-    es.onmessage = (msg) => {
-      let ev
-      try { ev = JSON.parse(msg.data) } catch { return }
-      if (ev.type === 'start') {
-        setAnalyzePhase({ phase: 'start', percent: 0 })
-      } else if (ev.type === 'phase') {
-        setAnalyzePhase({ phase: ev.phase, percent: ev.percent ?? 0 })
-      } else if (ev.type === 'done') {
-        setMetadata(ev.data?.metadata)
-        setClips(ev.data?.clips || [])
-        setExportStates(p => ({ ...p, ...seedExportStates(ev.data?.clips) }))
-        toast.success(`Found ${ev.data?.clips?.length || 0} clips`, { id: tid })
-        ;(ev.data?.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
+    es = openSuggestStream(videoId, { method: 'video', bucket, count }, {
+      onMessage: (ev) => {
+        if (ev.type === 'start') {
+          setAnalyzePhase({ phase: 'start', percent: 0 })
+        } else if (ev.type === 'phase') {
+          setAnalyzePhase({ phase: ev.phase, percent: ev.percent ?? 0 })
+        } else if (ev.type === 'done') {
+          setMetadata(ev.data?.metadata)
+          setClips(ev.data?.clips || [])
+          setExportStates(p => ({ ...p, ...seedExportStates(ev.data?.clips) }))
+          toast.success(`Found ${ev.data?.clips?.length || 0} clips`, { id: tid })
+          ;(ev.data?.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
+          finish()
+        } else if (ev.type === 'error') {
+          setError(ev.message)
+          toast.error(ev.message || 'Analysis failed', { id: tid })
+          finish()
+        }
+      },
+      onError: () => {
+        if (analyzeEsRef.current !== es) return // already finished/cancelled
+        setError('Connection lost during analysis')
+        toast.error('Connection lost during analysis', { id: tid })
         finish()
-      } else if (ev.type === 'error') {
-        setError(ev.message)
-        toast.error(ev.message || 'Analysis failed', { id: tid })
-        finish()
-      }
-    }
-
-    es.onerror = () => {
-      if (analyzeEsRef.current !== es) return // already finished/cancelled
-      setError('Connection lost during analysis')
-      toast.error('Connection lost during analysis', { id: tid })
-      finish()
-    }
+      },
+    })
+    analyzeEsRef.current = es
   }
 
   function cancelAnalyze() {
@@ -324,42 +321,36 @@ function ClipsEditor({ videoId }) {
     if (prev) { try { prev.close() } catch (_) {} esMapRef.current.delete(id) }
 
     setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
-    const params = new URLSearchParams({ clipId: id })
-    if (source === 'saved') params.set('source', 'saved')
-    else params.set('suggestProvider', clip.suggestProvider || suggestProvider)
-    const es = new EventSource(`/api/clips/${videoId}/export/stream?${params.toString()}`)
+    const es = openExportStream(videoId, { clipId: id, source, suggestProvider: clip.suggestProvider || suggestProvider }, {
+      onMessage: (ev) => {
+        if (ev.type === 'start') {
+          setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
+        } else if (ev.type === 'progress') {
+          setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: ev.percent ?? 0 } }))
+        } else if (ev.type === 'done') {
+          setExportStates(p => ({ ...p, [id]: { status: 'done', progress: 100, url: ev.clipUrl } }))
+          try { es.close() } catch (_) {}
+          esMapRef.current.delete(id)
+          triggerDownload(ev.clipUrl)
+        } else if (ev.type === 'error') {
+          setExportStates(p => ({ ...p, [id]: { status: 'error', error: ev.message } }))
+          try { es.close() } catch (_) {}
+          esMapRef.current.delete(id)
+          toast.error(ev.message || 'Download failed')
+        }
+      },
+      onError: () => {
+        if (es.readyState === EventSource.CLOSED) return // benign close after done/error
+        setExportStates(p => {
+          const c = p[id]
+          if (c?.status === 'done') return p
+          return { ...p, [id]: { status: 'error', error: 'Connection lost' } }
+        })
+        try { es.close() } catch (_) {}
+        esMapRef.current.delete(id)
+      },
+    })
     esMapRef.current.set(id, es)
-
-    es.onmessage = (msg) => {
-      let ev
-      try { ev = JSON.parse(msg.data) } catch { return }
-      if (ev.type === 'start') {
-        setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: 0 } }))
-      } else if (ev.type === 'progress') {
-        setExportStates(p => ({ ...p, [id]: { status: 'exporting', progress: ev.percent ?? 0 } }))
-      } else if (ev.type === 'done') {
-        setExportStates(p => ({ ...p, [id]: { status: 'done', progress: 100, url: ev.clipUrl } }))
-        try { es.close() } catch (_) {}
-        esMapRef.current.delete(id)
-        triggerDownload(ev.clipUrl)
-      } else if (ev.type === 'error') {
-        setExportStates(p => ({ ...p, [id]: { status: 'error', error: ev.message } }))
-        try { es.close() } catch (_) {}
-        esMapRef.current.delete(id)
-        toast.error(ev.message || 'Download failed')
-      }
-    }
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return // benign close after done/error
-      setExportStates(p => {
-        const c = p[id]
-        if (c?.status === 'done') return p
-        return { ...p, [id]: { status: 'error', error: 'Connection lost' } }
-      })
-      try { es.close() } catch (_) {}
-      esMapRef.current.delete(id)
-    }
   }
 
   const discovering = !notFound && transcriptProviders === null

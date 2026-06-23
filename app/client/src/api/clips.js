@@ -1,4 +1,5 @@
 import { getJsonOrNull, postJson, del } from './http'
+import { openEventStream } from './stream'
 
 // GET /api/clips/:id/:provider → suggestions for that provider, or null.
 export const getClips = (videoId, provider) => getJsonOrNull(`/api/clips/${videoId}/${provider}`)
@@ -18,4 +19,16 @@ export const saveClip = (videoId, body, fallbackMsg) =>
 export const removeSavedClip = (videoId, savedId, fallbackMsg) =>
   del(`/api/clips/${videoId}/saved/${savedId}`, fallbackMsg)
 
-// openSuggestStream / openExportStream (SSE) are added in the streaming pass.
+// GET /api/clips/:id/suggest/stream (SSE, video method) → raw EventSource.
+export const openSuggestStream = (videoId, { method, bucket, count }, handlers) => {
+  const params = new URLSearchParams({ method, bucket, count: String(count) })
+  return openEventStream(`/api/clips/${videoId}/suggest/stream?${params.toString()}`, handlers)
+}
+
+// GET /api/clips/:id/export/stream (SSE) → raw EventSource.
+export const openExportStream = (videoId, { clipId, source, suggestProvider }, handlers) => {
+  const params = new URLSearchParams({ clipId })
+  if (source === 'saved') params.set('source', 'saved')
+  else params.set('suggestProvider', suggestProvider)
+  return openEventStream(`/api/clips/${videoId}/export/stream?${params.toString()}`, handlers)
+}
