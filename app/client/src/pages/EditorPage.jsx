@@ -8,7 +8,8 @@ import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
 import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
 import { listVideos } from '../api/videos'
-import { getTranscriptionOrNull, patchTranscription, transcribe, subtitleDownloadUrl } from '../api/transcription'
+import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl } from '../api/transcription'
+import { readJsonLines } from '../api/stream'
 
 // DEFAULT_STYLE + EXPORT_FORMATS now live in config/subtitleStyle.js; they are
 // re-exported here for backward compatibility.
@@ -203,31 +204,16 @@ export default function EditorPage() {
     const burnStyle = { ...style, bold: style.fontWeight >= 600 }
 
     try {
-      const res = await fetch(`/api/burn/${videoId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style: burnStyle, provider: selectedProvider }),
-      })
+      const res = await burn(videoId, { style: burnStyle, provider: selectedProvider })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Burn failed') }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n'); buffer = lines.pop()
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue
-          const event = JSON.parse(line.slice(5).trim())
-          if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
-          else if (event.type === 'done') {
-            setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
-            toast.success('Subtitles burned!', { id: toastId })
-          } else if (event.type === 'error') throw new Error(event.message)
-        }
-      }
+      await readJsonLines(res, (event) => {
+        if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
+        else if (event.type === 'done') {
+          setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
+          toast.success('Subtitles burned!', { id: toastId })
+        } else if (event.type === 'error') throw new Error(event.message)
+      })
     } catch (err) {
       setBurnState(s => ({ ...s, status: 'idle' }))
       toast.error(err.message, { id: toastId })

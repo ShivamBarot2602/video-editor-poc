@@ -12,6 +12,10 @@ export const patchTranscription = (videoId, provider, body, fallbackMsg) =>
 // POST /api/transcribe/:id → raw Response (callers branch on res.ok themselves).
 export const transcribe = (videoId, body) => postRaw(`/api/transcribe/${videoId}`, body)
 
+// POST /api/burn/:id → raw Response whose body streams SSE progress events.
+// Caller checks res.ok then pipes the body through readJsonLines.
+export const burn = (videoId, body) => postRaw(`/api/burn/${videoId}`, body)
+
 // POST /api/prepare/:id → resolves on success; throws a fixed message on failure
 // (the caller never inspects the response body).
 export async function prepare(videoId) {
