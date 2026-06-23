@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
+import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
@@ -30,13 +31,6 @@ const RERANKERS = [
   { id: 'openai', label: 'OpenAI', model: 'gpt-4.1-mini' },
 ]
 
-function fmtTime(seconds) {
-  if (!Number.isFinite(seconds)) return '–'
-  const m = Math.floor(seconds / 60)
-  const s = (seconds - m * 60).toFixed(1)
-  return `${m}:${s.padStart(4, '0')}`
-}
-
 /**
  * Resolve the CSS `aspect-ratio` string to use for thumbnail cells.
  * Prefers explicit width/height from state; falls back to aspect category.
@@ -49,24 +43,6 @@ function resolveAspectRatio(video) {
     case 'landscape': return '16 / 9'
     default:          return '16 / 9' // safe default
   }
-}
-
-function fmtSize(bytes) {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso), now = new Date()
-  const mins = Math.floor((now - d) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
-  return d.toLocaleDateString()
 }
 
 /* No-video entry (`/thumbnails`): upload or pick a recent session, then route

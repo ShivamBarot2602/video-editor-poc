@@ -2,25 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Pencil, Check, Zap, FileText, ChevronDown } from 'lucide-react'
 import { PROVIDERS } from '../providers'
 import SpeakerBadge from './SpeakerBadge'
-
-function fmtTime(s) {
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
-function scrollRowIntoView(containerEl, rowEl, padding = 12) {
-  if (!containerEl || !rowEl) return
-  const containerRect = containerEl.getBoundingClientRect()
-  const rowRect = rowEl.getBoundingClientRect()
-  const topLimit = containerRect.top + padding
-  const bottomLimit = containerRect.bottom - padding
-  if (rowRect.top < topLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop - (topLimit - rowRect.top))
-  } else if (rowRect.bottom > bottomLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop + (rowRect.bottom - bottomLimit))
-  }
-}
+import { fmtClock as fmtTime } from '../lib/format'
+import { scrollRowIntoView } from '../lib/dom'
 
 function SegmentWords({ words, currentTime }) {
   return (

@@ -6,45 +6,10 @@ import toast from 'react-hot-toast'
 import { PROVIDERS } from '../providers'
 import UploadZone from '../components/UploadZone'
 import SpeakerBadge from '../components/SpeakerBadge'
+import { fmtClock as fmtTime, fmtSize, fmtDate } from '../lib/format'
+import { scrollRowIntoView } from '../lib/dom'
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
-
-function fmtTime(s) {
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
-function fmtSize(bytes) {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 ** 2)).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function scrollRowIntoView(containerEl, rowEl, padding = 12) {
-  if (!containerEl || !rowEl) return
-  const containerRect = containerEl.getBoundingClientRect()
-  const rowRect = rowEl.getBoundingClientRect()
-  const topLimit = containerRect.top + padding
-  const bottomLimit = containerRect.bottom - padding
-  if (rowRect.top < topLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop - (topLimit - rowRect.top))
-  } else if (rowRect.bottom > bottomLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop + (rowRect.bottom - bottomLimit))
-  }
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso), now = new Date()
-  const mins = Math.floor((now - d) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
-  return d.toLocaleDateString()
-}
 
 function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error }) {
   const segments = transcription?.segments || null

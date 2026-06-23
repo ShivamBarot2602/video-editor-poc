@@ -8,6 +8,8 @@ import ClipCard from '../components/ClipCard'
 import ClipControlsBar from '../components/ClipControlsBar'
 import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
 import SourceVideoPlayer from '../components/SourceVideoPlayer'
+import { fmtSize } from '../lib/format'
+import { triggerDownload } from '../lib/dom'
 
 const IDLE = { status: 'idle', progress: 0 }
 
@@ -28,21 +30,6 @@ function seedExportStates(clips) {
 // clip is already in the saved library.
 function computeSavedId(clip) {
   return `saved-${clip.suggestProvider || 'clip'}-${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}`
-}
-
-function triggerDownload(url) {
-  const a = document.createElement('a')
-  a.href = url
-  a.setAttribute('download', '')
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-}
-
-function fmtSize(bytes) {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
 }
 
 /* `/clips` entry with no video — upload or pick a recent session. */
