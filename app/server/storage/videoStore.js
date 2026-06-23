@@ -124,6 +124,10 @@ function assPath(id) {
   return path.join(videoDir(id), FILES.ASS)
 }
 
+function writeAss(id, content) {
+  fs.writeFileSync(assPath(id), content, 'utf8')
+}
+
 function thumbnailV2Path(id) {
   return path.join(videoDir(id), FILES.THUMBNAIL_V2)
 }
@@ -416,7 +420,7 @@ module.exports = {
   // original / media
   findOriginalName, findOriginalPath, statOriginal,
   burnedPath, findBurnedPath, hasBurned,
-  audioPath, audioExists, assPath, thumbnailV2Path, thumbnailV2Exists,
+  audioPath, audioExists, assPath, writeAss, thumbnailV2Path, thumbnailV2Exists,
   // meta
   readMeta, writeMeta,
   // transcription
