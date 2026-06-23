@@ -8,6 +8,8 @@ import {
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
 import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
+import { listVideos } from '../api/videos'
+import { getThumbnails, patchThumbnailSelection } from '../api/thumbnails'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
@@ -53,7 +55,7 @@ function ThumbnailsPicker() {
   const [thumbErrors, setThumbErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+    listVideos().then(setVideos).catch(() => setVideos([]))
   }, [])
 
   const go = (id) => navigate(`/thumbnails/${id}`)
@@ -153,8 +155,7 @@ function ThumbnailsEditor({ videoId }) {
   useEffect(() => {
     let cancel = false
     setStateLoading(true)
-    fetch(`/api/thumbnails/${videoId}`)
-      .then(r => r.ok ? r.json() : null)
+    getThumbnails(videoId)
       .then(s => { if (!cancel) setState(s) })
       .catch(() => {})
       .finally(() => { if (!cancel) setStateLoading(false) })
@@ -252,12 +253,8 @@ function ThumbnailsEditor({ videoId }) {
   async function handleChoose(key) {
     const next = state?.selectedKey === key ? null : key
     try {
-      const res = await fetch(`/api/thumbnails/${videoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedKey: next }),
-      })
-      if (res.ok) setState(await res.json())
+      const s = await patchThumbnailSelection(videoId, next)
+      if (s) setState(s)
     } catch (_) { /* ignore */ }
   }
 

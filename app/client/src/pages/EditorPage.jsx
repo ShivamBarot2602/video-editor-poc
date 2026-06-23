@@ -7,6 +7,8 @@ import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
 import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
+import { listVideos } from '../api/videos'
+import { getTranscriptionOrNull, patchTranscription, transcribe, subtitleDownloadUrl } from '../api/transcription'
 
 // DEFAULT_STYLE + EXPORT_FORMATS now live in config/subtitleStyle.js; they are
 // re-exported here for backward compatibility.
@@ -48,8 +50,7 @@ export default function EditorPage() {
     const load = async () => {
       setLoading(true)
       try {
-        const res = await fetch('/api/videos')
-        const videos = await res.json()
+        const videos = await listVideos()
         const video = videos.find(v => v.id === videoId)
         if (!video) { toast.error('Video not found'); navigate('/'); return }
 
@@ -63,8 +64,8 @@ export default function EditorPage() {
         const provider = searchParams.get('provider') || selectedProvider
         if (video.providers.includes(provider)) {
           try {
-            const tr = await fetch(`/api/transcription/${videoId}/${provider}`)
-            if (tr.ok) setTranscription(await tr.json())
+            const data = await getTranscriptionOrNull(videoId, provider)
+            if (data) setTranscription(data)
           } catch (_) {}
         }
       } catch (err) {
@@ -83,8 +84,7 @@ export default function EditorPage() {
   useEffect(() => {
     if (!videoId || availableProviders.length === 0) return
     if (!availableProviders.includes(selectedProvider)) { setTranscription(null); return }
-    fetch(`/api/transcription/${videoId}/${selectedProvider}`)
-      .then(r => r.ok ? r.json() : null)
+    getTranscriptionOrNull(videoId, selectedProvider)
       .then(data => { if (data) setTranscription(data) })
       .catch(() => {})
   }, [selectedProvider, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,16 +117,7 @@ export default function EditorPage() {
   const persistSpeakerAliases = useCallback(async (aliases) => {
     if (!videoId || !selectedProvider) return
     try {
-      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speaker_aliases: aliases || {} }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save speaker names')
-      }
-      const updated = await res.json()
+      const updated = await patchTranscription(videoId, selectedProvider, { speaker_aliases: aliases || {} }, 'Failed to save speaker names')
       // Keep local transcription in sync so refresh/download reflect server state.
       setTranscription(updated)
     } catch (err) {
@@ -137,16 +128,7 @@ export default function EditorPage() {
   const handleSegmentEdit = useCallback(async (segIdx, newText) => {
     if (!videoId || !selectedProvider) return
     try {
-      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segment_edits: { [segIdx]: newText } }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save edit')
-      }
-      setTranscription(await res.json())
+      setTranscription(await patchTranscription(videoId, selectedProvider, { segment_edits: { [segIdx]: newText } }, 'Failed to save edit'))
     } catch (err) {
       toast.error(err.message)
     }
@@ -167,11 +149,7 @@ export default function EditorPage() {
     setTranscription(null)
     const toastId = toast.loading('Transcribing…')
     try {
-      const res = await fetch(`/api/transcribe/${videoId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider }),
-      })
+      const res = await transcribe(videoId, { provider: selectedProvider })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Transcription failed')
       setTranscription(data)
@@ -211,7 +189,7 @@ export default function EditorPage() {
     }
 
     const a = document.createElement('a')
-    a.href = `/api/transcription/${videoId}/${selectedProvider}/${formatId}`
+    a.href = subtitleDownloadUrl(videoId, selectedProvider, formatId)
     a.download = `transcription_${selectedProvider}.${formatId}`
     a.click()
   }, [transcription, videoId, selectedProvider, speakerAliases])

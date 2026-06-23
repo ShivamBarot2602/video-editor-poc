@@ -3,6 +3,7 @@ import { Play, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { PROVIDERS } from '../config/providers'
 import { fmtSize, fmtDate } from '../lib/format'
+import { listVideos } from '../api/videos'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 
@@ -11,7 +12,7 @@ export default function RecentVideos({ onSelect, onPlayground }) {
   const [thumbErrors, setThumbErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+    listVideos().then(setVideos).catch(() => setVideos([]))
   }, [])
 
   if (videos === null) {

@@ -10,6 +10,8 @@ import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
 import SourceVideoPlayer from '../components/SourceVideoPlayer'
 import { fmtSize } from '../lib/format'
 import { triggerDownload } from '../lib/dom'
+import { listVideos } from '../api/videos'
+import { getClips, getSavedClips, suggestClips, saveClip, removeSavedClip } from '../api/clips'
 
 const IDLE = { status: 'idle', progress: 0 }
 
@@ -40,7 +42,7 @@ function ClipsPicker() {
   const go = (id) => navigate(`/clips/${id}`)
 
   useEffect(() => {
-    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+    listVideos().then(setVideos).catch(() => setVideos([]))
   }, [])
 
   return (
@@ -154,7 +156,7 @@ function ClipsEditor({ videoId }) {
   // ── discover the video + its transcript providers ──────────────────────────
   useEffect(() => {
     let cancel = false
-    fetch('/api/videos').then(r => r.json()).then(list => {
+    listVideos().then(list => {
       if (cancel) return
       const v = (list || []).find(x => x.id === videoId)
       if (!v) { setNotFound(true); setTranscriptProviders([]); return }
@@ -171,8 +173,7 @@ function ClipsEditor({ videoId }) {
     let cancel = false
     setLoadingSaved(true)
     setError(null)
-    fetch(`/api/clips/${videoId}/${loadProvider}`)
-      .then(r => r.ok ? r.json() : null)
+    getClips(videoId, loadProvider)
       .then(d => {
         if (cancel) return
         if (d) { setMetadata(d.metadata); setClips(d.clips || []); setExportStates(p => ({ ...p, ...seedExportStates(d.clips) })) }
@@ -186,8 +187,7 @@ function ClipsEditor({ videoId }) {
   // ── load the persistent saved-clips library (cross-provider, survives runs) ──
   useEffect(() => {
     let cancel = false
-    fetch(`/api/clips/${videoId}/saved`)
-      .then(r => r.ok ? r.json() : { clips: [] })
+    getSavedClips(videoId)
       .then(d => {
         if (cancel) return
         const list = d.clips || []
@@ -218,13 +218,7 @@ function ClipsEditor({ videoId }) {
     setError(null)
     const tid = toast.loading('Suggesting clips…')
     try {
-      const res = await fetch(`/api/clips/${videoId}/suggest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suggestProvider, transcriptProvider: selectedTranscriptProvider, bucket, count }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to suggest clips')
+      const data = await suggestClips(videoId, { suggestProvider, transcriptProvider: selectedTranscriptProvider, bucket, count }, 'Failed to suggest clips')
       setMetadata(data.metadata)
       setClips(data.clips || [])
       setExportStates(p => ({ ...p, ...seedExportStates(data.clips) }))
@@ -298,13 +292,7 @@ function ClipsEditor({ videoId }) {
 
   async function handleSave(clip) {
     try {
-      const res = await fetch(`/api/clips/${videoId}/saved`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clip, transcriptProvider: selectedTranscriptProvider, bucket }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Save failed')
+      const data = await saveClip(videoId, { clip, transcriptProvider: selectedTranscriptProvider, bucket }, 'Save failed')
       setSavedClips(data.clips || [])
       toast.success('Saved to your library')
     } catch (e) {
@@ -314,9 +302,7 @@ function ClipsEditor({ videoId }) {
 
   async function handleRemoveSaved(savedId) {
     try {
-      const res = await fetch(`/api/clips/${videoId}/saved/${savedId}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Remove failed')
+      const data = await removeSavedClip(videoId, savedId, 'Remove failed')
       setSavedClips(data.clips || [])
       const es = esMapRef.current.get(savedId)
       if (es) { try { es.close() } catch (_) {} esMapRef.current.delete(savedId) }
