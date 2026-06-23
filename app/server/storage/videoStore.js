@@ -285,6 +285,20 @@ function ensurePolishedDir(id) {
   return p
 }
 
+// Write a polished image buffer; returns its absolute path. Caller must have
+// called ensurePolishedDir(id) first (matches the original's single mkdir).
+function writePolishedImage(id, idx, providerId, ext, buffer) {
+  const outPath = path.join(polishedDirPath(id), P.polishedName(idx, providerId, ext))
+  fs.writeFileSync(outPath, buffer)
+  return outPath
+}
+
+// Generic existence check for an absolute path (used by the thumbnail file serve
+// after the traversal guard in resolveThumbnailFile).
+function fileExists(absPath) {
+  return fs.existsSync(absPath)
+}
+
 // Absolute path under the video dir for a thumbnail-pipeline file, guarded
 // against traversal and restricted to the frames/ and thumbnails/ subtrees.
 // Throws an Error with `.status` (400 / 403) on a bad path; caller handles 404.
@@ -443,7 +457,8 @@ module.exports = {
   readThumbnailState, writeThumbnailState,
   framesDirPath, framesExist, frameStatsPath, frameStatsExist,
   readFrameStats, writeFrameStats,
-  polishedDirPath, ensurePolishedDir, resolveThumbnailFile, thumbnailFileUrl,
+  polishedDirPath, ensurePolishedDir, writePolishedImage, fileExists,
+  resolveThumbnailFile, thumbnailFileUrl,
   // clips
   clipsSuggestionsPath, clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions,
   listClipProviders, savedClipsPath, savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,
