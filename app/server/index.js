@@ -1,10 +1,10 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const path = require('path')
-const fs = require('fs')
 const morgan = require('morgan')
 const Sentry = require('@sentry/node')
+const store = require('./storage/videoStore')
+const { VIDEOS_DIR } = require('./config/paths')
 
 // Initialize Sentry (if DSN is configured)
 if (process.env.SENTRY_DSN) {
@@ -28,22 +28,15 @@ const mediaRouter = require('./routes/media')
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const VIDEOS_DIR = path.resolve(process.env.VIDEOS_DIR || './videos')
 
-// Ensure videos directory exists
-fs.mkdirSync(VIDEOS_DIR, { recursive: true })
+// Ensure the videos directory exists
+store.init()
 
 app.use(cors())
 app.use(express.json())
 
 // Log incoming HTTP requests
 app.use(morgan('dev'))
-
-// Attach VIDEOS_DIR to every request so routes can access it
-app.use((req, _res, next) => {
-  req.videosDir = VIDEOS_DIR
-  next()
-})
 
 app.use('/api/upload', uploadRouter)
 app.use('/api/prepare', prepareRouter)
