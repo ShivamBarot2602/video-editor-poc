@@ -11,6 +11,7 @@ import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
 import { listVideos } from '../api/videos'
 import { getThumbnails, patchThumbnailSelection } from '../api/thumbnails'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
+import { openThumbnailStream } from '../api/thumbnails'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
@@ -183,61 +184,57 @@ function ThumbnailsEditor({ videoId }) {
       evtSourceRef.current = null
     }
 
-    const es = new EventSource(`/api/thumbnails/${videoId}/stream?reranker=${encodeURIComponent(reranker)}`)
+    const es = openThumbnailStream(videoId, reranker, {
+      onMessage: (event) => {
+        if (event.type === 'phase') {
+          setPhase(event.phase)
+          setPhaseMeta(prev => ({ ...prev, [event.phase]: event }))
+        } else if (event.type === 'picks') {
+          // Rerank finished — render the rows now, each polish cell pending.
+          setRunMeta({ rerankProvider: event.rerankProvider, rerankModel: event.rerankModel, video: event.video })
+          const pending = {}
+          ;(event.providers || []).forEach(p => { pending[p] = { status: 'pending' } })
+          setRunCandidates((event.picks || []).map(p => ({ ...p, polished: { ...pending } })))
+        } else if (event.type === 'polished') {
+          // A polish job finished — fill that one cell live.
+          setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+            ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'ok', url: event.url, model: event.model } } }
+            : c))
+        } else if (event.type === 'polish_failed') {
+          setWarnings(w => [...w, { stage: event.provider || 'polish', message: event.message }])
+          setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+            ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'error', error: event.message } } }
+            : c))
+        } else if (event.type === 'warn') {
+          setWarnings(w => [...w, { stage: event.stage || event.provider || 'unknown', message: event.message }])
+        } else if (event.type === 'done') {
+          setPhase('done')
+          setState(event.state)
+          setRunCandidates(null)   // hand off to authoritative saved state
+          setRunMeta(null)
+          es.close()
+          evtSourceRef.current = null
+          setRunning(false)
+        } else if (event.type === 'error') {
+          setError(event.message)
+          es.close()
+          evtSourceRef.current = null
+          setRunning(false)
+        }
+      },
+      onError: () => {
+        // EventSource auto-reconnects on transient errors, but once the server
+        // closes the stream after sending `done`, we get an error event. If we
+        // already have `done`/`error` state, this is benign and `running` is
+        // already false. Otherwise surface a generic message.
+        if (es.readyState === EventSource.CLOSED) return
+        setError('SSE connection lost')
+        try { es.close() } catch (_) {}
+        evtSourceRef.current = null
+        setRunning(false)
+      },
+    })
     evtSourceRef.current = es
-
-    es.onmessage = (msg) => {
-      let event
-      try { event = JSON.parse(msg.data) } catch { return }
-
-      if (event.type === 'phase') {
-        setPhase(event.phase)
-        setPhaseMeta(prev => ({ ...prev, [event.phase]: event }))
-      } else if (event.type === 'picks') {
-        // Rerank finished — render the rows now, each polish cell pending.
-        setRunMeta({ rerankProvider: event.rerankProvider, rerankModel: event.rerankModel, video: event.video })
-        const pending = {}
-        ;(event.providers || []).forEach(p => { pending[p] = { status: 'pending' } })
-        setRunCandidates((event.picks || []).map(p => ({ ...p, polished: { ...pending } })))
-      } else if (event.type === 'polished') {
-        // A polish job finished — fill that one cell live.
-        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
-          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'ok', url: event.url, model: event.model } } }
-          : c))
-      } else if (event.type === 'polish_failed') {
-        setWarnings(w => [...w, { stage: event.provider || 'polish', message: event.message }])
-        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
-          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'error', error: event.message } } }
-          : c))
-      } else if (event.type === 'warn') {
-        setWarnings(w => [...w, { stage: event.stage || event.provider || 'unknown', message: event.message }])
-      } else if (event.type === 'done') {
-        setPhase('done')
-        setState(event.state)
-        setRunCandidates(null)   // hand off to authoritative saved state
-        setRunMeta(null)
-        es.close()
-        evtSourceRef.current = null
-        setRunning(false)
-      } else if (event.type === 'error') {
-        setError(event.message)
-        es.close()
-        evtSourceRef.current = null
-        setRunning(false)
-      }
-    }
-
-    es.onerror = () => {
-      // EventSource auto-reconnects on transient errors, but once the server
-      // closes the stream after sending `done`, we get an error event. If we
-      // already have `done`/`error` state, this is benign and `running` is
-      // already false. Otherwise surface a generic message.
-      if (es.readyState === EventSource.CLOSED) return
-      setError('SSE connection lost')
-      try { es.close() } catch (_) {}
-      evtSourceRef.current = null
-      setRunning(false)
-    }
   }
 
   // Cleanup on unmount.
