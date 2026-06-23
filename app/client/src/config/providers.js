@@ -1,3 +1,5 @@
+// Static registry of STT providers for the UI (dropdowns, badges, labels).
+// Keep in sync with the server's provider registry (app/server/providers/index.js).
 export const PROVIDERS = [
   { id: 'assemblyai',   label: 'AssemblyAI',   diarization: true,  note: 'Best diarization · code-mixing' },
   { id: 'deepgram',     label: 'Deepgram',     diarization: true,  note: 'Nova-3 · fast' },
@@ -12,4 +14,7 @@ export const PROVIDERS = [
   { id: 'pyannote',     label: 'pyannoteAI',   diarization: true,  note: 'precision-2 · diarization + STT' },
   { id: 'sonix',        label: 'Sonix',        diarization: true,  note: '30 speakers · $10/hr' },
   { id: 'sarvam',       label: 'Sarvam AI',    diarization: true,  note: 'Saaras v3 · 22 Indic langs · code-mixing' },
+  { id: 'ibm',          label: 'IBM Watson',   diarization: true,  note: 'Speech to Text · 100 langs · 1 GB cap' },
+  { id: 'azure',        label: 'Azure Speech', diarization: true,  note: 'Speech Services · 100 langs · 1 GB cap' },
+  { id: 'google',       label: 'Google Cloud', diarization: true,  note: 'Speech-to-Text · 100 langs · 1 GB cap' },
 ]

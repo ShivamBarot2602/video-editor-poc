@@ -1,5 +1,5 @@
 import { Sparkles, Loader2, Film } from 'lucide-react'
-import { PROVIDERS } from '../providers'
+import { PROVIDERS } from '../config/providers'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 

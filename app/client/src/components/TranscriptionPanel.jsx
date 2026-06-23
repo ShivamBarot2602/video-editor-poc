@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Pencil, Check, Zap, FileText, ChevronDown } from 'lucide-react'
-import { PROVIDERS } from '../providers'
+import { PROVIDERS } from '../config/providers'
 import SpeakerBadge from './SpeakerBadge'
 import { fmtClock as fmtTime } from '../lib/format'
 import { scrollRowIntoView } from '../lib/dom'

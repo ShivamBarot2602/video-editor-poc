@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Play, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { PROVIDERS } from '../providers'
+import { PROVIDERS } from '../config/providers'
 import { fmtSize, fmtDate } from '../lib/format'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
