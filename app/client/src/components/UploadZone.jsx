@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { uploadVideo } from '../api/videos'
 
 const MAX_SIZE_MB = 500
 const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,audio/mpeg,audio/wav,audio/mp4'
@@ -18,29 +19,11 @@ export default function UploadZone({ onUpload, compact }) {
       toast.error(`File too large (${sizeMB.toFixed(0)} MB). Limit is ${MAX_SIZE_MB} MB.`)
       return
     }
-    const formData = new FormData()
-    formData.append('video', file)
     setUploading(true)
     setProgress(0)
     try {
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/upload')
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100))
-        }
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const data = JSON.parse(xhr.responseText)
-            onUpload(data.videoId, { name: file.name, size: file.size })
-            resolve()
-          } else {
-            reject(new Error(JSON.parse(xhr.responseText)?.error || 'Upload failed'))
-          }
-        }
-        xhr.onerror = () => reject(new Error('Network error'))
-        xhr.send(formData)
-      })
+      const data = await uploadVideo(file, { onProgress: setProgress })
+      onUpload(data.videoId, { name: file.name, size: file.size })
     } catch (err) {
       toast.error(err.message)
     } finally {
