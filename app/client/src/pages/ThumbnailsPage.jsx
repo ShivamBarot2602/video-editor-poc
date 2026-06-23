@@ -10,6 +10,7 @@ import UploadZone from '../components/UploadZone'
 import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
 import { listVideos } from '../api/videos'
 import { getThumbnails, patchThumbnailSelection } from '../api/thumbnails'
+import { useLocalStorageState } from '../hooks/useLocalStorageState'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
@@ -145,11 +146,9 @@ function ThumbnailsEditor({ videoId }) {
   const [phaseMeta, setPhaseMeta] = useState({})         // counts, warnings
   const [warnings, setWarnings] = useState([])
   const [error, setError]       = useState(null)
-  const [reranker, setReranker] = useState(() => localStorage.getItem('thumb_reranker') || 'gemini')
+  const [reranker, setReranker] = useLocalStorageState('thumb_reranker', 'gemini')
   const [runCandidates, setRunCandidates] = useState(null)  // progressive picks during a live run
   const [runMeta, setRunMeta] = useState(null)              // rerank model + video, from the `picks` event
-
-  useEffect(() => { localStorage.setItem('thumb_reranker', reranker) }, [reranker])
 
   // ─── load cached state on mount ──────────────────────────────────────────
   useEffect(() => {
