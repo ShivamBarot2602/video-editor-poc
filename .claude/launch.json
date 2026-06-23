@@ -6,6 +6,12 @@
       "runtimeExecutable": "yarn",
       "runtimeArgs": ["--cwd", "app/client", "dev"],
       "port": 5173
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": ["--cwd", "app/server", "dev"],
+      "port": 3001
     }
   ]
 }
