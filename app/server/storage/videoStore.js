@@ -339,9 +339,19 @@ function savedClipsPath(id) {
   return path.join(videoDir(id), FILES.SAVED_CLIPS)
 }
 
+function savedClipsExist(id) {
+  return fs.existsSync(savedClipsPath(id))
+}
+
 // Saved-clip library; missing / parse error → { clips: [] }.
 function readSavedClips(id) {
   return readJsonAt(savedClipsPath(id), { missing: { clips: [] }, bad: { clips: [] }, safe: true })
+}
+
+// Saved-clip library, strict: THROWS on parse error (export path matches the
+// original JSON.parse-in-try behavior). Caller must check savedClipsExist first.
+function readSavedClipsStrict(id) {
+  return JSON.parse(fs.readFileSync(savedClipsPath(id), 'utf8'))
 }
 
 function writeSavedClips(id, data) {
@@ -436,7 +446,7 @@ module.exports = {
   polishedDirPath, ensurePolishedDir, resolveThumbnailFile, thumbnailFileUrl,
   // clips
   clipsSuggestionsPath, clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions,
-  listClipProviders, savedClipsPath, readSavedClips, writeSavedClips,
+  listClipProviders, savedClipsPath, savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,
   clipsDirPath, ensureClipsDir, clipOutputPath, clipOutputExists, deleteClipOutput,
   clipThumbsDirPath, ensureClipThumbsDir, clipThumbPath, clipThumbExists,
   clipDebugPath, cleanStaleSuggestionFiles,
