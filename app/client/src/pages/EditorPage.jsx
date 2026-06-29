@@ -6,37 +6,14 @@ import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panel
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
+import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
+import { listVideos } from '../api/videos'
+import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl } from '../api/transcription'
+import { readJsonLines } from '../api/stream'
 
-export const DEFAULT_STYLE = {
-  fontFamily: 'Arial',
-  fontSize: 48,
-  fontWeight: 600,          // 400 Regular | 600 SemiBold | 700 Bold
-  primaryColor: '#FFFFFF',
-  karaokeColor: '#FFD700',
-  outlineColor: '#000000',
-  outlineThickness: 2,
-  italic: false,
-  position: 'bottom-center',
-  verticalMargin: 30,
-  backgroundBox: 'off',     // 'off' | 'solid' | 'blur'
-  backgroundOpacity: 70,
-  karaokeStyle: 'word-highlight',
-  animationIn: 'none',      // 'none' | 'fade'
-  wordTimingOffset: 0,
-  maxLines: 2,
-  outputFormat: 'mp4',      // 'mp4' | 'webm'
-  quality: 23,              // CRF value
-}
-
-// Transcription export formats shown in the Export menu.
-// `kind: 'json'` is rendered client-side; `kind: 'subtitle'` downloads the
-// server-rendered file at /api/transcription/:id/:provider/:id (kept in sync
-// with edits). Add VTT/ASS later by registering it here AND in the server's
-// lib/subtitleFormats.js — no other client changes needed.
-export const EXPORT_FORMATS = [
-  { id: 'json', label: 'JSON', description: 'Full transcript and metadata', kind: 'json' },
-  { id: 'srt',  label: 'SRT',  description: 'SubRip subtitles',           kind: 'subtitle' },
-]
+// DEFAULT_STYLE + EXPORT_FORMATS now live in config/subtitleStyle.js; they are
+// re-exported here for backward compatibility.
+export { DEFAULT_STYLE, EXPORT_FORMATS }
 
 export default function EditorPage() {
   const { videoId } = useParams()
@@ -74,8 +51,7 @@ export default function EditorPage() {
     const load = async () => {
       setLoading(true)
       try {
-        const res = await fetch('/api/videos')
-        const videos = await res.json()
+        const videos = await listVideos()
         const video = videos.find(v => v.id === videoId)
         if (!video) { toast.error('Video not found'); navigate('/'); return }
 
@@ -89,8 +65,8 @@ export default function EditorPage() {
         const provider = searchParams.get('provider') || selectedProvider
         if (video.providers.includes(provider)) {
           try {
-            const tr = await fetch(`/api/transcription/${videoId}/${provider}`)
-            if (tr.ok) setTranscription(await tr.json())
+            const data = await getTranscriptionOrNull(videoId, provider)
+            if (data) setTranscription(data)
           } catch (_) {}
         }
       } catch (err) {
@@ -109,8 +85,7 @@ export default function EditorPage() {
   useEffect(() => {
     if (!videoId || availableProviders.length === 0) return
     if (!availableProviders.includes(selectedProvider)) { setTranscription(null); return }
-    fetch(`/api/transcription/${videoId}/${selectedProvider}`)
-      .then(r => r.ok ? r.json() : null)
+    getTranscriptionOrNull(videoId, selectedProvider)
       .then(data => { if (data) setTranscription(data) })
       .catch(() => {})
   }, [selectedProvider, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -143,16 +118,7 @@ export default function EditorPage() {
   const persistSpeakerAliases = useCallback(async (aliases) => {
     if (!videoId || !selectedProvider) return
     try {
-      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speaker_aliases: aliases || {} }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save speaker names')
-      }
-      const updated = await res.json()
+      const updated = await patchTranscription(videoId, selectedProvider, { speaker_aliases: aliases || {} }, 'Failed to save speaker names')
       // Keep local transcription in sync so refresh/download reflect server state.
       setTranscription(updated)
     } catch (err) {
@@ -163,16 +129,7 @@ export default function EditorPage() {
   const handleSegmentEdit = useCallback(async (segIdx, newText) => {
     if (!videoId || !selectedProvider) return
     try {
-      const res = await fetch(`/api/transcription/${videoId}/${selectedProvider}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segment_edits: { [segIdx]: newText } }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save edit')
-      }
-      setTranscription(await res.json())
+      setTranscription(await patchTranscription(videoId, selectedProvider, { segment_edits: { [segIdx]: newText } }, 'Failed to save edit'))
     } catch (err) {
       toast.error(err.message)
     }
@@ -193,11 +150,7 @@ export default function EditorPage() {
     setTranscription(null)
     const toastId = toast.loading('Transcribing…')
     try {
-      const res = await fetch(`/api/transcribe/${videoId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selectedProvider }),
-      })
+      const res = await transcribe(videoId, { provider: selectedProvider })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Transcription failed')
       setTranscription(data)
@@ -237,7 +190,7 @@ export default function EditorPage() {
     }
 
     const a = document.createElement('a')
-    a.href = `/api/transcription/${videoId}/${selectedProvider}/${formatId}`
+    a.href = subtitleDownloadUrl(videoId, selectedProvider, formatId)
     a.download = `transcription_${selectedProvider}.${formatId}`
     a.click()
   }, [transcription, videoId, selectedProvider, speakerAliases])
@@ -251,31 +204,16 @@ export default function EditorPage() {
     const burnStyle = { ...style, bold: style.fontWeight >= 600 }
 
     try {
-      const res = await fetch(`/api/burn/${videoId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ style: burnStyle, provider: selectedProvider }),
-      })
+      const res = await burn(videoId, { style: burnStyle, provider: selectedProvider })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Burn failed') }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n'); buffer = lines.pop()
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue
-          const event = JSON.parse(line.slice(5).trim())
-          if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
-          else if (event.type === 'done') {
-            setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
-            toast.success('Subtitles burned!', { id: toastId })
-          } else if (event.type === 'error') throw new Error(event.message)
-        }
-      }
+      await readJsonLines(res, (event) => {
+        if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
+        else if (event.type === 'done') {
+          setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
+          toast.success('Subtitles burned!', { id: toastId })
+        } else if (event.type === 'error') throw new Error(event.message)
+      })
     } catch (err) {
       setBurnState(s => ({ ...s, status: 'idle' }))
       toast.error(err.message, { id: toastId })

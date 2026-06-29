@@ -1,12 +1,6 @@
 import { useState } from 'react'
 import { Check, ImageOff } from 'lucide-react'
-
-function fmtTime(s) {
-  if (!Number.isFinite(s) || s < 0) s = 0
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${m}:${String(sec).padStart(2, '0')}`
-}
+import { fmtClockSafe as fmtTime } from '../lib/format'
 
 /**
  * Thumbnail-candidate strip for a video-understanding clip. Gemini points at 3

@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => {
   const isDev = mode === 'development'
   const apiTarget = isDev
     ? "http://localhost:3001"
-    : "https://sp-video-editor-poc-backend-e8oh.onrender.com";
+    : "https://sp-video-editor-poc-backend-4m9o.onrender.com";
 
   return {
     plugins: [react()],

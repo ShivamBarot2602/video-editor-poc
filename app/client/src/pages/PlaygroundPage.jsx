@@ -3,48 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import { LayoutGrid, Play, ArrowUp, Check, Loader2, ChevronRight, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { PROVIDERS } from '../providers'
+import { PROVIDERS } from '../config/providers'
 import UploadZone from '../components/UploadZone'
 import SpeakerBadge from '../components/SpeakerBadge'
+import { fmtClock as fmtTime, fmtSize, fmtDate } from '../lib/format'
+import { scrollRowIntoView } from '../lib/dom'
+import { listVideos } from '../api/videos'
+import { getTranscriptionOrNull, transcribe, prepare } from '../api/transcription'
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
-
-function fmtTime(s) {
-  const m = Math.floor(s / 60)
-  const sec = Math.floor(s % 60)
-  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-}
-
-function fmtSize(bytes) {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 ** 2)).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function scrollRowIntoView(containerEl, rowEl, padding = 12) {
-  if (!containerEl || !rowEl) return
-  const containerRect = containerEl.getBoundingClientRect()
-  const rowRect = rowEl.getBoundingClientRect()
-  const topLimit = containerRect.top + padding
-  const bottomLimit = containerRect.bottom - padding
-  if (rowRect.top < topLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop - (topLimit - rowRect.top))
-  } else if (rowRect.bottom > bottomLimit) {
-    containerEl.scrollTop = Math.max(0, containerEl.scrollTop + (rowRect.bottom - bottomLimit))
-  }
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso), now = new Date()
-  const mins = Math.floor((now - d) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
-  return d.toLocaleDateString()
-}
 
 function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error }) {
   const segments = transcription?.segments || null
@@ -323,9 +290,8 @@ export default function PlaygroundPage() {
     setTranscriptions({})
     video.providers.forEach(async (pid) => {
       try {
-        const res = await fetch(`/api/transcription/${video.id}/${pid}`)
-        if (res.ok) {
-          const data = await res.json()
+        const data = await getTranscriptionOrNull(video.id, pid)
+        if (data) {
           setTranscriptions(prev => ({ ...prev, [pid]: data }))
         }
       } catch (_) {}
@@ -341,8 +307,7 @@ export default function PlaygroundPage() {
 
   /* Initial fetch — respect ?video= param */
   useEffect(() => {
-    fetch('/api/videos')
-      .then(r => r.json())
+    listVideos()
       .then(vids => {
         setAllVideos(vids)
         if (videoParam) {
@@ -379,7 +344,7 @@ export default function PlaygroundPage() {
   /* Path A: upload inside the playground empty state */
   const handleUpload = async (id, meta) => {
     toast.success(`Uploaded: ${meta.name}`)
-    const vids = await fetch('/api/videos').then(r => r.json())
+    const vids = await listVideos()
     setAllVideos(vids)
     const v = vids.find(v => v.id === id)
     if (v) {
@@ -427,8 +392,7 @@ export default function PlaygroundPage() {
     // All providers share the same audio.wav — do it upfront before firing
     // parallel requests so there is no race condition on the file write.
     try {
-      const prepRes = await fetch(`/api/prepare/${selectedVideo.id}`, { method: 'POST' })
-      if (!prepRes.ok) throw new Error('Audio preparation failed')
+      await prepare(selectedVideo.id)
     } catch (err) {
       toast.error(`Preparation failed: ${err.message}`)
       setRunning(prev => {
@@ -444,11 +408,7 @@ export default function PlaygroundPage() {
     // audio.wav instead of re-running ffmpeg N times.
     const transcribeOne = async (p) => {
       try {
-        const res = await fetch(`/api/transcribe/${selectedVideo.id}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider: p.id, skipExtract: true }),
-        })
+        const res = await transcribe(selectedVideo.id, { provider: p.id, skipExtract: true })
         if (res.ok) {
           const data = await res.json()
           // Update this provider's result as soon as it resolves — don't wait for others

@@ -1,25 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Play, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { PROVIDERS } from '../providers'
-
-function fmtSize(bytes) {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 ** 3)).toFixed(1)} GB`
-  if (bytes >= 1024 * 1024)        return `${(bytes / (1024 ** 2)).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso), now = new Date()
-  const mins = Math.floor((now - d) / 60000)
-  if (mins < 1)  return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24)  return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7)  return `${days}d ago`
-  return d.toLocaleDateString()
-}
+import { PROVIDERS } from '../config/providers'
+import { fmtSize, fmtDate } from '../lib/format'
+import { listVideos } from '../api/videos'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 
@@ -28,7 +12,7 @@ export default function RecentVideos({ onSelect, onPlayground }) {
   const [thumbErrors, setThumbErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+    listVideos().then(setVideos).catch(() => setVideos([]))
   }, [])
 
   if (videos === null) {

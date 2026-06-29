@@ -7,6 +7,11 @@ import {
 } from 'lucide-react'
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
+import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
+import { listVideos } from '../api/videos'
+import { getThumbnails, patchThumbnailSelection } from '../api/thumbnails'
+import { useLocalStorageState } from '../hooks/useLocalStorageState'
+import { openThumbnailStream } from '../api/thumbnails'
 
 const PHASES = [
   { id: 'extracting', label: 'Extracting frames', hint: 'Grab still snapshots from across the video' },
@@ -30,13 +35,6 @@ const RERANKERS = [
   { id: 'openai', label: 'OpenAI', model: 'gpt-4.1-mini' },
 ]
 
-function fmtTime(seconds) {
-  if (!Number.isFinite(seconds)) return '–'
-  const m = Math.floor(seconds / 60)
-  const s = (seconds - m * 60).toFixed(1)
-  return `${m}:${s.padStart(4, '0')}`
-}
-
 /**
  * Resolve the CSS `aspect-ratio` string to use for thumbnail cells.
  * Prefers explicit width/height from state; falls back to aspect category.
@@ -51,24 +49,6 @@ function resolveAspectRatio(video) {
   }
 }
 
-function fmtSize(bytes) {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
-}
-
-function fmtDate(iso) {
-  const d = new Date(iso), now = new Date()
-  const mins = Math.floor((now - d) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days}d ago`
-  return d.toLocaleDateString()
-}
-
 /* No-video entry (`/thumbnails`): upload or pick a recent session, then route
    to `/thumbnails/:id`. Mirrors the Playground empty state. */
 function ThumbnailsPicker() {
@@ -77,7 +57,7 @@ function ThumbnailsPicker() {
   const [thumbErrors, setThumbErrors] = useState({})
 
   useEffect(() => {
-    fetch('/api/videos').then(r => r.json()).then(setVideos).catch(() => setVideos([]))
+    listVideos().then(setVideos).catch(() => setVideos([]))
   }, [])
 
   const go = (id) => navigate(`/thumbnails/${id}`)
@@ -167,18 +147,15 @@ function ThumbnailsEditor({ videoId }) {
   const [phaseMeta, setPhaseMeta] = useState({})         // counts, warnings
   const [warnings, setWarnings] = useState([])
   const [error, setError]       = useState(null)
-  const [reranker, setReranker] = useState(() => localStorage.getItem('thumb_reranker') || 'gemini')
+  const [reranker, setReranker] = useLocalStorageState('thumb_reranker', 'gemini')
   const [runCandidates, setRunCandidates] = useState(null)  // progressive picks during a live run
   const [runMeta, setRunMeta] = useState(null)              // rerank model + video, from the `picks` event
-
-  useEffect(() => { localStorage.setItem('thumb_reranker', reranker) }, [reranker])
 
   // ─── load cached state on mount ──────────────────────────────────────────
   useEffect(() => {
     let cancel = false
     setStateLoading(true)
-    fetch(`/api/thumbnails/${videoId}`)
-      .then(r => r.ok ? r.json() : null)
+    getThumbnails(videoId)
       .then(s => { if (!cancel) setState(s) })
       .catch(() => {})
       .finally(() => { if (!cancel) setStateLoading(false) })
@@ -207,61 +184,57 @@ function ThumbnailsEditor({ videoId }) {
       evtSourceRef.current = null
     }
 
-    const es = new EventSource(`/api/thumbnails/${videoId}/stream?reranker=${encodeURIComponent(reranker)}`)
+    const es = openThumbnailStream(videoId, reranker, {
+      onMessage: (event) => {
+        if (event.type === 'phase') {
+          setPhase(event.phase)
+          setPhaseMeta(prev => ({ ...prev, [event.phase]: event }))
+        } else if (event.type === 'picks') {
+          // Rerank finished — render the rows now, each polish cell pending.
+          setRunMeta({ rerankProvider: event.rerankProvider, rerankModel: event.rerankModel, video: event.video })
+          const pending = {}
+          ;(event.providers || []).forEach(p => { pending[p] = { status: 'pending' } })
+          setRunCandidates((event.picks || []).map(p => ({ ...p, polished: { ...pending } })))
+        } else if (event.type === 'polished') {
+          // A polish job finished — fill that one cell live.
+          setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+            ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'ok', url: event.url, model: event.model } } }
+            : c))
+        } else if (event.type === 'polish_failed') {
+          setWarnings(w => [...w, { stage: event.provider || 'polish', message: event.message }])
+          setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
+            ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'error', error: event.message } } }
+            : c))
+        } else if (event.type === 'warn') {
+          setWarnings(w => [...w, { stage: event.stage || event.provider || 'unknown', message: event.message }])
+        } else if (event.type === 'done') {
+          setPhase('done')
+          setState(event.state)
+          setRunCandidates(null)   // hand off to authoritative saved state
+          setRunMeta(null)
+          es.close()
+          evtSourceRef.current = null
+          setRunning(false)
+        } else if (event.type === 'error') {
+          setError(event.message)
+          es.close()
+          evtSourceRef.current = null
+          setRunning(false)
+        }
+      },
+      onError: () => {
+        // EventSource auto-reconnects on transient errors, but once the server
+        // closes the stream after sending `done`, we get an error event. If we
+        // already have `done`/`error` state, this is benign and `running` is
+        // already false. Otherwise surface a generic message.
+        if (es.readyState === EventSource.CLOSED) return
+        setError('SSE connection lost')
+        try { es.close() } catch (_) {}
+        evtSourceRef.current = null
+        setRunning(false)
+      },
+    })
     evtSourceRef.current = es
-
-    es.onmessage = (msg) => {
-      let event
-      try { event = JSON.parse(msg.data) } catch { return }
-
-      if (event.type === 'phase') {
-        setPhase(event.phase)
-        setPhaseMeta(prev => ({ ...prev, [event.phase]: event }))
-      } else if (event.type === 'picks') {
-        // Rerank finished — render the rows now, each polish cell pending.
-        setRunMeta({ rerankProvider: event.rerankProvider, rerankModel: event.rerankModel, video: event.video })
-        const pending = {}
-        ;(event.providers || []).forEach(p => { pending[p] = { status: 'pending' } })
-        setRunCandidates((event.picks || []).map(p => ({ ...p, polished: { ...pending } })))
-      } else if (event.type === 'polished') {
-        // A polish job finished — fill that one cell live.
-        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
-          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'ok', url: event.url, model: event.model } } }
-          : c))
-      } else if (event.type === 'polish_failed') {
-        setWarnings(w => [...w, { stage: event.provider || 'polish', message: event.message }])
-        setRunCandidates(prev => prev && prev.map(c => c.idx === event.idx
-          ? { ...c, polished: { ...c.polished, [event.provider]: { status: 'error', error: event.message } } }
-          : c))
-      } else if (event.type === 'warn') {
-        setWarnings(w => [...w, { stage: event.stage || event.provider || 'unknown', message: event.message }])
-      } else if (event.type === 'done') {
-        setPhase('done')
-        setState(event.state)
-        setRunCandidates(null)   // hand off to authoritative saved state
-        setRunMeta(null)
-        es.close()
-        evtSourceRef.current = null
-        setRunning(false)
-      } else if (event.type === 'error') {
-        setError(event.message)
-        es.close()
-        evtSourceRef.current = null
-        setRunning(false)
-      }
-    }
-
-    es.onerror = () => {
-      // EventSource auto-reconnects on transient errors, but once the server
-      // closes the stream after sending `done`, we get an error event. If we
-      // already have `done`/`error` state, this is benign and `running` is
-      // already false. Otherwise surface a generic message.
-      if (es.readyState === EventSource.CLOSED) return
-      setError('SSE connection lost')
-      try { es.close() } catch (_) {}
-      evtSourceRef.current = null
-      setRunning(false)
-    }
   }
 
   // Cleanup on unmount.
@@ -276,12 +249,8 @@ function ThumbnailsEditor({ videoId }) {
   async function handleChoose(key) {
     const next = state?.selectedKey === key ? null : key
     try {
-      const res = await fetch(`/api/thumbnails/${videoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedKey: next }),
-      })
-      if (res.ok) setState(await res.json())
+      const s = await patchThumbnailSelection(videoId, next)
+      if (s) setState(s)
     } catch (_) { /* ignore */ }
   }
 

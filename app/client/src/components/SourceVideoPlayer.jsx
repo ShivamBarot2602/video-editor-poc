@@ -1,17 +1,11 @@
 import { Film } from 'lucide-react'
+import { fmtSizeOrNull as fmtSize } from '../lib/format'
 
 function fmtDuration(s) {
   if (!Number.isFinite(s) || s < 0) return null
   const m = Math.floor(s / 60)
   const sec = Math.floor(s % 60)
   return `${m}:${String(sec).padStart(2, '0')}`
-}
-
-function fmtSize(bytes) {
-  if (!Number.isFinite(bytes)) return null
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`
-  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
-  return `${(bytes / 1024).toFixed(0)} KB`
 }
 
 /**

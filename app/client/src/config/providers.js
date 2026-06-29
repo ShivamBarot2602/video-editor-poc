@@ -1,3 +1,5 @@
+// Static registry of STT providers for the UI (dropdowns, badges, labels).
+// Keep in sync with the server's provider registry (app/server/providers/index.js).
 export const PROVIDERS = [
   { id: 'assemblyai',   label: 'AssemblyAI',   diarization: true,  note: 'Best diarization · code-mixing' },
   { id: 'deepgram',     label: 'Deepgram',     diarization: true,  note: 'Nova-3 · fast' },
