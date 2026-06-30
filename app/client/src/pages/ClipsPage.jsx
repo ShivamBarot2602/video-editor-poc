@@ -77,7 +77,7 @@ function ClipsPicker() {
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
-                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: 'var(--video-bg)', borderRadius: 3, overflow: 'hidden' }}>
                   {!thumbErrors[v.id] && (
                     <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
                   )}
@@ -558,7 +558,7 @@ function PageBar({ videoId, filename, count }) {
           {filename}
         </span>
       )}
-      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }}>
+      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'var(--hover-overlay)', borderRadius: 4 }}>
         {videoId}
       </code>
       {count > 0 && (

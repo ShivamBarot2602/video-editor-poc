@@ -24,7 +24,7 @@ const PHASES = [
 
 const PROVIDER_META = {
   original: { label: 'Original',       icon: ImageIcon, color: 'var(--text-muted)' },
-  gemini:   { label: 'Gemini polish',  icon: Sparkles,  color: '#8a7df0' },
+  gemini:   { label: 'Gemini polish',  icon: Sparkles,  color: 'var(--provider-gemini)' },
   openai:   { label: 'OpenAI polish',  icon: Wand2,     color: '#10a37f' },
 }
 
@@ -98,7 +98,7 @@ function ThumbnailsPicker() {
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
-                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: 'var(--video-bg)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
                   {!thumbErrors[v.id] ? (
                     <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
                   ) : (
@@ -336,7 +336,7 @@ function PageBar({ videoId, hasCandidates }) {
         <Sparkles size={14} color="var(--accent)" />
         Thumbnail Candidates
       </div>
-      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'rgba(255,255,255,0.04)', borderRadius: 4 }}>
+      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'var(--hover-overlay)', borderRadius: 4 }}>
         {videoId}
       </code>
       {hasCandidates && (
@@ -362,7 +362,7 @@ function LeftPane({
     }}>
       <div style={{ padding: 12, borderBottom: '1px solid var(--border-sub)' }}>
         <div style={{
-          background: '#000', borderRadius: 'var(--radius)',
+          background: 'var(--video-bg)', borderRadius: 'var(--radius)',
           overflow: 'hidden', aspectRatio: '16 / 9',
         }}>
           <VideoPlayer videoId={videoId} videoRef={videoRef} fillHeight={true} />
@@ -481,7 +481,7 @@ function RerankerSelect({ value, onChange, disabled }) {
           aria-label="Vision reranker"
           style={{
             display: 'inline-flex', gap: 2, padding: 2,
-            background: 'rgba(255,255,255,0.05)',
+            background: 'var(--hover-overlay)',
             border: '1px solid var(--border-sub)',
             borderRadius: 8,
             opacity: disabled ? 0.5 : 1,
@@ -782,7 +782,7 @@ function ThumbCell({ cell, chosen, onChoose, timestamp, aspectRatio = '16 / 9' }
     >
       <div style={{
         position: 'relative', width: '100%', aspectRatio,
-        background: failed ? 'rgba(220,38,38,0.05)' : '#0a0a0a',
+        background: failed ? 'rgba(220,38,38,0.05)' : 'var(--video-bg)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {failed ? (

@@ -27,7 +27,7 @@ export default function SourceVideoPlayer({ videoId, filename, durationS, width,
       </div>
 
       <div style={{
-        background: '#000',
+        background: 'var(--video-bg)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
@@ -43,7 +43,7 @@ export default function SourceVideoPlayer({ videoId, filename, durationS, width,
           controls
           preload="metadata"
           aria-label={filename ? `Source video: ${filename}` : 'Source video'}
-          style={{ width: '100%', maxHeight: '64vh', objectFit: 'contain', display: 'block', background: '#000' }}
+          style={{ width: '100%', maxHeight: '64vh', objectFit: 'contain', display: 'block', background: 'var(--video-bg)' }}
         />
       </div>
 

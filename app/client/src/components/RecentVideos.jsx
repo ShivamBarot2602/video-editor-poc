@@ -44,7 +44,7 @@ export default function RecentVideos({ onSelect, onPlayground }) {
         >
           {/* Thumbnail */}
           <div
-            style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#0a0a0a', flexShrink: 0 }}
+            style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: 'var(--video-bg)', flexShrink: 0 }}
           >
             {!thumbErrors[v.id] ? (
               <img

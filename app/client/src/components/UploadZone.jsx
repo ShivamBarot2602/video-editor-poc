@@ -67,7 +67,7 @@ export default function UploadZone({ onUpload, compact }) {
           </>
         ) : (
           <>
-            <div style={{ marginBottom: compact ? 8 : 10, color: '#555', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ marginBottom: compact ? 8 : 10, color: 'var(--text-dim)', display: 'flex', justifyContent: 'center' }}>
               <Upload size={compact ? 24 : 32} strokeWidth={1.5} />
             </div>
             <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: compact ? 13 : 15, marginBottom: 4 }}>
