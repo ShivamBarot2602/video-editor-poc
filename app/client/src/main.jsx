@@ -3,7 +3,22 @@ import ReactDOM from 'react-dom/client'
 import * as Sentry from '@sentry/react'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
+import { AuthProvider } from './auth/AuthContext'
 import './index.css'
+
+// Global fetch interceptor: send the session cookie on every /api call (needed
+// for cross-origin in prod) and, on a 401 from a non-auth endpoint, signal the
+// app to drop to the login screen. Covers the many direct fetch() call sites.
+const origFetch = window.fetch.bind(window)
+window.fetch = async (input, init = {}) => {
+  const url = typeof input === 'string' ? input : input?.url || ''
+  const isApi = url.includes('/api/')
+  const res = await origFetch(input, isApi ? { credentials: 'include', ...init } : init)
+  if (isApi && res.status === 401 && !url.includes('/api/auth/')) {
+    window.dispatchEvent(new Event('auth:expired'))
+  }
+  return res
+}
 
 // Initialize Sentry
 if (import.meta.env.VITE_SENTRY_DSN) {
@@ -26,7 +41,9 @@ const SentryApp = Sentry.withProfiler(App)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <SentryApp />
+    <AuthProvider>
+      <SentryApp />
+    </AuthProvider>
     <Toaster
       position="bottom-right"
       toastOptions={{

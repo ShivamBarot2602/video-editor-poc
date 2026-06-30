@@ -1,6 +1,7 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
+const cookieParser = require('cookie-parser')
 const morgan = require('morgan')
 const Sentry = require('@sentry/node')
 const store = require('./storage/videoStore')
@@ -25,18 +26,40 @@ const healthRouter = require('./routes/health')
 const videosRouter = require('./routes/videos')
 const transcriptionRouter = require('./routes/transcription')
 const mediaRouter = require('./routes/media')
+const authRouter = require('./routes/auth')
+const { requireAuth, authConfigured } = require('./middleware/auth')
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
+// Refuse to start half-configured — a public deployment with no auth is the
+// exact failure mode this feature exists to prevent.
+if (!authConfigured) {
+  console.error(
+    'FATAL: auth not configured. Set AUTH_USERNAME, AUTH_PASSWORD_HASH, JWT_SECRET in .env.\n' +
+    "Generate a hash with: node scripts/gen-password-hash.js '<password>'"
+  )
+  process.exit(1)
+}
+
 // Ensure the videos directory exists
 store.init()
 
-app.use(cors())
+// Credentialed CORS so the SPA can send the session cookie cross-origin in prod.
+// `origin: true` reflects the request origin (POC has no fixed client domain).
+app.use(cors({ origin: true, credentials: true }))
 app.use(express.json())
+app.use(cookieParser())
 
 // Log incoming HTTP requests
 app.use(morgan('dev'))
+
+// Public routes — auth (login/logout/me) and health checks stay open.
+app.use('/api/auth', authRouter)
+app.use('/api/health', healthRouter)
+
+// Everything below requires a valid session.
+app.use('/api', requireAuth)
 
 app.use('/api/upload', uploadRouter)
 app.use('/api/prepare', prepareRouter)
@@ -44,10 +67,14 @@ app.use('/api/transcribe', transcribeRouter)
 app.use('/api/burn', burnRouter)
 app.use('/api/thumbnails', thumbnailsRouter)
 app.use('/api/clips', clipsRouter)
-app.use('/api/health', healthRouter)
 app.use('/api/videos', videosRouter)
 app.use('/api/transcription', transcriptionRouter)
 app.use('/api/video', mediaRouter)
+
+// JSON 404 for unknown API routes (instead of Express's default HTML page).
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Not found' })
+})
 
 // Sentry error handler (must be after all routes, before other error handlers)
 if (process.env.SENTRY_DSN) {

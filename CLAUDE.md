@@ -81,6 +81,15 @@ React Router v7 SPA. Routes:
 
 The client provider list (`app/client/src/providers.js`) is a static registry used for UI. Keep it in sync with `app/server/providers/index.js` when adding new providers.
 
+### Auth
+
+Single-user login gates the whole app (it's publicly deployed). Credentials come from env: `AUTH_USERNAME`, `AUTH_PASSWORD_HASH` (bcrypt — generate via `node scripts/gen-password-hash.js '<pw>'`), `JWT_SECRET`. The server **refuses to start** if any are missing.
+
+- `POST /api/auth/login` verifies creds, sets an httpOnly `sp_auth` JWT cookie (HS256, 7d).
+- `POST /api/auth/logout` clears it; `GET /api/auth/me` reports the session.
+- `/api/auth/*` and `/api/health` are public; `requireAuth` (`middleware/auth.js`) gates everything else under `/api`.
+- Client: `auth/AuthContext.jsx` checks `/me` on mount and renders `LoginPage` until authed. A `window.fetch` interceptor in `main.jsx` adds `credentials:'include'` to `/api` calls and dispatches `auth:expired` on a 401, dropping back to login.
+
 ### Subtitle pipeline
 
 `POST /api/burn` → `assBuilder.buildAss(transcription, style)` → `.ass` file → `ffmpeg ass filter` → `burned.<ext>`. The burn route uses SSE (`text/event-stream`) to stream `{type: 'start'}`, `{type: 'progress', percent}`, `{type: 'done', burnedUrl}` events to the client.
