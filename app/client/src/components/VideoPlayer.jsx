@@ -49,7 +49,7 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
         ref={containerRef}
         style={{
           position: 'relative',
-          background: '#000',
+          background: 'var(--video-bg)',
           borderRadius: 10,
           overflow: 'hidden',
           ...(fillHeight ? { flex: 1, minHeight: 0 } : null),

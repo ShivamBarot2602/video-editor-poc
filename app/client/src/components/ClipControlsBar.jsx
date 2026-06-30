@@ -44,7 +44,7 @@ function Segmented({ options, value, onChange, disabled, ariaLabel }) {
       aria-label={ariaLabel}
       style={{
         display: 'inline-flex', gap: 2, padding: 2,
-        background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-sub)',
+        background: 'var(--hover-overlay)', border: '1px solid var(--border-sub)',
         borderRadius: 8, opacity: disabled ? 0.5 : 1, width: 'fit-content',
       }}
     >
@@ -139,7 +139,7 @@ export default function ClipControlsBar({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, height: 30,
               padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-sub)',
-              background: 'rgba(255,255,255,0.04)', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap',
+              background: 'var(--hover-overlay)', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap',
             }}
           >
             <Film size={13} color="var(--accent)" /> {VIDEO_MODEL}

@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
 import { AuthProvider } from './auth/AuthContext'
+import { ThemeProvider } from './theme/ThemeContext'
 import './index.css'
 
 // Global fetch interceptor: send the session cookie on every /api call (needed
@@ -41,22 +42,24 @@ const SentryApp = Sentry.withProfiler(App)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <SentryApp />
-    </AuthProvider>
-    <Toaster
-      position="bottom-right"
-      toastOptions={{
-        style: {
-          background: '#1a1a1a',
-          color: '#e4e4e7',
-          border: '1px solid #2a2a2a',
-          borderRadius: '8px',
-          fontSize: '14px',
-        },
-        success: { iconTheme: { primary: '#7c3aed', secondary: '#fff' } },
-        error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
-      }}
-    />
+    <ThemeProvider>
+      <AuthProvider>
+        <SentryApp />
+      </AuthProvider>
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: 'var(--surface)',
+            color: 'var(--text-bright)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            fontSize: '14px',
+          },
+          success: { iconTheme: { primary: 'var(--accent)', secondary: 'var(--text-on-accent)' } },
+          error: { iconTheme: { primary: 'var(--error)', secondary: 'var(--text-on-accent)' } },
+        }}
+      />
+    </ThemeProvider>
   </React.StrictMode>
 )

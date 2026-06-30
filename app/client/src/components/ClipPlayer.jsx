@@ -148,7 +148,7 @@ export default function ClipPlayer({ videoId, start, end, loop = true, aspectRat
       <div
         style={{
           position: 'relative', width: '100%', aspectRatio,
-          background: '#000', overflow: 'hidden',
+          background: 'var(--video-bg)', overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer',
         }}

@@ -184,7 +184,7 @@ function PlaygroundEmptyState({ allVideos, onUpload, onSelectRecent }) {
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
                 {/* Mini thumbnail */}
-                <div style={{ width: 46, height: 28, flexShrink: 0, background: '#0a0a0a', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: 46, height: 28, flexShrink: 0, background: 'var(--video-bg)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
                   {!thumbErrors[v.id] ? (
                     <img
                       src={v.thumbnail}
@@ -466,7 +466,7 @@ export default function PlaygroundPage() {
             borderRadius: 6,
             overflow: 'hidden',
             flexShrink: 0,
-            background: '#000',
+            background: 'var(--video-bg)',
             maxHeight: SIDEBAR_PREVIEW_MAX_HEIGHT,
             display: 'flex',
             alignItems: 'center',

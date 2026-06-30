@@ -1,7 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Sun, Moon } from 'lucide-react'
 import { useAuth } from './auth/AuthContext'
+import { useTheme } from './theme/ThemeContext'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import LandingPage from './pages/LandingPage'
@@ -17,6 +18,7 @@ import ClipsDocPage from './pages/docs/ClipsDocPage'
 function Header() {
   const location = useLocation()
   const { logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const isEditor = location.pathname.startsWith('/editor/')
   if (isEditor) return null
 
@@ -37,6 +39,15 @@ function Header() {
         <Link to="/clips" className={`topbar-tab ${isClips ? 'active' : ''}`}>Clips</Link>
         <Link to="/docs" className={`topbar-tab ${isDocs ? 'active' : ''}`}>Docs</Link>
         <button
+          onClick={toggleTheme}
+          className="topbar-tab"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+        <button
           onClick={logout}
           className="topbar-tab"
           title="Sign out"
@@ -51,8 +62,8 @@ function Header() {
 
 const screenStyle = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-  height: '100vh', gap: 14, backgroundColor: '#1a1a1a', color: '#e4e4e7',
-  fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center', padding: 20,
+  height: '100vh', gap: 14, backgroundColor: 'var(--bg)', color: 'var(--text-bright)',
+  textAlign: 'center', padding: 20,
 }
 
 export default function App() {
@@ -60,7 +71,7 @@ export default function App() {
 
   // Initial session check in flight.
   if (loading) {
-    return <div style={{ ...screenStyle, color: '#a1a1a1' }}>Loading…</div>
+    return <div style={{ ...screenStyle, color: 'var(--text-muted)' }}>Loading…</div>
   }
 
   // Session check failed to reach the server (distinct from "logged out").
@@ -68,13 +79,8 @@ export default function App() {
     return (
       <div style={screenStyle}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Connection problem</h1>
-        <p style={{ color: '#a1a1a1', fontSize: 14, margin: 0, maxWidth: 420 }}>{error}</p>
-        <button
-          onClick={retry}
-          style={{ padding: '10px 18px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-        >
-          Retry
-        </button>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0, maxWidth: 420 }}>{error}</p>
+        <button onClick={retry} className="btn btn-primary">Retry</button>
       </div>
     )
   }
@@ -119,41 +125,29 @@ function ErrorFallback({ error, resetError }) {
       height: '100vh',
       gap: '20px',
       padding: '20px',
-      backgroundColor: '#1a1a1a',
-      color: '#e4e4e7',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
+      backgroundColor: 'var(--bg)',
+      color: 'var(--text-bright)',
     }}>
       <h1 style={{ fontSize: '24px', marginBottom: '10px' }}>Something went wrong</h1>
-      <p style={{ color: '#a1a1a1', marginBottom: '20px', textAlign: 'center', maxWidth: '500px' }}>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px', textAlign: 'center', maxWidth: '500px' }}>
         We've been notified about this error. Please try refreshing the page.
       </p>
       {error && (
         <pre style={{
-          backgroundColor: '#2a2a2a',
+          backgroundColor: 'var(--surface-2)',
+          color: 'var(--text)',
           padding: '12px',
           borderRadius: '4px',
           overflow: 'auto',
           maxHeight: '200px',
           maxWidth: '600px',
           fontSize: '12px',
-          border: '1px solid #404040',
+          border: '1px solid var(--border)',
         }}>
           {error.toString()}
         </pre>
       )}
-      <button
-        onClick={resetError}
-        style={{
-          padding: '10px 20px',
-          backgroundColor: '#7c3aed',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '14px',
-          marginTop: '10px',
-        }}
-      >
+      <button onClick={resetError} className="btn btn-primary" style={{ marginTop: '10px' }}>
         Try Again
       </button>
     </div>

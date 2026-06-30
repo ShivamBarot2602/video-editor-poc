@@ -80,7 +80,7 @@ export default function ClipCard({
       {/* Player */}
       {degenerate ? (
         <div style={{
-          aspectRatio, background: '#0a0a0a', display: 'flex', flexDirection: 'column',
+          aspectRatio, background: 'var(--video-bg)', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: 11, gap: 6,
         }}>
           <AlertTriangle size={18} /> Invalid clip range
