@@ -1,5 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
+import { LogOut } from 'lucide-react'
+import { useAuth } from './auth/AuthContext'
+import LoginPage from './pages/LoginPage'
+import NotFoundPage from './pages/NotFoundPage'
 import LandingPage from './pages/LandingPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
@@ -12,6 +16,7 @@ import ClipsDocPage from './pages/docs/ClipsDocPage'
 
 function Header() {
   const location = useLocation()
+  const { logout } = useAuth()
   const isEditor = location.pathname.startsWith('/editor/')
   if (isEditor) return null
 
@@ -31,12 +36,51 @@ function Header() {
         <Link to="/thumbnails" className={`topbar-tab ${isThumbnails ? 'active' : ''}`}>Thumbnails</Link>
         <Link to="/clips" className={`topbar-tab ${isClips ? 'active' : ''}`}>Clips</Link>
         <Link to="/docs" className={`topbar-tab ${isDocs ? 'active' : ''}`}>Docs</Link>
+        <button
+          onClick={logout}
+          className="topbar-tab"
+          title="Sign out"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          <LogOut size={14} /> Sign out
+        </button>
       </nav>
     </header>
   )
 }
 
+const screenStyle = {
+  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+  height: '100vh', gap: 14, backgroundColor: '#1a1a1a', color: '#e4e4e7',
+  fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center', padding: 20,
+}
+
 export default function App() {
+  const { user, loading, error, retry } = useAuth()
+
+  // Initial session check in flight.
+  if (loading) {
+    return <div style={{ ...screenStyle, color: '#a1a1a1' }}>Loading…</div>
+  }
+
+  // Session check failed to reach the server (distinct from "logged out").
+  if (error) {
+    return (
+      <div style={screenStyle}>
+        <h1 style={{ fontSize: 20, margin: 0 }}>Connection problem</h1>
+        <p style={{ color: '#a1a1a1', fontSize: 14, margin: 0, maxWidth: 420 }}>{error}</p>
+        <button
+          onClick={retry}
+          style={{ padding: '10px 18px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  if (!user) return <LoginPage />
+
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />} showDialog>
       <Router>
@@ -56,6 +100,7 @@ export default function App() {
               <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
               <Route path="/clips" element={<ClipsPage />} />
               <Route path="/clips/:videoId" element={<ClipsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </div>
         </div>
