@@ -44,7 +44,7 @@ const FLOW = [
       { title: 'Gemini 2.5 Flash Image', meta: '$0.039 / img', detail: 'Variant A · image-to-image edit, keeps subject by default.' },
       { title: 'OpenAI gpt-image-1.5', meta: '$0.20 high', detail: 'Variant B · exact size, quality tiers, no watermark.' },
     ] },
-  { n: 6, title: 'Pick the winner', tone: 'user', detail: '3 picks × { original · Gemini · OpenAI } grid → user selects one (PATCH selectedKey).' },
+  { n: 6, title: 'Pick the winner', tone: 'user', detail: '3 picks × { original · Gemini · OpenAI } grid → preview full-size or download any (GET /download).' },
 ]
 
 const DECISIONS = [
