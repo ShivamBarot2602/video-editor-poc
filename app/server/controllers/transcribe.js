@@ -5,10 +5,10 @@ async function run(req, res) {
   const { id } = req.params
   const { provider = 'assemblyai', language, skipExtract = false } = req.body
 
-  if (!transcribeService.videoExists(id)) {
+  if (!await transcribeService.videoExists(id)) {
     return res.status(404).json({ error: 'Video not found' })
   }
-  if (!transcribeService.originalExists(id)) {
+  if (!await transcribeService.originalExists(id)) {
     return res.status(404).json({ error: 'Original video file missing' })
   }
   if (!transcribeService.providerExists(provider)) {

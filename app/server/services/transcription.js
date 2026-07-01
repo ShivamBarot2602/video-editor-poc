@@ -1,16 +1,16 @@
 const store = require('../storage/videoStore')
 
-function exists(id, provider) {
+async function exists(id, provider) {
   return store.transcriptionExists(id, provider)
 }
 
-// Parsed transcription. THROWS on parse error (controller surfaces 500).
-function get(id, provider) {
+// Parsed transcription. REJECTS on parse error (controller surfaces 500).
+async function get(id, provider) {
   return store.readTranscription(id, provider)
 }
 
-// Absolute path to an export format, building it lazily if absent.
-function resolveExportPath(id, provider, formatId) {
+// Built export → { content, contentType, fileName }, built from the saved JSON.
+async function resolveExport(id, provider, formatId) {
   return store.resolveSubtitleExport(id, provider, formatId)
 }
 
@@ -20,8 +20,8 @@ function resolveExportPath(id, provider, formatId) {
  *   - aliases: { [speakerId]: string } — empty value clears the alias
  *   - edits:   { [index]: string | null } — null removes text_edited
  */
-function applyEdits(id, provider, { aliases, edits }) {
-  const tx = store.readTranscription(id, provider)
+async function applyEdits(id, provider, { aliases, edits }) {
+  const tx = await store.readTranscription(id, provider)
 
   if (aliases) {
     const prev = tx?.metadata?.speaker_aliases && typeof tx.metadata.speaker_aliases === 'object'
@@ -49,10 +49,10 @@ function applyEdits(id, provider, { aliases, edits }) {
     }
   }
 
-  store.writeTranscription(id, provider, tx)
+  await store.writeTranscription(id, provider, tx)
   // Regenerate every export format so downloads reflect the latest edits.
-  store.writeSubtitleExports(id, provider, tx)
+  await store.writeSubtitleExports(id, provider, tx)
   return tx
 }
 
-module.exports = { exists, get, resolveExportPath, applyEdits }
+module.exports = { exists, get, resolveExport, applyEdits }

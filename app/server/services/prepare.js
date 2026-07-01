@@ -1,23 +1,30 @@
+const path = require('path')
 const store = require('../storage/videoStore')
+const { withTempDir } = require('../lib/tempWork')
 const { extractAudio } = require('../lib/ffmpeg')
 
-function videoExists(id) {
+async function videoExists(id) {
   return store.videoExists(id)
 }
 
-function originalExists(id) {
-  return !!store.findOriginalPath(id)
+async function originalExists(id) {
+  return store.originalExists(id)
 }
 
 // True if audio.wav has already been extracted (idempotency check).
-function audioReady(id) {
+async function audioReady(id) {
   return store.audioExists(id)
 }
 
-// Extract audio to audio.wav. Throws on failure (controller surfaces 500).
+// Download original → extract audio.wav → upload. Throws on failure (→ 500).
 async function extract(id) {
   console.log(`[${id}] Preparing audio (extracting once for parallel run)…`)
-  await extractAudio(store.findOriginalPath(id), store.audioPath(id))
+  await withTempDir(`prep-${id}`, async (dir) => {
+    const orig = await store.downloadOriginal(id, dir)
+    const audioOut = path.join(dir, 'audio.wav')
+    await extractAudio(orig, audioOut)
+    await store.uploadAudio(id, audioOut)
+  })
   console.log(`[${id}] Audio prepared → audio.wav`)
 }
 

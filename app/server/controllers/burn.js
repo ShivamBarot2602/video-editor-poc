@@ -6,12 +6,17 @@ async function burn(req, res) {
   const { style, provider } = req.body
 
   if (!style) return res.status(400).json({ error: 'style payload required' })
-  if (!burnService.videoExists(id)) return res.status(404).json({ error: 'Video not found' })
-  if (!burnService.originalExists(id)) return res.status(404).json({ error: 'Original video missing' })
+  if (!await burnService.videoExists(id)) return res.status(404).json({ error: 'Video not found' })
+  if (!await burnService.originalExists(id)) return res.status(404).json({ error: 'Original video missing' })
 
   // Resolve + read the transcription up front (outside the stream try, as before)
   // so a "no transcription" case returns a clean 400 instead of an SSE error.
-  const transcription = burnService.resolveTranscription(id, provider)
+  let transcription
+  try {
+    transcription = await burnService.resolveTranscription(id, provider)
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
   if (transcription === null) return res.status(400).json({ error: 'Run transcription first' })
 
   const sendEvent = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`)

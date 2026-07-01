@@ -5,7 +5,8 @@ const cookieParser = require('cookie-parser')
 const morgan = require('morgan')
 const Sentry = require('@sentry/node')
 const store = require('./storage/videoStore')
-const { VIDEOS_DIR } = require('./config/paths')
+const tempWork = require('./lib/tempWork')
+const storageConfig = require('./config/storage')
 
 // Initialize Sentry (if DSN is configured)
 if (process.env.SENTRY_DSN) {
@@ -42,8 +43,18 @@ if (!authConfigured) {
   process.exit(1)
 }
 
-// Ensure the videos directory exists
+// Refuse to start without S3 storage configured — there is no local-disk fallback.
+if (!storageConfig.configured) {
+  console.error(
+    'FATAL: S3 storage not configured. Set AWS_REGION and S3_BUCKET in .env.\n' +
+    '(Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY for local dev, or rely on an IAM role.)'
+  )
+  process.exit(1)
+}
+
+// S3 is the durable store; create the local ephemeral scratch dir for ffmpeg work.
 store.init()
+tempWork.init()
 
 // Credentialed CORS so the SPA can send the session cookie cross-origin in prod.
 // `origin: true` reflects the request origin (POC has no fixed client domain).
@@ -89,5 +100,6 @@ app.use((err, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
-  console.log(`Videos directory: ${VIDEOS_DIR}`)
+  console.log(`Storage: s3://${storageConfig.S3_BUCKET}/${storageConfig.S3_KEY_PREFIX} (region ${storageConfig.AWS_REGION})`)
+  console.log(`Scratch dir: ${storageConfig.TMP_WORK_DIR}`)
 })

@@ -1,10 +1,10 @@
 /**
- * Single source of truth for where session data lives and what every artifact
- * inside a video's directory is named. Nothing else in the codebase should
- * hardcode a filename, prefix, or subdirectory — import from here (or, better,
- * use storage/videoStore.js which builds absolute paths on top of these).
+ * Single source of truth for what every artifact inside a video's namespace is
+ * named. Nothing else in the codebase should hardcode a filename, prefix, or
+ * subdirectory — import from here (or, better, use storage/videoStore.js which
+ * builds S3 object keys on top of these).
  *
- * Layout of a session directory ({VIDEOS_DIR}/<videoId>/):
+ * Layout of a session namespace (<S3_KEY_PREFIX><videoId>/):
  *   original.<ext>                uploaded source video
  *   meta.json                     { filename, size, uploadedAt }
  *   audio.wav                     extracted mono 16kHz WAV
@@ -26,13 +26,7 @@
  *   clip_debug_<provider>.log     LLM prompt/response debug log
  */
 
-const path = require('path')
-
-// Root directory for all session data. Resolved once at module load, exactly as
-// index.js did before. Reads process.env, so this module must load after dotenv.
-const VIDEOS_DIR = path.resolve(process.env.VIDEOS_DIR || './videos')
-
-// Fixed (non-templated) filenames, relative to a video's directory.
+// Fixed (non-templated) filenames, relative to a video's namespace.
 const FILES = {
   META: 'meta.json',
   AUDIO: 'audio.wav',
@@ -73,7 +67,6 @@ const clipThumbName = (clipId, n) => `${clipId}-${n}.jpg`
 const polishedName = (idx, providerId, ext) => `${idx}_${providerId}.${ext}`
 
 module.exports = {
-  VIDEOS_DIR,
   FILES,
   PREFIXES,
   DIRS,

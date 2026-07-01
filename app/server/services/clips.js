@@ -1,4 +1,7 @@
+const fs = require('fs')
+const path = require('path')
 const store = require('../storage/videoStore')
+const { withTempDir } = require('../lib/tempWork')
 const clipSuggest = require('../providers/clipSuggest')
 const { resolveBucket } = require('../lib/clipPrompt')
 const { getVideoDuration, getVideoSize } = require('../lib/frameExtraction')
@@ -25,6 +28,14 @@ function computeSavedId(provider, start, end) {
 
 function pad2(n) {
   return String(n).padStart(2, '0')
+}
+
+// Read the temp debug log a suggest provider wrote and persist it to S3 (best-effort).
+async function uploadDebugLog(id, provider, debugPath) {
+  try {
+    const content = fs.readFileSync(debugPath, 'utf8')
+    await store.writeClipDebug(id, provider, content)
+  } catch (_) { /* no debug log written — fine */ }
 }
 
 /**
@@ -120,8 +131,7 @@ function normalizeClips(raw, { videoDuration, count, segments, provider }) {
 // POST /api/clips/:id/suggest — transcript-based suggestion. Returns the saved
 // object; throws httpError(4xx) for expected validation failures.
 async function suggest({ id, suggestProvider, transcriptProvider, bucket, count }) {
-  const originalPath = store.findOriginalPath(id)
-  if (!originalPath) throw httpError(404, 'Video not found')
+  if (!await store.originalExists(id)) throw httpError(404, 'Video not found')
 
   if (!SAFE_TOKEN.test(String(suggestProvider || '')) || !clipSuggest.REGISTRY[suggestProvider]) {
     throw httpError(400, `Unknown suggest provider "${suggestProvider}"`)
@@ -134,73 +144,78 @@ async function suggest({ id, suggestProvider, transcriptProvider, bucket, count 
     throw httpError(400, `${key} not set on the server`)
   }
 
-  if (!store.transcriptionExists(id, transcriptProvider)) {
+  if (!await store.transcriptionExists(id, transcriptProvider)) {
     throw httpError(400, 'Run transcription first for the selected provider')
   }
-  const tx = store.readTranscription(id, transcriptProvider)
+  const tx = await store.readTranscription(id, transcriptProvider)
 
-  const videoDuration = await getVideoDuration(originalPath)
-  const b = resolveBucket(bucket)
-  if (!videoDuration || videoDuration < b.min) {
-    throw httpError(400, 'Video is too short for clip suggestions')
-  }
+  return withTempDir(`clip-suggest-${id}`, async (dir) => {
+    const originalPath = await store.downloadOriginal(id, dir)
 
-  const wantCount = clampCount(count)
-  let size = { width: 0, height: 0 }
-  try { size = await getVideoSize(originalPath) } catch (_) {}
+    const videoDuration = await getVideoDuration(originalPath)
+    const b = resolveBucket(bucket)
+    if (!videoDuration || videoDuration < b.min) {
+      throw httpError(400, 'Video is too short for clip suggestions')
+    }
 
-  const filename = store.readMeta(id).filename
-  const language = tx?.metadata?.detected_language
-  // One debug log per provider, overwritten each run — prompts + raw response.
-  const debugPath = store.clipDebugPath(id, suggestProvider)
-  const result = await clipSuggest.REGISTRY[suggestProvider].suggest({
-    segments: tx.segments,
-    bucket,
-    count: wantCount,
-    videoDuration,
-    language,
-    filename,
-    debugPath,
-  })
+    const wantCount = clampCount(count)
+    let size = { width: 0, height: 0 }
+    try { size = await getVideoSize(originalPath) } catch (_) {}
 
-  const { clips, warnings } = normalizeClips(result.clips, {
-    videoDuration,
-    count: wantCount,
-    segments: tx.segments,
-    provider: suggestProvider,
-  })
-
-  const obj = {
-    metadata: {
-      suggestProvider,
-      model: result.model,
-      transcriptProvider,
+    const filename = (await store.readMeta(id)).filename
+    const language = tx?.metadata?.detected_language
+    // One debug log per provider (temp, then uploaded) — prompts + raw response.
+    const debugPath = path.join(dir, `clip_debug_${suggestProvider}.log`)
+    const result = await clipSuggest.REGISTRY[suggestProvider].suggest({
+      segments: tx.segments,
       bucket,
-      bucketSeconds: { min: b.min, max: b.max },
-      requestedCount: wantCount,
-      video_duration_s: +videoDuration.toFixed(2),
-      video_width: size.width,
-      video_height: size.height,
-      language: language || null,
-      transcript_truncated: !!result.truncated,
-      timestamp: new Date().toISOString(),
-      warnings,
-    },
-    clips,
-  }
+      count: wantCount,
+      videoDuration,
+      language,
+      filename,
+      debugPath,
+    })
 
-  store.cleanStaleSuggestionFiles(id, suggestProvider)
-  store.writeClipSuggestions(id, suggestProvider, obj)
-  return obj
+    const { clips, warnings } = normalizeClips(result.clips, {
+      videoDuration,
+      count: wantCount,
+      segments: tx.segments,
+      provider: suggestProvider,
+    })
+
+    const obj = {
+      metadata: {
+        suggestProvider,
+        model: result.model,
+        transcriptProvider,
+        bucket,
+        bucketSeconds: { min: b.min, max: b.max },
+        requestedCount: wantCount,
+        video_duration_s: +videoDuration.toFixed(2),
+        video_width: size.width,
+        video_height: size.height,
+        language: language || null,
+        transcript_truncated: !!result.truncated,
+        timestamp: new Date().toISOString(),
+        warnings,
+      },
+      clips,
+    }
+
+    await store.cleanStaleSuggestionFiles(id, suggestProvider)
+    await store.writeClipSuggestions(id, suggestProvider, obj)
+    await uploadDebugLog(id, suggestProvider, debugPath)
+    return obj
+  })
 }
 
-function listSaved(id) {
+async function listSaved(id) {
   return store.readSavedClips(id)
 }
 
 // Bookmark a clip definition (no cut). Throws httpError(4xx) on bad input.
-function saveClip({ id, clip, transcriptProvider, bucket }) {
-  if (!store.findOriginalPath(id)) throw httpError(404, 'Video not found')
+async function saveClip({ id, clip, transcriptProvider, bucket }) {
+  if (!await store.originalExists(id)) throw httpError(404, 'Video not found')
   if (!clip || !Number.isFinite(Number(clip.start)) || !Number.isFinite(Number(clip.end)) || Number(clip.end) <= Number(clip.start)) {
     throw httpError(400, 'Invalid clip')
   }
@@ -210,7 +225,7 @@ function saveClip({ id, clip, transcriptProvider, bucket }) {
   const end = Number(clip.end)
   const savedId = computeSavedId(provider, start, end)
 
-  const data = store.readSavedClips(id)
+  const data = await store.readSavedClips(id)
   if (!Array.isArray(data.clips)) data.clips = []
 
   const existing = data.clips.find(c => c.id === savedId)
@@ -235,29 +250,29 @@ function saveClip({ id, clip, transcriptProvider, bucket }) {
     clipUrl: null,
   }
   data.clips.push(entry)
-  store.writeSavedClips(id, data)
+  await store.writeSavedClips(id, data)
   return { saved: entry, clips: data.clips }
 }
 
-function deleteSaved(id, savedId) {
-  const data = store.readSavedClips(id)
+async function deleteSaved(id, savedId) {
+  const data = await store.readSavedClips(id)
   data.clips = (data.clips || []).filter(c => c.id !== savedId)
-  store.writeSavedClips(id, data)
-  store.deleteClipOutput(id, savedId)
+  await store.writeSavedClips(id, data)
+  await store.deleteClipOutput(id, savedId)
   return { clips: data.clips }
 }
 
-function hasSuggestions(id, provider) {
+async function hasSuggestions(id, provider) {
   return store.clipsSuggestionsExist(id, provider)
 }
 
-function getSuggestions(id, provider) {
+async function getSuggestions(id, provider) {
   return store.readClipSuggestions(id, provider)
 }
 
-// Absolute path to a clip's thumbnail frame, or null if absent.
-function thumbPath(id, clipId, idx) {
-  return store.clipThumbExists(id, clipId, idx) ? store.clipThumbPath(id, clipId, idx) : null
+// Presigned URL for a clip's thumbnail frame, or null if absent.
+async function thumbUrl(id, clipId, idx) {
+  return store.presignClipThumb(id, clipId, idx)
 }
 
 // GET /api/clips/:id/export/stream — cut a clip via ffmpeg, emitting SSE events.
@@ -269,43 +284,45 @@ async function exportClip({ id, clipId, suggestProvider, source }, emit) {
     return emit({ type: 'error', message: 'Invalid provider or clip id' })
   }
 
-  const originalPath = store.findOriginalPath(id)
-  if (!originalPath) return emit({ type: 'error', message: 'Video not found' })
+  if (!await store.originalExists(id)) return emit({ type: 'error', message: 'Video not found' })
 
-  const fileExists = isSaved ? store.savedClipsExist(id) : store.clipsSuggestionsExist(id, suggestProvider)
+  const fileExists = isSaved ? await store.savedClipsExist(id) : await store.clipsSuggestionsExist(id, suggestProvider)
   if (!fileExists) {
     return emit({ type: 'error', message: isSaved ? 'No saved clips' : 'No clips for this provider' })
   }
-  const data = isSaved ? store.readSavedClipsStrict(id) : store.readClipSuggestions(id, suggestProvider)
+  const data = isSaved ? await store.readSavedClipsStrict(id) : await store.readClipSuggestions(id, suggestProvider)
   const clip = (data.clips || []).find(c => c.id === clipId)
   if (!clip) return emit({ type: 'error', message: 'Clip not found' })
 
-  store.ensureClipsDir(id)
-  const outPath = store.clipOutputPath(id, clipId)
   const clipUrl = `/api/video/${id}/clip/${clipId}`
 
   // Idempotent: already cut → return immediately.
-  if (store.clipOutputExists(id, clipId)) {
+  if (await store.clipOutputExists(id, clipId)) {
     return emit({ type: 'done', clipUrl })
   }
 
   emit({ type: 'start' })
 
-  // Re-clamp against the live duration in case the stored range is stale.
-  const videoDuration = await getVideoDuration(originalPath)
-  const start = Math.max(0, Math.min(clip.start, videoDuration - 0.1))
-  const end = Math.min(clip.end, videoDuration)
-  const duration = Math.max(0.1, end - start)
+  await withTempDir(`clip-cut-${id}-${clipId}`, async (dir) => {
+    const originalPath = await store.downloadOriginal(id, dir)
+    // Re-clamp against the live duration in case the stored range is stale.
+    const videoDuration = await getVideoDuration(originalPath)
+    const start = Math.max(0, Math.min(clip.start, videoDuration - 0.1))
+    const end = Math.min(clip.end, videoDuration)
+    const duration = Math.max(0.1, end - start)
 
-  await cutClip(originalPath, outPath, start, duration, (percent) => {
-    emit({ type: 'progress', percent })
+    const outPath = path.join(dir, `${clipId}.mp4`)
+    await cutClip(originalPath, outPath, start, duration, (percent) => {
+      emit({ type: 'progress', percent })
+    })
+    await store.uploadClipOutput(id, clipId, outPath)
   })
 
   // Persist export state back into the source file.
   clip.exported = true
   clip.clipUrl = clipUrl
-  if (isSaved) store.writeSavedClips(id, data)
-  else store.writeClipSuggestions(id, suggestProvider, data)
+  if (isSaved) await store.writeSavedClips(id, data)
+  else await store.writeClipSuggestions(id, suggestProvider, data)
 
   emit({ type: 'done', clipUrl })
 }
@@ -313,83 +330,87 @@ async function exportClip({ id, clipId, suggestProvider, source }, emit) {
 // GET /api/clips/:id/suggest/stream (method=video) — Gemini video understanding.
 // Emits its own validation errors; throws only on unexpected failure.
 async function suggestFromVideo({ id, bucket, count }, emit) {
-  const originalPath = store.findOriginalPath(id)
-  if (!originalPath) return emit({ type: 'error', message: 'Video not found' })
+  if (!await store.originalExists(id)) return emit({ type: 'error', message: 'Video not found' })
   if (!clipSuggest.videoMethodAvailable()) {
     return emit({ type: 'error', message: 'GEMINI_API_KEY not set on the server' })
   }
 
   const wantCount = clampCount(count)
   const b = resolveBucket(bucket)
-  const videoDuration = await getVideoDuration(originalPath)
-  if (!videoDuration || videoDuration < b.min) {
-    return emit({ type: 'error', message: 'Video is too short for clip suggestions' })
-  }
-  let size = { width: 0, height: 0 }
-  try { size = await getVideoSize(originalPath) } catch (_) {}
 
-  const warnings = []
-  const mediaResolution = 'low'
-
-  const filename = store.readMeta(id).filename
-
-  console.log(`[${id}] video suggest start: count=${wantCount} bucket=${bucket} res=${mediaResolution} dur=${videoDuration.toFixed(1)}s`)
-  emit({ type: 'start' })
-
-  const debugPath = store.clipDebugPath(id, VIDEO_PROVIDER)
-  const result = await clipSuggest.geminiVideo.suggestFromVideo({
-    videoPath: originalPath, dir: store.videoDir(id), count: wantCount, bucket, videoDuration,
-    filename, language: null, debugPath, mediaResolution,
-    onPhase: (phase, data) => emit({ type: 'phase', phase, ...(data || {}) }),
-  })
-
-  const { clips, warnings: normWarnings } = normalizeClips(result.clips, {
-    videoDuration, count: wantCount, segments: [], provider: VIDEO_PROVIDER,
-  })
-  warnings.push(...normWarnings)
-
-  // Extract the suggested thumbnail frames; a failed extract just drops that
-  // one thumb (the clip stays valid).
-  emit({ type: 'phase', phase: 'extracting' })
-  store.cleanStaleSuggestionFiles(id, VIDEO_PROVIDER)
-  store.ensureClipThumbsDir(id)
-  for (const clip of clips) {
-    if (!Array.isArray(clip.thumbnails)) continue
-    const kept = []
-    for (let n = 0; n < clip.thumbnails.length; n++) {
-      const t = clip.thumbnails[n].t
-      try {
-        await extractFrameAt(originalPath, t, store.clipThumbPath(id, clip.id, n))
-        kept.push({ t, url: `/api/clips/${id}/thumb/${clip.id}/${n}` })
-      } catch (e) {
-        console.error(`[${id}] thumb extract failed (${clip.id}#${n} @${t}s): ${e.message}`)
-      }
+  await withTempDir(`clip-vsuggest-${id}`, async (dir) => {
+    const originalPath = await store.downloadOriginal(id, dir)
+    const videoDuration = await getVideoDuration(originalPath)
+    if (!videoDuration || videoDuration < b.min) {
+      return emit({ type: 'error', message: 'Video is too short for clip suggestions' })
     }
-    clip.thumbnails = kept
-  }
+    let size = { width: 0, height: 0 }
+    try { size = await getVideoSize(originalPath) } catch (_) {}
 
-  const obj = {
-    metadata: {
-      method: 'video',
-      suggestProvider: VIDEO_PROVIDER,
-      model: result.model,
-      bucket,
-      bucketSeconds: { min: b.min, max: b.max },
-      requestedCount: wantCount,
-      video_duration_s: +videoDuration.toFixed(2),
-      video_width: size.width,
-      video_height: size.height,
-      mediaResolution,
-      language: null,
-      timestamp: new Date().toISOString(),
-      warnings,
-    },
-    clips,
-  }
-  store.writeClipSuggestions(id, VIDEO_PROVIDER, obj)
-  console.log(`[${id}] video suggest done: ${clips.length} clips, ${warnings.length} warnings → clips_${VIDEO_PROVIDER}.json`)
+    const warnings = []
+    const mediaResolution = 'low'
+    const filename = (await store.readMeta(id)).filename
 
-  emit({ type: 'done', data: obj })
+    console.log(`[${id}] video suggest start: count=${wantCount} bucket=${bucket} res=${mediaResolution} dur=${videoDuration.toFixed(1)}s`)
+    emit({ type: 'start' })
+
+    const debugPath = path.join(dir, `clip_debug_${VIDEO_PROVIDER}.log`)
+    const result = await clipSuggest.geminiVideo.suggestFromVideo({
+      videoPath: originalPath, dir, count: wantCount, bucket, videoDuration,
+      filename, language: null, debugPath, mediaResolution,
+      onPhase: (phase, data) => emit({ type: 'phase', phase, ...(data || {}) }),
+    })
+
+    const { clips, warnings: normWarnings } = normalizeClips(result.clips, {
+      videoDuration, count: wantCount, segments: [], provider: VIDEO_PROVIDER,
+    })
+    warnings.push(...normWarnings)
+
+    // Extract the suggested thumbnail frames to temp + upload; a failed extract
+    // just drops that one thumb (the clip stays valid).
+    emit({ type: 'phase', phase: 'extracting' })
+    await store.cleanStaleSuggestionFiles(id, VIDEO_PROVIDER)
+    for (const clip of clips) {
+      if (!Array.isArray(clip.thumbnails)) continue
+      const kept = []
+      for (let n = 0; n < clip.thumbnails.length; n++) {
+        const t = clip.thumbnails[n].t
+        try {
+          const out = path.join(dir, `${clip.id}-${n}.jpg`)
+          await extractFrameAt(originalPath, t, out)
+          await store.uploadClipThumb(id, clip.id, n, out)
+          kept.push({ t, url: `/api/clips/${id}/thumb/${clip.id}/${n}` })
+        } catch (e) {
+          console.error(`[${id}] thumb extract failed (${clip.id}#${n} @${t}s): ${e.message}`)
+        }
+      }
+      clip.thumbnails = kept
+    }
+
+    const obj = {
+      metadata: {
+        method: 'video',
+        suggestProvider: VIDEO_PROVIDER,
+        model: result.model,
+        bucket,
+        bucketSeconds: { min: b.min, max: b.max },
+        requestedCount: wantCount,
+        video_duration_s: +videoDuration.toFixed(2),
+        video_width: size.width,
+        video_height: size.height,
+        mediaResolution,
+        language: null,
+        timestamp: new Date().toISOString(),
+        warnings,
+      },
+      clips,
+    }
+    await store.writeClipSuggestions(id, VIDEO_PROVIDER, obj)
+    await uploadDebugLog(id, VIDEO_PROVIDER, debugPath)
+    console.log(`[${id}] video suggest done: ${clips.length} clips, ${warnings.length} warnings → clips_${VIDEO_PROVIDER}.json`)
+
+    emit({ type: 'done', data: obj })
+  })
 }
 
 module.exports = {
@@ -399,7 +420,7 @@ module.exports = {
   deleteSaved,
   hasSuggestions,
   getSuggestions,
-  thumbPath,
+  thumbUrl,
   exportClip,
   suggestFromVideo,
 }
