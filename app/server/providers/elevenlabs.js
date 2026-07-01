@@ -18,18 +18,21 @@ const PROVIDER = 'elevenlabs'
 const MODEL = 'scribe_v2'
 const BASE_URL = 'https://api.elevenlabs.io/v1'
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.ELEVENLABS_API_KEY
   if (!apiKey) throw new Error('ELEVENLABS_API_KEY is not set')
 
   const form = new FormData()
   form.append('model_id', MODEL)
-  form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
+  // source_url (current field, replaces deprecated cloud_storage_url) fetches
+  // audio.wav from S3 directly — no upload. Falls back to a file part otherwise.
+  if (audioUrl) form.append('source_url', audioUrl)
+  else form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
   form.append('diarize', 'true')
   form.append('timestamps_granularity', 'word')
   if (language) form.append('language_code', language)
 
-  console.log(`  [elevenlabs] Transcribing with ${MODEL}…`)
+  console.log(audioUrl ? `  [elevenlabs] Transcribing via source_url with ${MODEL} (no upload)…` : `  [elevenlabs] Transcribing with ${MODEL}…`)
 
   let response
   try {

@@ -28,16 +28,16 @@ async function suggest(req, res) {
 }
 
 // GET /api/clips/:id/saved
-function listSaved(req, res) {
-  res.json(clipService.listSaved(req.params.id))
+async function listSaved(req, res) {
+  res.json(await clipService.listSaved(req.params.id))
 }
 
 // POST /api/clips/:id/saved  { clip, transcriptProvider, bucket }
-function saveClip(req, res) {
+async function saveClip(req, res) {
   const { id } = req.params
   const { clip, transcriptProvider, bucket } = req.body || {}
   try {
-    res.json(clipService.saveClip({ id, clip, transcriptProvider, bucket }))
+    res.json(await clipService.saveClip({ id, clip, transcriptProvider, bucket }))
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(`[${id}] save clip error:`, err.message)
@@ -46,25 +46,25 @@ function saveClip(req, res) {
 }
 
 // DELETE /api/clips/:id/saved/:savedId
-function deleteSaved(req, res) {
+async function deleteSaved(req, res) {
   const { id, savedId } = req.params
   if (!SAFE_TOKEN.test(savedId)) return res.status(400).json({ error: 'Invalid saved id' })
   try {
-    res.json(clipService.deleteSaved(id, savedId))
+    res.json(await clipService.deleteSaved(id, savedId))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 }
 
 // GET /api/clips/:id/:suggestProvider
-function getSuggestions(req, res) {
+async function getSuggestions(req, res) {
   const { id, suggestProvider } = req.params
   if (!SAFE_TOKEN.test(suggestProvider)) return res.status(400).json({ error: 'Invalid provider' })
-  if (!clipService.hasSuggestions(id, suggestProvider)) {
+  if (!await clipService.hasSuggestions(id, suggestProvider)) {
     return res.status(404).json({ error: 'No clips generated yet' })
   }
   try {
-    res.json(clipService.getSuggestions(id, suggestProvider))
+    res.json(await clipService.getSuggestions(id, suggestProvider))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -119,15 +119,15 @@ async function suggestStream(req, res) {
   }
 }
 
-// GET /api/clips/:id/thumb/:clipId/:n
-function serveThumb(req, res) {
+// GET /api/clips/:id/thumb/:clipId/:n — redirect to the clip thumbnail in S3
+async function serveThumb(req, res) {
   const { id, clipId, n } = req.params
   if (!SAFE_TOKEN.test(clipId)) return res.status(400).json({ error: 'Invalid clip id' })
   const idx = parseInt(n, 10)
   if (!Number.isInteger(idx) || idx < 0 || idx > 9) return res.status(400).json({ error: 'Invalid index' })
-  const filePath = clipService.thumbPath(id, clipId, idx)
-  if (!filePath) return res.status(404).json({ error: 'Thumbnail not found' })
-  res.sendFile(filePath)
+  const url = await clipService.thumbUrl(id, clipId, idx)
+  if (!url) return res.status(404).json({ error: 'Thumbnail not found' })
+  res.redirect(302, url)
 }
 
 module.exports = {

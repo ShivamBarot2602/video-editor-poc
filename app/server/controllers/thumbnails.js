@@ -7,16 +7,16 @@ const thumbnailService = require('../services/thumbnails')
 const inFlightRuns = new Set()
 
 // GET /api/thumbnails/:videoId
-function get(req, res) {
-  const state = thumbnailService.getState(req.params.videoId)
+async function get(req, res) {
+  const state = await thumbnailService.getState(req.params.videoId)
   if (!state) return res.status(404).json({ error: 'No thumbnails generated yet' })
   res.json(state)
 }
 
 // PATCH /api/thumbnails/:videoId  { selectedKey }
-function patch(req, res) {
+async function patch(req, res) {
   const { videoId } = req.params
-  const state = thumbnailService.getState(videoId)
+  const state = await thumbnailService.getState(videoId)
   if (!state) return res.status(404).json({ error: 'No thumbnails generated yet' })
 
   const { selectedKey } = req.body || {}
@@ -24,16 +24,31 @@ function patch(req, res) {
     return res.status(400).json({ error: 'selectedKey must be string or null' })
   }
   const prev = state.selectedKey
-  const updated = thumbnailService.setSelectedKey(videoId, state, selectedKey)
+  const updated = await thumbnailService.setSelectedKey(videoId, state, selectedKey)
   console.log(`[${videoId}][thumbnails] selectedKey: ${prev ?? 'null'} → ${updated.selectedKey ?? 'null'}`)
   res.json(updated)
 }
 
-// GET /api/thumbnails/:videoId/file/:relpath — traversal-guarded file serve
-function serveFile(req, res) {
+// GET /api/thumbnails/:videoId/file/:relpath — traversal-guarded redirect to S3
+async function serveFile(req, res) {
   try {
-    const target = thumbnailService.resolveFile(req.params.videoId, req.params.relpath)
-    res.sendFile(target)
+    const url = await thumbnailService.resolveFileUrl(req.params.videoId, req.params.relpath)
+    res.redirect(302, url)
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message })
+  }
+}
+
+// GET /api/thumbnails/:videoId/download/:relpath — force-download the file.
+// Proxies the bytes same-origin with Content-Disposition: attachment so the
+// browser saves it (a redirect to the public S3 URL would open inline instead).
+async function downloadFile(req, res) {
+  try {
+    const { buffer, filename, contentType } = await thumbnailService.resolveFileDownload(req.params.videoId, req.params.relpath)
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', buffer.length)
+    res.send(buffer)
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message })
   }
@@ -42,8 +57,7 @@ function serveFile(req, res) {
 // GET /api/thumbnails/:videoId/stream — SSE pipeline
 async function stream(req, res) {
   const { videoId } = req.params
-  const origPath = thumbnailService.originalPath(videoId)
-  if (!origPath) return res.status(404).json({ error: 'Original video missing' })
+  if (!await thumbnailService.originalExists(videoId)) return res.status(404).json({ error: 'Original video missing' })
 
   const tag = `[${videoId}][thumbnails]`
   const runStart = Date.now()
@@ -92,7 +106,7 @@ async function stream(req, res) {
   res.on('close', cleanup)
 
   try {
-    await thumbnailService.runPipeline({ videoId, origPath, reranker: req.query.reranker, runStart }, sendEvent)
+    await thumbnailService.runPipeline({ videoId, reranker: req.query.reranker, runStart }, sendEvent)
     cleanup()
     res.end()
   } catch (err) {
@@ -105,4 +119,4 @@ async function stream(req, res) {
   }
 }
 
-module.exports = { get, patch, serveFile, stream }
+module.exports = { get, patch, serveFile, downloadFile, stream }

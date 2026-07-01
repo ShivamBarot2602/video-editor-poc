@@ -21,36 +21,42 @@ const BASE_URL = 'https://api.gladia.io/v2'
 const POLL_INTERVAL_MS = 3000
 const POLL_TIMEOUT_MS = 20 * 60 * 1000 // 20 min
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.GLADIA_API_KEY
   if (!apiKey) throw new Error('GLADIA_API_KEY is not set')
 
   const authHeaders = { 'x-gladia-key': apiKey }
 
-  // Step 1: Upload local media file to Gladia file storage
-  const uploadForm = new FormData()
-  uploadForm.append('audio', fs.createReadStream(audioPath), { filename: 'audio.wav' })
+  // A public S3 URL skips Gladia's own upload step entirely — /v2/pre-recorded
+  // accepts any publicly-accessible audio_url, not just their own storage.
+  let finalAudioUrl = audioUrl
+  if (finalAudioUrl) {
+    console.log('  [gladia] Using public S3 URL directly (skipping Gladia upload)…')
+  } else {
+    const uploadForm = new FormData()
+    uploadForm.append('audio', fs.createReadStream(audioPath), { filename: 'audio.wav' })
 
-  console.log('  [gladia] Uploading audio…')
+    console.log('  [gladia] Uploading audio…')
 
-  let uploaded
-  try {
-    const uploadRes = await axios.post(`${BASE_URL}/upload`, uploadForm, {
-      headers: { ...authHeaders, ...uploadForm.getHeaders() },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    })
-    uploaded = uploadRes.data || {}
-  } catch (err) {
-    throw new Error(`Gladia upload failed: ${extractApiError(err)}`)
+    let uploaded
+    try {
+      const uploadRes = await axios.post(`${BASE_URL}/upload`, uploadForm, {
+        headers: { ...authHeaders, ...uploadForm.getHeaders() },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      })
+      uploaded = uploadRes.data || {}
+    } catch (err) {
+      throw new Error(`Gladia upload failed: ${extractApiError(err)}`)
+    }
+
+    finalAudioUrl = uploaded.audio_url
+    if (!finalAudioUrl) throw new Error('Gladia upload did not return audio_url')
   }
-
-  const audioUrl = uploaded.audio_url
-  if (!audioUrl) throw new Error('Gladia upload did not return audio_url')
 
   // Step 2: Start pre-recorded transcription job
   const payload = {
-    audio_url: audioUrl,
+    audio_url: finalAudioUrl,
     diarization: true,
     sentences: true,
     ...(language ? { language_config: { languages: [language], code_switching: true } } : {}),

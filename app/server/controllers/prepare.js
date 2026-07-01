@@ -12,15 +12,15 @@ const prepareService = require('../services/prepare')
 async function prepare(req, res) {
   const { id } = req.params
 
-  if (!prepareService.videoExists(id)) {
+  if (!await prepareService.videoExists(id)) {
     return res.status(404).json({ error: 'Video not found' })
   }
-  if (!prepareService.originalExists(id)) {
+  if (!await prepareService.originalExists(id)) {
     return res.status(404).json({ error: 'Original video file missing' })
   }
 
   // Already extracted — return immediately (idempotent)
-  if (prepareService.audioReady(id)) {
+  if (await prepareService.audioReady(id)) {
     console.log(`[${id}] Audio already prepared (cached)`)
     return res.json({ ready: true, cached: true })
   }

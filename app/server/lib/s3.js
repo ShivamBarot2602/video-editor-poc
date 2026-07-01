@@ -1,0 +1,226 @@
+/**
+ * Low-level S3 access — the only module that talks to the AWS SDK. Everything
+ * else (videoStore, services) calls these helpers with full object keys built
+ * via config/storage.js `key()`.
+ *
+ * Stream rule (AWS SDK v3): GetObject Body is a Node Readable, readable once.
+ * We either pipe it to a file (downloadToFile) or transform it to bytes/string.
+ */
+
+const fs = require('fs')
+const { pipeline } = require('stream/promises')
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+} = require('@aws-sdk/client-s3')
+const { Upload } = require('@aws-sdk/lib-storage')
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
+
+const { S3_BUCKET, AWS_REGION, credentials, PRESIGN_EXPIRES_S } = require('../config/storage')
+
+const Bucket = S3_BUCKET
+
+// Lazily construct the client so requiring this module is side-effect-free — the
+// S3Client throws if the region is missing, and we want the clean fail-fast in
+// index.js to fire first when storage is unconfigured.
+let _client = null
+function getClient() {
+  if (!_client) _client = new S3Client({ region: AWS_REGION, credentials })
+  return _client
+}
+
+// True when an S3 error means "object/key not found" (varies across operations).
+function isNotFound(err) {
+  const code = err?.name || err?.Code
+  return code === 'NoSuchKey' || code === 'NotFound' || err?.$metadata?.httpStatusCode === 404
+}
+
+// ─── writes ──────────────────────────────────────────────────────────────────
+
+// Put an in-memory body (string | Buffer). Use for small JSON/text/images.
+async function putObject(key, body, contentType) {
+  await getClient().send(new PutObjectCommand({
+    Bucket, Key: key, Body: body,
+    ...(contentType ? { ContentType: contentType } : {}),
+  }))
+}
+
+// Stream a local file up via managed multipart upload (handles large videos).
+async function uploadFile(key, localPath, contentType, contentDisposition) {
+  const up = new Upload({
+    client: getClient(),
+    params: {
+      Bucket, Key: key, Body: fs.createReadStream(localPath),
+      ...(contentType ? { ContentType: contentType } : {}),
+      ...(contentDisposition ? { ContentDisposition: contentDisposition } : {}),
+    },
+  })
+  await up.done()
+}
+
+// ─── reads ─────────────────────────────────────────────────────────────────--
+
+// Object body as a UTF-8 string, or null if the key is missing.
+async function getText(key) {
+  try {
+    const out = await getClient().send(new GetObjectCommand({ Bucket, Key: key }))
+    return await out.Body.transformToString('utf-8')
+  } catch (err) {
+    if (isNotFound(err)) return null
+    throw err
+  }
+}
+
+// Object body as a Buffer, or null if the key is missing.
+async function getBuffer(key) {
+  try {
+    const out = await getClient().send(new GetObjectCommand({ Bucket, Key: key }))
+    const bytes = await out.Body.transformToByteArray()
+    return Buffer.from(bytes)
+  } catch (err) {
+    if (isNotFound(err)) return null
+    throw err
+  }
+}
+
+// Download an object to a local file path. Throws if the key is missing.
+async function downloadToFile(key, localPath) {
+  const out = await getClient().send(new GetObjectCommand({ Bucket, Key: key }))
+  await pipeline(out.Body, fs.createWriteStream(localPath))
+}
+
+// ─── metadata / listing ────────────────────────────────────────────────────--
+
+// True if the exact key exists.
+async function exists(key) {
+  try {
+    await getClient().send(new HeadObjectCommand({ Bucket, Key: key }))
+    return true
+  } catch (err) {
+    if (isNotFound(err)) return false
+    throw err
+  }
+}
+
+// HEAD an object → { size, contentType, lastModified } or null if missing.
+async function head(key) {
+  try {
+    const out = await getClient().send(new HeadObjectCommand({ Bucket, Key: key }))
+    return { size: out.ContentLength, contentType: out.ContentType, lastModified: out.LastModified }
+  } catch (err) {
+    if (isNotFound(err)) return null
+    throw err
+  }
+}
+
+// Full object listing under a prefix (paginated): [{ key, size, lastModified }].
+// One round trip per 1000 objects — use this (not N separate listKeys calls)
+// whenever multiple facts about the same prefix are needed at once.
+async function listObjects(prefix) {
+  const out = []
+  let ContinuationToken
+  do {
+    const res = await getClient().send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken }))
+    for (const o of res.Contents || []) out.push({ key: o.Key, size: o.Size, lastModified: o.LastModified })
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
+  } while (ContinuationToken)
+  return out
+}
+
+// Convenience: just the keys, for call sites that only need existence/names.
+async function listKeys(prefix) {
+  return (await listObjects(prefix)).map(o => o.key)
+}
+
+// ─── deletes ───────────────────────────────────────────────────────────────--
+
+async function deleteObject(key) {
+  await getClient().send(new DeleteObjectCommand({ Bucket, Key: key }))
+}
+
+// Delete every object under a prefix. Batches of up to 1000 per request.
+async function deleteByPrefix(prefix) {
+  const keys = await listKeys(prefix)
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000)
+    await getClient().send(new DeleteObjectsCommand({
+      Bucket, Delete: { Objects: batch.map(Key => ({ Key })), Quiet: true },
+    }))
+  }
+}
+
+// ─── presigning (upload only) ──────────────────────────────────────────────--
+
+// Presigned PUT for a browser → S3 direct single-request upload (small files —
+// whatever fits in one multipart part, so no multipart machinery needed at all).
+// `contentType` is signed in; the caller MUST send an identical Content-Type
+// header on the actual PUT or S3 rejects it with a signature mismatch.
+function presignPut(key, contentType, { expiresIn = PRESIGN_EXPIRES_S } = {}) {
+  const cmd = new PutObjectCommand({
+    Bucket, Key: key,
+    ...(contentType ? { ContentType: contentType } : {}),
+  })
+  return getSignedUrl(getClient(), cmd, { expiresIn })
+}
+
+// Start a multipart upload; ContentType is set here (once) — UploadPart itself
+// carries no content-type. Returns the uploadId used by every subsequent call.
+async function createMultipartUpload(key, contentType) {
+  const out = await getClient().send(new CreateMultipartUploadCommand({
+    Bucket, Key: key,
+    ...(contentType ? { ContentType: contentType } : {}),
+  }))
+  return out.UploadId
+}
+
+// Presigned PUT for one part of a multipart upload. No body to sign — the
+// browser PUTs raw bytes directly and must read the ETag off the response.
+function presignUploadPart(key, uploadId, partNumber, { expiresIn = PRESIGN_EXPIRES_S } = {}) {
+  const cmd = new UploadPartCommand({ Bucket, Key: key, UploadId: uploadId, PartNumber: partNumber })
+  return getSignedUrl(getClient(), cmd, { expiresIn })
+}
+
+// Finalize a multipart upload. `parts` is [{ partNumber, eTag }] — every part
+// the client successfully uploaded, order doesn't matter (S3 sorts by PartNumber).
+async function completeMultipartUpload(key, uploadId, parts) {
+  await getClient().send(new CompleteMultipartUploadCommand({
+    Bucket, Key: key, UploadId: uploadId,
+    MultipartUpload: { Parts: parts.map(p => ({ PartNumber: p.partNumber, ETag: p.eTag })) },
+  }))
+}
+
+// Abort a multipart upload, discarding any parts already uploaded to S3. Called
+// automatically when a client-side upload fails past its retry budget, so
+// orphaned parts don't sit around until the bucket lifecycle rule sweeps them.
+async function abortMultipartUpload(key, uploadId) {
+  await getClient().send(new AbortMultipartUploadCommand({ Bucket, Key: key, UploadId: uploadId }))
+}
+
+module.exports = {
+  getClient,
+  putObject,
+  uploadFile,
+  getText,
+  getBuffer,
+  downloadToFile,
+  exists,
+  head,
+  listObjects,
+  listKeys,
+  deleteObject,
+  deleteByPrefix,
+  presignPut,
+  createMultipartUpload,
+  presignUploadPart,
+  completeMultipartUpload,
+  abortMultipartUpload,
+}

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { uploadVideo } from '../api/videos'
 
 const MAX_SIZE_MB = 500
-const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,audio/mpeg,audio/wav,audio/mp4'
+const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm'
 
 export default function UploadZone({ onUpload, compact }) {
   const [dragging, setDragging] = useState(false)

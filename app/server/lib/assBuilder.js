@@ -26,16 +26,52 @@ const KARAOKE_TAG = {
   'color-sweep': 'ko',
 }
 
-// #RRGGBB  →  &H00BBGGRR
-function hexToAss(hex) {
-  const h = hex.replace('#', '').padStart(6, '0')
+// #RRGGBB  →  &H00BBGGRR. Anything not exactly 6 hex digits (after stripping
+// '#') falls back to `fallback` — this is a hard whitelist, not just clamping:
+// unvalidated input here can otherwise land a literal comma/newline inside the
+// [V4+ Styles] line (e.g. padStart only pads short strings, it doesn't strip
+// bad characters already present), breaking out into arbitrary injected ASS.
+function hexToAss(hex, fallback = '#FFFFFF') {
+  const raw = String(hex ?? '').replace('#', '')
+  const h = /^[0-9a-fA-F]{6}$/.test(raw) ? raw : fallback.replace('#', '')
   return `&H00${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase()
 }
 
-// opacity 0–100 (%) → ASS alpha byte (00=opaque, FF=invisible)
+// opacity 0–100 (%) → ASS alpha byte (00=opaque, FF=invisible). Non-numeric or
+// out-of-range input falls back to 70 rather than propagating NaN into the file.
 function opacityToAssAlpha(opacity) {
-  const alpha = Math.round((1 - opacity / 100) * 255)
+  const n = Number(opacity)
+  const clamped = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 70
+  const alpha = Math.round((1 - clamped / 100) * 255)
   return alpha.toString(16).padStart(2, '0').toUpperCase()
+}
+
+// Coerce to a finite number within [min, max], else `fallback`. Guards every
+// numeric style field that gets string-interpolated straight into the .ass —
+// an unvalidated string (e.g. a JSON body sending fontSize as "1,\ninjected")
+// would otherwise inject a newline/comma into the header line.
+function numOr(value, min, max, fallback) {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback
+}
+
+// Strips characters that are structurally meaningful in the ASS Style line
+// (comma = field separator, braces/backslash = override-tag syntax, newline =
+// new line) — a font name doesn't legitimately need any of these.
+function sanitizeFontFamily(name) {
+  const cleaned = String(name ?? '').replace(/[,{}\\\r\n]/g, '').trim().slice(0, 100)
+  return cleaned || 'Arial'
+}
+
+// Escapes user-controlled subtitle text before it lands in a Dialogue line:
+//   - real newlines → ASS's own forced-break sequence \N (safe, two chars)
+//   - literal { or } stripped — prevents transcript text from opening an ASS
+//     override-tag block (e.g. a typed "{\move(...)}" would otherwise be
+//     interpreted as an animation command by libass, not shown as text)
+// Apply to raw words/segment text BEFORE wrapping in our own {\k..} tags, so
+// the tags we deliberately emit are never touched by this.
+function escapeAssText(text) {
+  return String(text ?? '').replace(/\r\n|\r|\n/g, '\\N').replace(/[{}]/g, '')
 }
 
 function assTime(seconds) {
@@ -49,12 +85,12 @@ function buildKaraokeText(segment, karaokeStyle) {
   const words = segment.words || []
   const tag = KARAOKE_TAG[karaokeStyle] || 'k'
 
-  if (words.length === 0) return segment.text
+  if (words.length === 0) return escapeAssText(segment.text)
 
   return words.map((w, i) => {
     const nextStart = words[i + 1]?.start ?? segment.end
     const durationCs = Math.max(1, Math.round((nextStart - w.start) * 100))
-    return `{\\${tag}${durationCs}}${w.word}`
+    return `{\\${tag}${durationCs}}${escapeAssText(w.word)}`
   }).join(' ')
 }
 
@@ -131,21 +167,31 @@ function buildAss(transcription, style) {
     backgroundOpacity = 70,
     karaokeStyle = 'word-highlight',
     maxLines = 2,
-  } = style
+  } = style || {}
+
+  // Every field below is attacker-controlled (POST /api/burn body) and gets
+  // string-interpolated straight into the .ass file ffmpeg/libass parses —
+  // validate types/ranges here, once, rather than trusting the caller.
+  const safeFontFamily = sanitizeFontFamily(fontFamily)
+  const safeFontSize = numOr(fontSize, 1, 500, 48)
+  const safeOutlineThickness = numOr(outlineThickness, 0, 50, 2)
+  const safeFontWeight = numOr(fontWeight, 100, 900, 400)
+  const safeVerticalMargin = Math.round(numOr(verticalMargin, 0, 2000, 30))
+  const safeMaxLines = Math.round(numOr(maxLines, 1, 10, 2))
 
   const alignment = POSITION_TO_ALIGNMENT[position] ?? 2
   // In ASS karaoke: SecondaryColour = upcoming/unspoken state, PrimaryColour = post-highlight state.
   // We want: upcoming words shown in primaryColor (white), highlighted/spoken in karaokeColor (yellow).
   // So: PrimaryColour ← karaokeColor, SecondaryColour ← primaryColor.
-  const primaryAss   = hexToAss(karaokeColor)    // color words transition TO (highlighted/spoken)
-  const secondaryAss = hexToAss(primaryColor)    // color words start as (upcoming/unspoken)
-  const outlineAss   = hexToAss(outlineColor)
+  const primaryAss   = hexToAss(karaokeColor, '#FFD700')  // color words transition TO (highlighted/spoken)
+  const secondaryAss = hexToAss(primaryColor, '#FFFFFF')  // color words start as (upcoming/unspoken)
+  const outlineAss   = hexToAss(outlineColor, '#000000')
   const hasBox       = backgroundBox === 'solid' || backgroundBox === 'blur'
-  const isBold       = (fontWeight >= 600) || bold
+  const isBold       = (safeFontWeight >= 600) || !!bold
   const boxAlpha     = opacityToAssAlpha(backgroundOpacity)
   const backAss      = hasBox ? `&H${boxAlpha}000000` : '&H00000000'
   const borderStyle  = hasBox ? 4 : 1
-  const outline      = hasBox ? 0 : outlineThickness
+  const outline      = hasBox ? 0 : safeOutlineThickness
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -155,12 +201,12 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontFamily},${fontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${isBold ? -1 : 0},${italic ? -1 : 0},0,0,100,100,0,0,${borderStyle},${outline},0,${alignment},10,10,${verticalMargin},1
+Style: Default,${safeFontFamily},${safeFontSize},${primaryAss},${secondaryAss},${outlineAss},${backAss},${isBold ? -1 : 0},${italic ? -1 : 0},0,0,100,100,0,0,${borderStyle},${outline},0,${alignment},10,10,${safeVerticalMargin},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
 
-  const wordsPerPage = calcWordsPerPage(fontSize, maxLines)
+  const wordsPerPage = calcWordsPerPage(safeFontSize, safeMaxLines)
 
   const events = []
   for (const seg of (transcription.segments || [])) {

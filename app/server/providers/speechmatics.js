@@ -14,7 +14,7 @@ const BASE_URL = 'https://asr.api.speechmatics.com/v2'
 const POLL_INTERVAL_MS = 3000
 const POLL_TIMEOUT_MS = 10 * 60 * 1000 // 10 min
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.SPEECHMATICS_API_KEY
   if (!apiKey) throw new Error('SPEECHMATICS_API_KEY is not set')
 
@@ -26,15 +26,20 @@ module.exports = async function run({ audioPath, language }) {
     diarization: 'speaker',
     language: language || 'en',
   }
+  const jobConfig = { type: 'transcription', transcription_config: txConfig }
 
-  // Submit job via multipart POST
+  // Jobs are always submitted as multipart with a `config` part; when we have
+  // a public URL, add `fetch_data` to the config and omit `data_file` — no
+  // audio bytes travel through us or to Speechmatics via upload.
+  if (audioUrl) jobConfig.fetch_data = { url: audioUrl }
+
   const form = new FormData()
-  form.append('data_file', fs.createReadStream(audioPath))
-  form.append('config', JSON.stringify({ type: 'transcription', transcription_config: txConfig }))
+  if (!audioUrl) form.append('data_file', fs.createReadStream(audioPath))
+  form.append('config', JSON.stringify(jobConfig))
 
   let submitRes;
 
-  console.log(`  [speechmatics] Submitting batch job…`,{ ...authHeaders, ...form.getHeaders() },)
+  console.log(audioUrl ? `  [speechmatics] Submitting batch job via fetch_data (no upload)…` : `  [speechmatics] Submitting batch job…`)
   try {
      submitRes = await axios.post(`${BASE_URL}/jobs/`, form, {
       headers: { ...authHeaders, ...form.getHeaders() },

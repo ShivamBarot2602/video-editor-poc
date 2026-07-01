@@ -1,468 +1,551 @@
 /**
- * videoStore — the single, centralized file-I/O layer for session data.
+ * videoStore — the single, centralized storage layer for session data, backed
+ * by S3. Every artifact for a video lives under the key `<videoId>/<name>`
+ * (plus the configured S3_KEY_PREFIX). Callers pass a videoId (+ provider /
+ * clipId / etc) and never construct a key or touch the AWS SDK directly.
  *
- * Every read/write of an artifact under VIDEOS_DIR goes through here. Callers
- * pass a videoId (+ provider/clipId/etc) and never construct a path or touch
- * `fs` directly. Filenames/dirs come from config/paths.js.
+ * Two families of API:
+ *   1. Content I/O — small JSON/text/images read & written directly to S3.
+ *      Fallback/throw semantics match the old on-disk layer:
+ *        - readMeta / readSavedClips / readThumbnailState / readFrameStats
+ *          swallow missing + parse errors and return the documented fallback.
+ *        - readTranscription / readClipSuggestions / readBurnTranscription /
+ *          readSavedClipsStrict THROW on a parse error (callers catch → 500).
+ *        - exists / find helpers return false/null (never throw) when absent.
+ *   2. Media materialization — binary blobs that ffmpeg / sharp / providers must
+ *      see as real local files. `downloadX(id, destDir) → localPath` hydrates a
+ *      temp file; `uploadX(id, localPath)` persists a temp result; `presignX(id)`
+ *      returns a time-limited GET URL for the browser (media delivery).
  *
- * Semantics are byte-for-byte what the routes did inline:
- *   - JSON writes use JSON.stringify(obj, null, 2) + 'utf8'.
- *   - "read with fallback" helpers (readMeta/readSavedClips/readThumbnailState/
- *     readFrameStats) swallow parse errors and return the documented fallback.
- *   - "read" helpers that the routes wrapped in try/catch (readTranscription/
- *     readClipSuggestions/readBurnTranscription) THROW on a parse error so the
- *     caller's existing catch still produces the same status code.
- *   - find/exists helpers return null/false (never throw) when a dir is missing.
- *
- * Path-getters are PURE (no mkdir). Writers that need a directory call the
- * matching ensure* helper first — so a GET that only builds a path can never
- * create a directory as a side effect.
+ * Everything that hits S3 is async. ffmpeg work happens in lib/tempWork temp dirs.
  */
 
-const fs = require('fs')
 const path = require('path')
 const { v4: uuidv4 } = require('uuid')
 
 const P = require('../config/paths')
-const { pathFor, writeFormat, writeAll } = require('../lib/subtitleFormats')
+const C = require('../config/storage')
+const s3 = require('../lib/s3')
+const { buildAll, buildFormat } = require('../lib/subtitleFormats')
 
-const { VIDEOS_DIR, FILES, PREFIXES, DIRS } = P
+const { FILES, PREFIXES, DIRS } = P
 
-// ─── internal helpers ────────────────────────────────────────────────────────
+// ─── key helpers ──────────────────────────────────────────────────────────────
 
-function joinDirs(base, segs) {
-  return Array.isArray(segs) ? path.join(base, ...segs) : path.join(base, segs)
+// Full object key for a video-relative path (segments joined with '/').
+const vkey = (id, ...rel) => C.key(id, ...rel)
+
+// Prefix that lists every object for a video.
+const videoPrefix = (id) => C.key(id) + '/'
+
+const CONTENT_TYPES = {
+  '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.mpeg': 'video/mpeg',
+  '.3gp': 'video/3gpp', '.flv': 'video/x-flv',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+  '.json': 'application/json', '.ass': 'text/x-ssa; charset=utf-8',
+}
+const contentTypeFor = (name) => CONTENT_TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream'
+
+// Strip the bucket prefix + videoId, leaving the in-session relative path.
+function relFromKey(id, key) {
+  return key.slice(vkey(id).length + 1)
 }
 
-// Parse JSON at an absolute path. Missing file → returns `missing`. On a parse
-// error: throw when `safe` is false (caller has a try/catch), else return `bad`.
-function readJsonAt(absPath, { missing = null, bad = null, safe = false } = {}) {
-  if (!fs.existsSync(absPath)) return missing
-  if (safe) {
-    try { return JSON.parse(fs.readFileSync(absPath, 'utf8')) } catch (_) { return bad }
+// ─── boot / id / session ───────────────────────────────────────────────────────
+
+// No durable local dir to create (S3 is the store). Kept for index.js parity.
+function init() {}
+
+// Mint a new session id (replaces the old createVideoDir uuid+mkdir).
+function newId() {
+  return uuidv4()
+}
+
+// True if the session has any object under <id>/.
+async function videoExists(id) {
+  const keys = await s3.listKeys(videoPrefix(id))
+  return keys.length > 0
+}
+
+// Distinct session ids — the first path segment of every key under the prefix.
+async function listSessionIds() {
+  const keys = await s3.listKeys(C.key(''))
+  const ids = new Set()
+  const base = C.key('')
+  for (const k of keys) {
+    const rest = k.slice(base.length)
+    const seg = rest.split('/')[0]
+    if (seg) ids.add(seg)
   }
-  return JSON.parse(fs.readFileSync(absPath, 'utf8'))
+  return [...ids]
 }
 
-function writeJsonAt(absPath, obj) {
-  fs.writeFileSync(absPath, JSON.stringify(obj, null, 2), 'utf8')
+// Raw object listing (key/size/lastModified) for a single session — ONE S3
+// call, so callers can derive existence/providers/size/etc. without N more
+// round trips. Keys come back relative to the session (prefix stripped).
+async function listSessionObjects(id) {
+  const objects = await s3.listObjects(videoPrefix(id))
+  const base = videoPrefix(id)
+  return objects.map(o => ({ ...o, rel: o.key.slice(base.length) }))
 }
 
-// ─── boot / directory ────────────────────────────────────────────────────────
-
-function init() {
-  fs.mkdirSync(VIDEOS_DIR, { recursive: true })
-}
-
-function videoDir(id) {
-  return path.join(VIDEOS_DIR, id)
-}
-
-function videoExists(id) {
-  return fs.existsSync(videoDir(id))
-}
-
-// Directory entries under VIDEOS_DIR (session ids). Mirrors the /api/videos
-// loop: statSync.isDirectory() with no swallow, so a stat error propagates.
-function listSessionIds() {
-  if (!fs.existsSync(VIDEOS_DIR)) return []
-  return fs.readdirSync(VIDEOS_DIR).filter(id => fs.statSync(path.join(VIDEOS_DIR, id)).isDirectory())
-}
-
-// uuid + mkdir; returns { id, dir }. (Available for upload; multer keeps its own.)
-function createVideoDir() {
-  const id = uuidv4()
-  const dir = videoDir(id)
-  fs.mkdirSync(dir, { recursive: true })
-  return { id, dir }
+// Raw object listing across EVERY session in one S3 call, grouped by videoId.
+// Same shape as listSessionObjects, keyed by id — avoids listing per-session
+// when building something like the Recent Videos list.
+async function listAllSessionObjects() {
+  const objects = await s3.listObjects(C.key(''))
+  const base = C.key('')
+  const byId = new Map()
+  for (const o of objects) {
+    const rest = o.key.slice(base.length)
+    const id = rest.split('/')[0]
+    if (!id) continue
+    const rel = rest.slice(id.length + 1)
+    if (!byId.has(id)) byId.set(id, [])
+    byId.get(id).push({ ...o, rel })
+  }
+  return byId
 }
 
 // ─── original / derived media ────────────────────────────────────────────────
 
-function findOriginalName(id) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return null
-  return fs.readdirSync(dir).find(f => f.startsWith(PREFIXES.ORIGINAL)) || null
+// Basename (e.g. "original.mp4") of the uploaded source, or null.
+async function findOriginalName(id) {
+  const keys = await s3.listKeys(vkey(id, PREFIXES.ORIGINAL))
+  if (!keys.length) return null
+  return path.posix.basename(keys[0])
 }
 
-function findOriginalPath(id) {
-  const name = findOriginalName(id)
-  return name ? path.join(videoDir(id), name) : null
+async function originalExists(id) {
+  return (await findOriginalName(id)) !== null
 }
 
-function statOriginal(id) {
-  const p = findOriginalPath(id)
-  return p ? fs.statSync(p) : null
+// Key of the uploaded source, or null.
+async function originalKey(id) {
+  const name = await findOriginalName(id)
+  return name ? vkey(id, name) : null
 }
 
-function burnedPath(id, ext) {
-  return path.join(videoDir(id), P.burnedName(ext))
+// HEAD the original → { size, mtime: Date } or null.
+async function statOriginal(id) {
+  const key = await originalKey(id)
+  if (!key) return null
+  const h = await s3.head(key)
+  return h ? { size: h.size, mtime: h.lastModified } : null
 }
 
-function findBurnedPath(id) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return null
-  const f = fs.readdirSync(dir).find(x => x.startsWith(PREFIXES.BURNED + '.'))
-  return f ? path.join(dir, f) : null
+// Download the source video into destDir; returns the local path (keeps ext).
+async function downloadOriginal(id, destDir) {
+  const name = await findOriginalName(id)
+  if (!name) throw new Error('Original video not found')
+  const local = path.join(destDir, name)
+  await s3.downloadToFile(vkey(id, name), local)
+  return local
 }
 
-function hasBurned(id) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return false
-  return fs.readdirSync(dir).some(f => f.startsWith(PREFIXES.BURNED + '.'))
+// Public GET URL for the source (inline playback, Range-capable). Null if missing.
+async function publicUrlOriginal(id) {
+  const name = await findOriginalName(id)
+  if (!name) return null
+  return C.publicUrl(vkey(id, name))
 }
 
-function audioPath(id) {
-  return path.join(videoDir(id), FILES.AUDIO)
+// burned.<ext>
+const burnedKey = (id, ext) => vkey(id, P.burnedName(ext))
+
+async function findBurnedName(id) {
+  const keys = await s3.listKeys(vkey(id, PREFIXES.BURNED + '.'))
+  return keys.length ? path.posix.basename(keys[0]) : null
 }
 
-function audioExists(id) {
-  return fs.existsSync(audioPath(id))
+async function hasBurned(id) {
+  return (await findBurnedName(id)) !== null
 }
 
-function assPath(id) {
-  return path.join(videoDir(id), FILES.ASS)
+async function uploadBurned(id, ext, localPath) {
+  const key = burnedKey(id, ext)
+  // Burned video is a download link in the UI. Objects are public (no per-request
+  // response-content-disposition override on unsigned GETs), so bake the
+  // attachment disposition into the object metadata at upload time.
+  await s3.uploadFile(key, localPath, contentTypeFor(key), `attachment; filename="${P.burnedName(ext)}"`)
 }
 
-function writeAss(id, content) {
-  fs.writeFileSync(assPath(id), content, 'utf8')
+async function publicUrlBurned(id) {
+  const name = await findBurnedName(id)
+  if (!name) return null
+  return C.publicUrl(vkey(id, name))
 }
 
-function thumbnailV2Path(id) {
-  return path.join(videoDir(id), FILES.THUMBNAIL_V2)
+// audio.wav
+const audioKey = (id) => vkey(id, FILES.AUDIO)
+
+async function audioExists(id) {
+  return s3.exists(audioKey(id))
 }
 
-function thumbnailV2Exists(id) {
-  return fs.existsSync(thumbnailV2Path(id))
+async function downloadAudio(id, destDir) {
+  const local = path.join(destDir, FILES.AUDIO)
+  await s3.downloadToFile(audioKey(id), local)
+  return local
+}
+
+// Public GET URL for audio.wav — passed directly to STT providers that accept
+// a URL instead of an uploaded file, so bytes never round-trip through us.
+function publicUrlAudio(id) {
+  return C.publicUrl(audioKey(id))
+}
+
+async function uploadAudio(id, localPath) {
+  await s3.uploadFile(audioKey(id), localPath, contentTypeFor(FILES.AUDIO))
+}
+
+// subtitles.ass — written to S3 for the record; burn also keeps a temp copy.
+async function writeAss(id, content) {
+  await s3.putObject(vkey(id, FILES.ASS), content, contentTypeFor(FILES.ASS))
+}
+
+// thumbnail_v2.jpg
+const thumbnailV2Key = (id) => vkey(id, FILES.THUMBNAIL_V2)
+
+async function thumbnailV2Exists(id) {
+  return s3.exists(thumbnailV2Key(id))
+}
+
+async function uploadThumbnailV2(id, localPath) {
+  await s3.uploadFile(thumbnailV2Key(id), localPath, 'image/jpeg')
+}
+
+function publicUrlThumbnailV2(id) {
+  return C.publicUrl(thumbnailV2Key(id))
 }
 
 // ─── meta ────────────────────────────────────────────────────────────────────
 
-function readMeta(id) {
-  return readJsonAt(path.join(videoDir(id), FILES.META), { missing: {}, bad: {}, safe: true })
+async function readMeta(id) {
+  const txt = await s3.getText(vkey(id, FILES.META))
+  if (txt == null) return {}
+  try { return JSON.parse(txt) } catch (_) { return {} }
 }
 
-function writeMeta(id, obj) {
-  writeJsonAt(path.join(videoDir(id), FILES.META), obj)
+async function writeMeta(id, obj) {
+  await s3.putObject(vkey(id, FILES.META), JSON.stringify(obj, null, 2), 'application/json')
 }
 
 // ─── transcription (provider-keyed) ──────────────────────────────────────────
 
-function transcriptionPath(id, provider) {
-  return path.join(videoDir(id), P.transcriptionName(provider))
+const transcriptionKey = (id, provider) => vkey(id, P.transcriptionName(provider))
+
+async function transcriptionExists(id, provider) {
+  return s3.exists(transcriptionKey(id, provider))
 }
 
-function transcriptionExists(id, provider) {
-  return fs.existsSync(transcriptionPath(id, provider))
+// Parsed transcription, or null if missing. THROWS on a parse error.
+async function readTranscription(id, provider) {
+  const txt = await s3.getText(transcriptionKey(id, provider))
+  return txt == null ? null : JSON.parse(txt)
 }
 
-// Parsed transcription, or null if the file is missing. THROWS on a parse error
-// (callers wrap in try/catch and surface 500, exactly as before).
-function readTranscription(id, provider) {
-  return readJsonAt(transcriptionPath(id, provider), { missing: null })
+async function writeTranscription(id, provider, tx) {
+  await s3.putObject(transcriptionKey(id, provider), JSON.stringify(tx, null, 2), 'application/json')
 }
 
-function writeTranscription(id, provider, tx) {
-  writeJsonAt(transcriptionPath(id, provider), tx)
+async function writeRaw(id, provider, raw) {
+  await s3.putObject(vkey(id, P.rawName(provider)), JSON.stringify(raw, null, 2), 'application/json')
 }
 
-function writeRaw(id, provider, raw) {
-  writeJsonAt(path.join(videoDir(id), P.rawName(provider)), raw)
-}
-
-// Provider ids that have a transcription_<provider>.json on disk.
-function listTranscriptionProviders(id) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return []
-  return fs.readdirSync(dir)
+// Provider ids that have a transcription_<provider>.json in S3.
+async function listTranscriptionProviders(id) {
+  const keys = await s3.listKeys(vkey(id, PREFIXES.TRANSCRIPTION))
+  return keys
+    .map(k => path.posix.basename(k))
     .filter(f => f.startsWith(PREFIXES.TRANSCRIPTION) && f.endsWith('.json'))
     .map(f => f.slice(PREFIXES.TRANSCRIPTION.length, -'.json'.length))
 }
 
-function legacyTranscriptionPath(id) {
-  return path.join(videoDir(id), FILES.LEGACY_TRANSCRIPTION)
-}
-
-// Burn input resolution: prefer transcription_<provider>.json, fall back to the
-// legacy transcription.json. Returns the parsed transcription, or null when
-// neither exists (caller → 400). THROWS on a parse error (matches today).
-function readBurnTranscription(id, provider) {
-  const dir = videoDir(id)
-  const providerFile = provider ? path.join(dir, P.transcriptionName(provider)) : null
-  const legacy = path.join(dir, FILES.LEGACY_TRANSCRIPTION)
-  const file = (providerFile && fs.existsSync(providerFile))
-    ? providerFile
-    : fs.existsSync(legacy) ? legacy : null
-  if (!file) return null
-  return JSON.parse(fs.readFileSync(file, 'utf8'))
+// Burn input: prefer transcription_<provider>.json, fall back to legacy
+// transcription.json. null when neither exists. THROWS on a parse error.
+async function readBurnTranscription(id, provider) {
+  if (provider) {
+    const txt = await s3.getText(transcriptionKey(id, provider))
+    if (txt != null) return JSON.parse(txt)
+  }
+  const legacy = await s3.getText(vkey(id, FILES.LEGACY_TRANSCRIPTION))
+  if (legacy != null) return JSON.parse(legacy)
+  return null
 }
 
 // Transcript hint for the thumbnail pipeline: pick by provider priority, else
 // any; return the first `maxChars` of full_transcript, or null. Never throws.
-function readTranscriptHint(id, priority, maxChars) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return null
-  const files = fs.readdirSync(dir)
-    .filter(f => f.startsWith(PREFIXES.TRANSCRIPTION) && f.endsWith('.json'))
-    .map(f => ({ provider: f.slice(PREFIXES.TRANSCRIPTION.length, -'.json'.length), file: f }))
-  if (files.length === 0) return null
-
+async function readTranscriptHint(id, priority, maxChars) {
+  const providers = await listTranscriptionProviders(id)
+  if (!providers.length) return null
   let chosen = null
   for (const pref of priority) {
-    chosen = files.find(f => f.provider === pref)
-    if (chosen) break
+    if (providers.includes(pref)) { chosen = pref; break }
   }
-  if (!chosen) chosen = files[0]
-
+  if (!chosen) chosen = providers[0]
   try {
-    const tx = JSON.parse(fs.readFileSync(path.join(dir, chosen.file), 'utf8'))
+    const txt = await s3.getText(transcriptionKey(id, chosen))
+    const tx = JSON.parse(txt)
     const text = (tx.full_transcript || '').toString().trim()
     return text.slice(0, maxChars) || null
   } catch (_) { return null }
 }
 
-// ─── subtitle exports (delegate to lib/subtitleFormats) ──────────────────────
+// ─── subtitle exports ─────────────────────────────────────────────────────────
 
-// Existing export file, building it lazily from the saved transcription JSON if
-// absent (older sessions). Returns the absolute file path.
-function resolveSubtitleExport(id, provider, formatId) {
-  const dir = videoDir(id)
-  let filePath = pathFor(dir, provider, formatId)
-  if (!fs.existsSync(filePath)) {
-    const tx = JSON.parse(fs.readFileSync(transcriptionPath(id, provider), 'utf8'))
-    filePath = writeFormat(dir, provider, formatId, tx)
+// Build + store every registered export format for a provider (after transcribe / edit).
+async function writeSubtitleExports(id, provider, tx) {
+  for (const fmt of buildAll(provider, tx)) {
+    if (!fmt) continue
+    await s3.putObject(vkey(id, fmt.fileName), fmt.content, fmt.contentType)
   }
-  return filePath
 }
 
-// Regenerate every registered export format for a provider (after transcribe / edit).
-function writeSubtitleExports(id, provider, tx) {
-  writeAll(videoDir(id), provider, tx)
+// Return a downloadable export's { content, contentType, fileName }, building it
+// from the saved transcription on the fly (no separate fetch; subtitle text is
+// tiny). THROWS on a missing/corrupt transcription (caller → 500).
+async function resolveSubtitleExport(id, provider, formatId) {
+  const tx = await readTranscription(id, provider)
+  if (!tx) throw new Error('Transcription not found')
+  return buildFormat(provider, formatId, tx)
 }
 
 // ─── thumbnail pipeline state + frames ───────────────────────────────────────
 
-function readThumbnailState(id) {
-  return readJsonAt(path.join(videoDir(id), FILES.THUMBNAIL_STATE), { missing: null, bad: null, safe: true })
+async function readThumbnailState(id) {
+  const txt = await s3.getText(vkey(id, FILES.THUMBNAIL_STATE))
+  if (txt == null) return null
+  try { return JSON.parse(txt) } catch (_) { return null }
 }
 
-function writeThumbnailState(id, state) {
-  writeJsonAt(path.join(videoDir(id), FILES.THUMBNAIL_STATE), state)
+async function writeThumbnailState(id, state) {
+  await s3.putObject(vkey(id, FILES.THUMBNAIL_STATE), JSON.stringify(state, null, 2), 'application/json')
 }
 
-function framesDirPath(id) {
-  return joinDirs(videoDir(id), DIRS.FRAMES)
+async function framesExist(id) {
+  const keys = await s3.listKeys(vkey(id, DIRS.FRAMES) + '/')
+  return keys.length > 0
 }
 
-function framesExist(id) {
-  return fs.existsSync(framesDirPath(id))
-}
-
-function frameStatsPath(id) {
-  return path.join(videoDir(id), FILES.FRAME_STATS)
-}
-
-function frameStatsExist(id) {
-  return fs.existsSync(frameStatsPath(id))
+async function frameStatsExist(id) {
+  return s3.exists(vkey(id, FILES.FRAME_STATS))
 }
 
 // Cached frame candidates + scores, or null on missing / parse error.
-function readFrameStats(id) {
-  return readJsonAt(frameStatsPath(id), { missing: null, bad: null, safe: true })
+async function readFrameStats(id) {
+  const txt = await s3.getText(vkey(id, FILES.FRAME_STATS))
+  if (txt == null) return null
+  try { return JSON.parse(txt) } catch (_) { return null }
 }
 
-function writeFrameStats(id, scored) {
-  writeJsonAt(frameStatsPath(id), scored)
+async function writeFrameStats(id, scored) {
+  await s3.putObject(vkey(id, FILES.FRAME_STATS), JSON.stringify(scored, null, 2), 'application/json')
 }
 
-function polishedDirPath(id) {
-  return joinDirs(videoDir(id), DIRS.POLISHED)
+// Download every frame under <id>/frames/ into destDir; returns basenames.
+async function downloadFrames(id, destDir) {
+  const prefix = vkey(id, DIRS.FRAMES) + '/'
+  const keys = await s3.listKeys(prefix)
+  const names = []
+  for (const k of keys) {
+    const name = path.posix.basename(k)
+    await s3.downloadToFile(k, path.join(destDir, name))
+    names.push(name)
+  }
+  return names
 }
 
-function ensurePolishedDir(id) {
-  const p = polishedDirPath(id)
-  fs.mkdirSync(p, { recursive: true })
-  return p
+// Upload every file in localFramesDir to <id>/frames/<name>.
+async function uploadFrames(id, localFramesDir) {
+  await uploadLocalDir(localFramesDir, (name) => vkey(id, DIRS.FRAMES, name))
 }
 
-// Write a polished image buffer; returns its absolute path. Caller must have
-// called ensurePolishedDir(id) first (matches the original's single mkdir).
-function writePolishedImage(id, idx, providerId, ext, buffer) {
-  const outPath = path.join(polishedDirPath(id), P.polishedName(idx, providerId, ext))
-  fs.writeFileSync(outPath, buffer)
-  return outPath
+// Store a polished image buffer at <id>/thumbnails/polished/<idx>_<provider>.<ext>.
+// Returns the in-session relative path (used to build the file-serve URL).
+async function writePolishedImage(id, idx, providerId, ext, buffer) {
+  const name = P.polishedName(idx, providerId, ext)
+  const rel = DIRS.POLISHED.concat(name)            // ['thumbnails','polished', name]
+  await s3.putObject(vkey(id, ...rel), buffer, contentTypeFor(name))
+  return rel.join('/')
 }
 
-// Generic existence check for an absolute path (used by the thumbnail file serve
-// after the traversal guard in resolveThumbnailFile).
-function fileExists(absPath) {
-  return fs.existsSync(absPath)
-}
-
-// Absolute path under the video dir for a thumbnail-pipeline file, guarded
-// against traversal and restricted to the frames/ and thumbnails/ subtrees.
-// Throws an Error with `.status` (400 / 403) on a bad path; caller handles 404.
-function resolveThumbnailFile(id, rawRelpath) {
-  const dir = videoDir(id)
+// Traversal-guarded resolution of a thumbnail-subtree relative path. Throws an
+// Error with `.status` (400/403). Returns the validated relative path.
+function resolveThumbnailRelpath(id, rawRelpath) {
   const rel = decodeURIComponent(rawRelpath)
-  const target = path.normalize(path.join(dir, rel))
-  if (!target.startsWith(dir + path.sep) && target !== dir) {
+  const norm = path.posix.normalize(rel)
+  if (norm.startsWith('..') || norm.startsWith('/') || norm.includes('/../')) {
     const err = new Error('Invalid path'); err.status = 400; throw err
   }
-  const ok = rel.startsWith(DIRS.FRAMES + '/') || rel.startsWith(DIRS.POLISHED[0] + '/')
+  const ok = norm.startsWith(DIRS.FRAMES + '/') || norm.startsWith(DIRS.POLISHED.join('/') + '/')
   if (!ok) {
     const err = new Error('Forbidden'); err.status = 403; throw err
   }
-  return target
+  return norm
 }
 
-// URL fragment for a polished/original file served via the thumbnails router.
-function thumbnailFileUrl(id, absPath) {
-  const rel = path.relative(videoDir(id), absPath).split(path.sep).join('/')
-  return `/api/thumbnails/${id}/file/${encodeURIComponent(rel)}`
+async function thumbnailFileExists(id, rel) {
+  return s3.exists(vkey(id, rel))
+}
+
+function publicUrlThumbnailFile(id, rel) {
+  return C.publicUrl(vkey(id, rel))
+}
+
+// Raw bytes of a thumbnail-subtree file, or null if missing. Used to proxy a
+// same-origin download (Content-Disposition: attachment) instead of redirecting
+// to the public S3 URL, which would open inline rather than download.
+async function readThumbnailFileBuffer(id, rel) {
+  return s3.getBuffer(vkey(id, rel))
 }
 
 // ─── clips ───────────────────────────────────────────────────────────────────
 
-function clipsSuggestionsPath(id, provider) {
-  return path.join(videoDir(id), P.clipsName(provider))
-}
+const clipsSuggestionsKey = (id, provider) => vkey(id, P.clipsName(provider))
 
-function clipsSuggestionsExist(id, provider) {
-  return fs.existsSync(clipsSuggestionsPath(id, provider))
+async function clipsSuggestionsExist(id, provider) {
+  return s3.exists(clipsSuggestionsKey(id, provider))
 }
 
 // Parsed suggestions for a provider, or null if missing. THROWS on parse error.
-function readClipSuggestions(id, provider) {
-  return readJsonAt(clipsSuggestionsPath(id, provider), { missing: null })
+async function readClipSuggestions(id, provider) {
+  const txt = await s3.getText(clipsSuggestionsKey(id, provider))
+  return txt == null ? null : JSON.parse(txt)
 }
 
-function writeClipSuggestions(id, provider, obj) {
-  writeJsonAt(clipsSuggestionsPath(id, provider), obj)
+async function writeClipSuggestions(id, provider, obj) {
+  await s3.putObject(clipsSuggestionsKey(id, provider), JSON.stringify(obj, null, 2), 'application/json')
 }
 
-function listClipProviders(id) {
-  const dir = videoDir(id)
-  if (!fs.existsSync(dir)) return []
-  return fs.readdirSync(dir)
+async function listClipProviders(id) {
+  const keys = await s3.listKeys(vkey(id, PREFIXES.CLIPS))
+  return keys
+    .map(k => path.posix.basename(k))
     .filter(f => f.startsWith(PREFIXES.CLIPS) && f.endsWith('.json'))
     .map(f => f.slice(PREFIXES.CLIPS.length, -'.json'.length))
 }
 
-function savedClipsPath(id) {
-  return path.join(videoDir(id), FILES.SAVED_CLIPS)
-}
+const savedClipsKey = (id) => vkey(id, FILES.SAVED_CLIPS)
 
-function savedClipsExist(id) {
-  return fs.existsSync(savedClipsPath(id))
+async function savedClipsExist(id) {
+  return s3.exists(savedClipsKey(id))
 }
 
 // Saved-clip library; missing / parse error → { clips: [] }.
-function readSavedClips(id) {
-  return readJsonAt(savedClipsPath(id), { missing: { clips: [] }, bad: { clips: [] }, safe: true })
+async function readSavedClips(id) {
+  const txt = await s3.getText(savedClipsKey(id))
+  if (txt == null) return { clips: [] }
+  try { return JSON.parse(txt) } catch (_) { return { clips: [] } }
 }
 
-// Saved-clip library, strict: THROWS on parse error (export path matches the
-// original JSON.parse-in-try behavior). Caller must check savedClipsExist first.
-function readSavedClipsStrict(id) {
-  return JSON.parse(fs.readFileSync(savedClipsPath(id), 'utf8'))
+// Strict variant: THROWS on a parse error. Caller checks savedClipsExist first.
+async function readSavedClipsStrict(id) {
+  const txt = await s3.getText(savedClipsKey(id))
+  return JSON.parse(txt)
 }
 
-function writeSavedClips(id, data) {
-  writeJsonAt(savedClipsPath(id), data)
+async function writeSavedClips(id, data) {
+  await s3.putObject(savedClipsKey(id), JSON.stringify(data, null, 2), 'application/json')
 }
 
-function clipsDirPath(id) {
-  return joinDirs(videoDir(id), DIRS.CLIPS)
+// clips/<clipId>.mp4
+const clipOutputKey = (id, clipId) => vkey(id, DIRS.CLIPS, P.clipOutputName(clipId))
+
+async function clipOutputExists(id, clipId) {
+  return s3.exists(clipOutputKey(id, clipId))
 }
 
-function ensureClipsDir(id) {
-  const p = clipsDirPath(id)
-  fs.mkdirSync(p, { recursive: true })
-  return p
+async function uploadClipOutput(id, clipId, localPath) {
+  await s3.uploadFile(clipOutputKey(id, clipId), localPath, 'video/mp4')
 }
 
-function clipOutputPath(id, clipId) {
-  return path.join(clipsDirPath(id), P.clipOutputName(clipId))
+async function publicUrlClipOutput(id, clipId) {
+  if (!(await clipOutputExists(id, clipId))) return null
+  return C.publicUrl(clipOutputKey(id, clipId))
 }
 
-function clipOutputExists(id, clipId) {
-  return fs.existsSync(clipOutputPath(id, clipId))
+async function deleteClipOutput(id, clipId) {
+  try { await s3.deleteObject(clipOutputKey(id, clipId)) } catch (_) {}
 }
 
-function deleteClipOutput(id, clipId) {
-  const p = clipOutputPath(id, clipId)
-  if (fs.existsSync(p)) { try { fs.unlinkSync(p) } catch (_) {} }
+// clips/thumbs/<clipId>-<n>.jpg
+const clipThumbKey = (id, clipId, n) => vkey(id, ...DIRS.CLIP_THUMBS, P.clipThumbName(clipId, n))
+
+async function clipThumbExists(id, clipId, n) {
+  return s3.exists(clipThumbKey(id, clipId, n))
 }
 
-function clipThumbsDirPath(id) {
-  return joinDirs(videoDir(id), DIRS.CLIP_THUMBS)
+async function uploadClipThumb(id, clipId, n, localPath) {
+  await s3.uploadFile(clipThumbKey(id, clipId, n), localPath, 'image/jpeg')
 }
 
-function ensureClipThumbsDir(id) {
-  const p = clipThumbsDirPath(id)
-  fs.mkdirSync(p, { recursive: true })
-  return p
+async function publicUrlClipThumb(id, clipId, n) {
+  if (!(await clipThumbExists(id, clipId, n))) return null
+  return C.publicUrl(clipThumbKey(id, clipId, n))
 }
 
-function clipThumbPath(id, clipId, n) {
-  return path.join(clipThumbsDirPath(id), P.clipThumbName(clipId, n))
-}
-
-function clipThumbExists(id, clipId, n) {
-  return fs.existsSync(clipThumbPath(id, clipId, n))
-}
-
-function clipDebugPath(id, provider) {
-  return path.join(videoDir(id), P.clipDebugName(provider))
+// clip_debug_<provider>.log — best-effort persistence of the LLM debug log.
+async function writeClipDebug(id, provider, content) {
+  try { await s3.putObject(vkey(id, P.clipDebugName(provider)), content, 'text/plain; charset=utf-8') } catch (_) {}
 }
 
 // Delete a previous suggestion run's exported clips + thumbnail frames for this
-// provider so a re-suggest can't serve a stale cut. Saved files are never matched.
-function cleanStaleSuggestionFiles(id, provider) {
+// provider so a re-suggest can't serve a stale cut. Saved files never match the
+// "<provider>-clip-" prefix, so they're untouched.
+async function cleanStaleSuggestionFiles(id, provider) {
   try {
-    const cdir = clipsDirPath(id)
-    if (fs.existsSync(cdir)) {
-      for (const f of fs.readdirSync(cdir)) {
-        if (f.startsWith(`${provider}-clip-`) && f.endsWith('.mp4')) {
-          fs.unlinkSync(path.join(cdir, f))
-        }
-      }
-    }
-    const tdir = clipThumbsDirPath(id)
-    if (fs.existsSync(tdir)) {
-      for (const f of fs.readdirSync(tdir)) {
-        if (f.startsWith(`${provider}-clip-`)) fs.unlinkSync(path.join(tdir, f))
-      }
-    }
+    const clipKeys = await s3.listKeys(vkey(id, DIRS.CLIPS) + '/')
+    const thumbKeys = await s3.listKeys(vkey(id, ...DIRS.CLIP_THUMBS) + '/')
+    const stale = [...clipKeys, ...thumbKeys].filter(k => {
+      const base = path.posix.basename(k)
+      return base.startsWith(`${provider}-clip-`)
+    })
+    for (const k of stale) { try { await s3.deleteObject(k) } catch (_) {} }
   } catch (_) {}
 }
 
+// ─── internal: bulk local→S3 ───────────────────────────────────────────────────
+
+const fs = require('fs')
+async function uploadLocalDir(localDir, keyFor) {
+  let entries = []
+  try { entries = fs.readdirSync(localDir) } catch (_) { return }
+  for (const name of entries) {
+    const full = path.join(localDir, name)
+    if (!fs.statSync(full).isFile()) continue
+    await s3.uploadFile(keyFor(name), full, contentTypeFor(name))
+  }
+}
+
 module.exports = {
-  // boot / dir
-  init, videoDir, videoExists, listSessionIds, createVideoDir,
+  // boot / session
+  init, newId, videoExists, listSessionIds, listSessionObjects, listAllSessionObjects,
   // original / media
-  findOriginalName, findOriginalPath, statOriginal,
-  burnedPath, findBurnedPath, hasBurned,
-  audioPath, audioExists, assPath, writeAss, thumbnailV2Path, thumbnailV2Exists,
+  findOriginalName, originalExists, originalKey, statOriginal,
+  downloadOriginal, publicUrlOriginal,
+  burnedKey, findBurnedName, hasBurned, uploadBurned, publicUrlBurned,
+  audioKey, audioExists, downloadAudio, uploadAudio, publicUrlAudio,
+  writeAss, thumbnailV2Exists, uploadThumbnailV2, publicUrlThumbnailV2,
   // meta
   readMeta, writeMeta,
   // transcription
-  transcriptionPath, transcriptionExists, readTranscription, writeTranscription,
-  writeRaw, listTranscriptionProviders, legacyTranscriptionPath,
-  readBurnTranscription, readTranscriptHint,
+  transcriptionKey, transcriptionExists, readTranscription, writeTranscription,
+  writeRaw, listTranscriptionProviders, readBurnTranscription, readTranscriptHint,
   // subtitle exports
   resolveSubtitleExport, writeSubtitleExports,
   // thumbnails
   readThumbnailState, writeThumbnailState,
-  framesDirPath, framesExist, frameStatsPath, frameStatsExist,
-  readFrameStats, writeFrameStats,
-  polishedDirPath, ensurePolishedDir, writePolishedImage, fileExists,
-  resolveThumbnailFile, thumbnailFileUrl,
+  framesExist, frameStatsExist, readFrameStats, writeFrameStats,
+  downloadFrames, uploadFrames, writePolishedImage,
+  resolveThumbnailRelpath, thumbnailFileExists, publicUrlThumbnailFile, readThumbnailFileBuffer,
   // clips
-  clipsSuggestionsPath, clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions,
-  listClipProviders, savedClipsPath, savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,
-  clipsDirPath, ensureClipsDir, clipOutputPath, clipOutputExists, deleteClipOutput,
-  clipThumbsDirPath, ensureClipThumbsDir, clipThumbPath, clipThumbExists,
-  clipDebugPath, cleanStaleSuggestionFiles,
+  clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions, listClipProviders,
+  savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,
+  clipOutputExists, uploadClipOutput, publicUrlClipOutput, deleteClipOutput,
+  clipThumbExists, uploadClipThumb, publicUrlClipThumb,
+  writeClipDebug, cleanStaleSuggestionFiles,
 }

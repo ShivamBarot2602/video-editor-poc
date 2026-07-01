@@ -7,12 +7,10 @@
  * The download endpoint, the on-transcribe write, and the on-edit regeneration
  * all iterate this registry — no route changes or client wiring needed.
  *
- * Files are persisted next to the transcription JSON as
- * `transcription_<provider>.<ext>`.
+ * Builders are PURE (transcription → string). Persistence (S3) lives in
+ * storage/videoStore.js, which stores each as `transcription_<provider>.<ext>`.
  */
 
-const fs = require('fs')
-const path = require('path')
 const { buildSrt } = require('./srtBuilder')
 
 const SUBTITLE_FORMATS = {
@@ -24,7 +22,6 @@ const SUBTITLE_FORMATS = {
   },
   // Future formats slot in here, e.g.:
   // vtt: { label: 'WebVTT', ext: 'vtt', contentType: 'text/vtt; charset=utf-8', build: buildVtt },
-  // ass: { label: 'Advanced SubStation', ext: 'ass', contentType: 'text/x-ssa; charset=utf-8', build: buildAssPlain },
 }
 
 function getFormat(id) {
@@ -35,30 +32,37 @@ function listFormatIds() {
   return Object.keys(SUBTITLE_FORMATS)
 }
 
-function pathFor(videoDir, provider, formatId) {
+// Filename (relative to a video) for a provider's export in a given format.
+function fileName(provider, formatId) {
   const fmt = getFormat(formatId)
-  if (!fmt) return null
-  return path.join(videoDir, `transcription_${provider}.${fmt.ext}`)
+  return fmt ? `transcription_${provider}.${fmt.ext}` : null
 }
 
-// Build + persist a single format. Returns the file path, or null if unknown.
-function writeFormat(videoDir, provider, formatId, transcription) {
+// Build a single format → { fileName, ext, contentType, content }, or null if
+// the format id is unknown.
+function buildFormat(provider, formatId, transcription) {
   const fmt = getFormat(formatId)
   if (!fmt) return null
-  const filePath = pathFor(videoDir, provider, formatId)
-  fs.writeFileSync(filePath, fmt.build(transcription), 'utf8')
-  return filePath
+  return {
+    fileName: `transcription_${provider}.${fmt.ext}`,
+    ext: fmt.ext,
+    contentType: fmt.contentType,
+    content: fmt.build(transcription),
+  }
 }
 
-// Regenerate every registered format for a provider (after transcribe / edit).
-function writeAll(videoDir, provider, transcription) {
+// Build every registered format for a provider. Skips (and logs) any builder
+// that throws, mirroring the previous best-effort writeAll behaviour.
+function buildAll(provider, transcription) {
+  const out = []
   for (const id of listFormatIds()) {
     try {
-      writeFormat(videoDir, provider, id, transcription)
+      out.push(buildFormat(provider, id, transcription))
     } catch (err) {
       console.error(`[${provider}] ${id} generation failed:`, err.message)
     }
   }
+  return out
 }
 
-module.exports = { SUBTITLE_FORMATS, getFormat, listFormatIds, pathFor, writeFormat, writeAll }
+module.exports = { SUBTITLE_FORMATS, getFormat, listFormatIds, fileName, buildFormat, buildAll }

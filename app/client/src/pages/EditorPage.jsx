@@ -7,7 +7,7 @@ import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
 import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
-import { listVideos } from '../api/videos'
+import { getVideoOrNull } from '../api/videos'
 import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl } from '../api/transcription'
 import { readJsonLines } from '../api/stream'
 
@@ -45,14 +45,19 @@ export default function EditorPage() {
 
   const videoRef = useRef(null)
 
+  // Loads video metadata only — a single GET /api/videos/:id, not the whole
+  // list. Transcription fetching is owned entirely by the effect below (keyed
+  // off availableProviders + selectedProvider) so it only ever fires once per
+  // actual provider/video change, never duplicated here too.
   useEffect(() => {
     if (!videoId) { navigate('/'); return }
 
+    let cancelled = false
     const load = async () => {
       setLoading(true)
       try {
-        const videos = await listVideos()
-        const video = videos.find(v => v.id === videoId)
+        const video = await getVideoOrNull(videoId)
+        if (cancelled) return
         if (!video) { toast.error('Video not found'); navigate('/'); return }
 
         setVideoMeta({ name: video.filename, size: video.size })
@@ -61,34 +66,32 @@ export default function EditorPage() {
 
         const saved = localStorage.getItem(`style_${videoId}`)
         if (saved) { try { setStyle(JSON.parse(saved)) } catch (_) {} }
-
-        const provider = searchParams.get('provider') || selectedProvider
-        if (video.providers.includes(provider)) {
-          try {
-            const data = await getTranscriptionOrNull(videoId, provider)
-            if (data) setTranscription(data)
-          } catch (_) {}
-        }
       } catch (err) {
-        toast.error('Failed to load video')
+        if (!cancelled) toast.error('Failed to load video')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     load()
-  }, [videoId]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true }
+  }, [videoId, navigate])
 
   useEffect(() => {
     if (videoId) localStorage.setItem(`style_${videoId}`, JSON.stringify(style))
   }, [style, videoId])
 
+  // Single owner of transcription fetching: runs on mount (once availableProviders
+  // loads), on provider switch, and on videoId change.
   useEffect(() => {
     if (!videoId || availableProviders.length === 0) return
     if (!availableProviders.includes(selectedProvider)) { setTranscription(null); return }
+
+    let cancelled = false
     getTranscriptionOrNull(videoId, selectedProvider)
-      .then(data => { if (data) setTranscription(data) })
+      .then(data => { if (!cancelled && data) setTranscription(data) })
       .catch(() => {})
-  }, [selectedProvider, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true }
+  }, [videoId, selectedProvider, availableProviders])
 
   // Initialize speaker aliases from the loaded transcription JSON (server persisted)
   useEffect(() => {

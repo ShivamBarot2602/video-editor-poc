@@ -13,33 +13,48 @@ const PROVIDER = 'groq'
 const MODEL = 'whisper-large-v3-turbo'
 const LIMIT_MB = 100
 
-module.exports = async function run({ audioPath, videoDir, language }) {
+module.exports = async function run({ audioPath, audioUrl, videoDir, language }) {
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) throw new Error('GROQ_API_KEY is not set')
 
   const { default: Groq } = await import('groq-sdk')
   const client = new Groq({ apiKey })
 
-  const mp3Path = path.join(videoDir, 'audio_compressed.mp3')
-  console.log(`  [groq] Compressing audio to mp3…`)
-  await compressAudio(audioPath, mp3Path)
+  // `url` fetches audio.wav from S3 server-side — no upload, and per Groq's
+  // docs it's the recommended path for larger files, so skip our own mp3
+  // compression (that existed only to fit the 100MB upload limit).
+  let response
+  if (audioUrl) {
+    console.log(`  [groq] Transcribing via URL (no upload, no compression)…`)
+    response = await client.audio.transcriptions.create({
+      url: audioUrl,
+      model: MODEL,
+      response_format: 'verbose_json',
+      timestamp_granularities: ['word'],
+      ...(language ? { language } : {}),
+    })
+  } else {
+    const mp3Path = path.join(videoDir, 'audio_compressed.mp3')
+    console.log(`  [groq] Compressing audio to mp3…`)
+    await compressAudio(audioPath, mp3Path)
 
-  const sizeMB = getFileSizeMB(mp3Path)
-  if (sizeMB > LIMIT_MB) {
-    throw new Error(
-      `Audio is ${sizeMB.toFixed(1)} MB after compression — Groq has a ${LIMIT_MB} MB limit. ` +
-      `Use AssemblyAI or Deepgram for longer videos.`
-    )
+    const sizeMB = getFileSizeMB(mp3Path)
+    if (sizeMB > LIMIT_MB) {
+      throw new Error(
+        `Audio is ${sizeMB.toFixed(1)} MB after compression — Groq has a ${LIMIT_MB} MB limit. ` +
+        `Use AssemblyAI or Deepgram for longer videos.`
+      )
+    }
+
+    console.log(`  [groq] Sending ${sizeMB.toFixed(1)} MB to Groq…`)
+    response = await client.audio.transcriptions.create({
+      file: fs.createReadStream(mp3Path),
+      model: MODEL,
+      response_format: 'verbose_json',
+      timestamp_granularities: ['word'],
+      ...(language ? { language } : {}),
+    })
   }
-
-  console.log(`  [groq] Sending ${sizeMB.toFixed(1)} MB to Groq…`)
-  const response = await client.audio.transcriptions.create({
-    file: fs.createReadStream(mp3Path),
-    model: MODEL,
-    response_format: 'verbose_json',
-    timestamp_granularities: ['word'],
-    ...(language ? { language } : {}),
-  })
 
   const words = response.words || []
 

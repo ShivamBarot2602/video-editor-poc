@@ -18,19 +18,27 @@ const BASE_URL = 'https://api.pyannote.ai/v1'
 const POLL_INTERVAL_MS = 3000
 const POLL_TIMEOUT_MS = 20 * 60 * 1000 // 20 min
 
-module.exports = async function run({ audioPath, videoId, language }) {
+module.exports = async function run({ audioPath, audioUrl, videoId, language }) {
   const apiKey = process.env.PYANNOTE_API_KEY
   if (!apiKey) throw new Error('PYANNOTE_API_KEY is not set')
-  if (!audioPath || !fs.existsSync(audioPath)) throw new Error('pyannote input audio file is missing')
+  if (!audioUrl && (!audioPath || !fs.existsSync(audioPath))) throw new Error('pyannote input audio file is missing')
 
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   }
 
-  const mediaRef = buildMediaRef(audioPath, videoId)
-  const uploadUrl = await createUploadUrl({ headers, mediaRef })
-  await uploadAudio({ uploadUrl, audioPath })
+  // /v1/diarize accepts any public HTTPS URL directly — when we have one
+  // (audio.wav's public S3 URL), skip pyannote's own presigned-upload flow
+  // entirely (no PUT of audio bytes to their storage).
+  let mediaRef = audioUrl
+  if (mediaRef) {
+    console.log(`  [pyannote] Using public S3 URL directly (skipping pyannote upload)…`)
+  } else {
+    mediaRef = buildMediaRef(audioPath, videoId)
+    const uploadUrl = await createUploadUrl({ headers, mediaRef })
+    await uploadAudio({ uploadUrl, audioPath })
+  }
 
   const payload = {
     url: mediaRef,

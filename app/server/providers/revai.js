@@ -17,32 +17,39 @@ const BASE_URL = 'https://api.rev.ai/speechtotext/v1'
 const POLL_INTERVAL_MS = 5000
 const MAX_POLLS        = 720  // 1 hr max wait
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.REVAI_ACCESS_TOKEN
   if (!apiKey) throw new Error('REVAI_ACCESS_TOKEN is not set')
 
   const authHeaders = { Authorization: `Bearer ${apiKey}` }
-
-  // ── Step 1: Submit job via multipart upload ────────────────────────────────
-  const form = new FormData()
-  form.append('media', fs.createReadStream(audioPath), { filename: 'audio.wav' })
 
   const jobOptions = {
     diarization_type: 'premium',
     remove_disfluencies: false,
     language: language || 'en',
   }
-  form.append('options', JSON.stringify(jobOptions), { contentType: 'application/json' })
 
-  console.log(`  [revai] Submitting job (language=${jobOptions.language})…`)
-
+  // ── Step 1: Submit job — via source_config (URL, no upload) or multipart ──
   let jobId
   try {
-    const res = await axios.post(`${BASE_URL}/jobs`, form, {
-      headers: { ...authHeaders, ...form.getHeaders() },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    })
+    let res
+    if (audioUrl) {
+      console.log(`  [revai] Submitting job via source_config (language=${jobOptions.language}, no upload)…`)
+      res = await axios.post(`${BASE_URL}/jobs`,
+        { source_config: { url: audioUrl }, ...jobOptions },
+        { headers: { ...authHeaders, 'Content-Type': 'application/json' } })
+    } else {
+      const form = new FormData()
+      form.append('media', fs.createReadStream(audioPath), { filename: 'audio.wav' })
+      form.append('options', JSON.stringify(jobOptions), { contentType: 'application/json' })
+
+      console.log(`  [revai] Submitting job (language=${jobOptions.language})…`)
+      res = await axios.post(`${BASE_URL}/jobs`, form, {
+        headers: { ...authHeaders, ...form.getHeaders() },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      })
+    }
     jobId = res.data.id
   } catch (err) {
     const msg = err.response?.data?.title || err.response?.data?.message || err.message
