@@ -20,8 +20,9 @@ export const removeSavedClip = (videoId, savedId, fallbackMsg) =>
   del(`/api/clips/${videoId}/saved/${savedId}`, fallbackMsg)
 
 // GET /api/clips/:id/suggest/stream (SSE, video method) → raw EventSource.
-export const openSuggestStream = (videoId, { method, bucket, count }, handlers) => {
+export const openSuggestStream = (videoId, { method, bucket, count, model }, handlers) => {
   const params = new URLSearchParams({ method, bucket, count: String(count) })
+  if (model) params.set('model', model)
   return openEventStream(`/api/clips/${videoId}/suggest/stream?${params.toString()}`, handlers)
 }
 

@@ -128,6 +128,9 @@ function ClipsEditor({ videoId }) {
   const [method, setMethod] = useState(
     () => searchParams.get('method') || localStorage.getItem('clip_method') || 'subtitles'
   )
+  const [videoModel, setVideoModel] = useState(
+    () => searchParams.get('vmodel') || localStorage.getItem('clip_video_model') || 'gemini-2.5-flash'
+  )
   const [bucket, setBucket] = useState(searchParams.get('bucket') || 'auto')
   const [count, setCount] = useState(parseInt(searchParams.get('count'), 10) || 3)
 
@@ -148,10 +151,12 @@ function ClipsEditor({ videoId }) {
   useEffect(() => {
     const next = { method, suggestProvider, bucket, count: String(count) }
     if (selectedTranscriptProvider) next.transcriptProvider = selectedTranscriptProvider
+    if (method === 'video') next.vmodel = videoModel
     setSearchParams(next, { replace: true })
     localStorage.setItem('clip_suggest_provider', suggestProvider)
     localStorage.setItem('clip_method', method)
-  }, [method, suggestProvider, selectedTranscriptProvider, bucket, count]) // eslint-disable-line
+    localStorage.setItem('clip_video_model', videoModel)
+  }, [method, suggestProvider, selectedTranscriptProvider, videoModel, bucket, count]) // eslint-disable-line
 
   // ── discover the video + its transcript providers ──────────────────────────
   useEffect(() => {
@@ -250,7 +255,7 @@ function ClipsEditor({ videoId }) {
       setAnalyzePhase(null)
     }
 
-    es = openSuggestStream(videoId, { method: 'video', bucket, count }, {
+    es = openSuggestStream(videoId, { method: 'video', bucket, count, model: videoModel }, {
       onMessage: (ev) => {
         if (ev.type === 'start') {
           setAnalyzePhase({ phase: 'start', percent: 0 })
@@ -387,6 +392,8 @@ function ClipsEditor({ videoId }) {
             onTranscriptProvider={setSelectedTranscriptProvider}
             suggestProvider={suggestProvider}
             onSuggestProvider={setSuggestProvider}
+            videoModel={videoModel}
+            onVideoModel={setVideoModel}
             bucket={bucket}
             onBucket={setBucket}
             count={count}

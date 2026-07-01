@@ -33,6 +33,7 @@ export default function EditorPage() {
   const [videoMeta, setVideoMeta] = useState(null)
   const [transcription, setTranscription] = useState(null)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [isLoadingTranscription, setIsLoadingTranscription] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState(
     searchParams.get('provider') || 'assemblyai'
   )
@@ -84,12 +85,21 @@ export default function EditorPage() {
   // loads), on provider switch, and on videoId change.
   useEffect(() => {
     if (!videoId || availableProviders.length === 0) return
-    if (!availableProviders.includes(selectedProvider)) { setTranscription(null); return }
+    if (!availableProviders.includes(selectedProvider)) {
+      setTranscription(null)
+      setIsLoadingTranscription(false)
+      return
+    }
 
+    // Clear stale transcription from prior provider + show loader while the
+    // stored file is fetched (typically pulled from S3, non-trivial latency).
     let cancelled = false
+    setTranscription(null)
+    setIsLoadingTranscription(true)
     getTranscriptionOrNull(videoId, selectedProvider)
       .then(data => { if (!cancelled && data) setTranscription(data) })
       .catch(() => {})
+      .finally(() => { if (!cancelled) setIsLoadingTranscription(false) })
     return () => { cancelled = true }
   }, [videoId, selectedProvider, availableProviders])
 
@@ -307,6 +317,7 @@ export default function EditorPage() {
                 <TranscriptionPanel
                   transcription={transcription}
                   isTranscribing={isTranscribing}
+                  isLoadingTranscription={isLoadingTranscription}
                   selectedProvider={selectedProvider}
                   onProviderChange={setSelectedProvider}
                   onTranscribe={handleTranscribe}

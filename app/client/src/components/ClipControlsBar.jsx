@@ -22,6 +22,11 @@ export const METHODS = [
   { id: 'video',     label: 'Video understanding' },
 ]
 export const VIDEO_MODEL = 'gemini-2.5-flash'
+// Video-understanding model toggle. Must match server config/constants VIDEO_MODELS.
+export const VIDEO_MODELS = [
+  { id: 'gemini-2.5-flash', label: 'Flash', model: 'gemini-2.5-flash · cheap, fast', hint: '~$0.03 / 5 min' },
+  { id: 'gemini-2.5-pro',   label: 'Pro',   model: 'gemini-2.5-pro · best adherence', hint: 'sharper · ~4× cost' },
+]
 
 const COUNTS = [3, 4, 5]
 
@@ -108,12 +113,14 @@ export default function ClipControlsBar({
   method = 'subtitles', onMethod,
   transcriptProviders, transcriptProvider, onTranscriptProvider,
   suggestProvider, onSuggestProvider,
+  videoModel = VIDEO_MODEL, onVideoModel,
   bucket, onBucket, count, onCount,
   onSuggest, suggesting, disabled,
 }) {
   const countOpts = COUNTS.map(n => ({ id: n, label: String(n) }))
   const isVideo = method === 'video'
   const busy = disabled || suggesting
+  const videoHint = (VIDEO_MODELS.find(m => m.id === videoModel) || VIDEO_MODELS[0]).hint
 
   return (
     <div style={{
@@ -132,18 +139,19 @@ export default function ClipControlsBar({
       </Field>
 
       {isVideo ? (
-        // Video understanding is Gemini-only — no transcript/provider pickers.
+        // Video understanding is Gemini-only — pick flash (cheap) or pro (sharper).
         <Field label="Model">
-          <div
-            title="Gemini watches the raw video (audio + frames)"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, height: 30,
-              padding: '0 12px', borderRadius: 8, border: '1px solid var(--border-sub)',
-              background: 'var(--hover-overlay)', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap',
-            }}
-          >
-            <Film size={13} color="var(--accent)" /> {VIDEO_MODEL}
-            <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>· ~$0.03 / 5 min</span>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Segmented
+              options={VIDEO_MODELS}
+              value={videoModel}
+              onChange={onVideoModel}
+              disabled={busy}
+              ariaLabel="Video understanding model"
+            />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-faint)', fontSize: 11, whiteSpace: 'nowrap' }}>
+              <Film size={12} color="var(--accent)" /> {videoHint}
+            </span>
           </div>
         </Field>
       ) : (

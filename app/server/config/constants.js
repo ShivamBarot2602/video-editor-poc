@@ -39,6 +39,10 @@ const DEFAULT_RES_MAX_S = 3600
 // Requested clip count is clamped into [MIN, MAX].
 const CLIP_COUNT_MIN = 3
 const CLIP_COUNT_MAX = 5
+// Video-understanding models the user can pick (flash = cheap default, pro =
+// better instruction-following). First entry is the default.
+const VIDEO_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']
+const VIDEO_MODEL_DEFAULT = 'gemini-2.5-flash'
 
 module.exports = {
   MAX_FILE_SIZE_MB,
@@ -54,4 +58,6 @@ module.exports = {
   DEFAULT_RES_MAX_S,
   CLIP_COUNT_MIN,
   CLIP_COUNT_MAX,
+  VIDEO_MODELS,
+  VIDEO_MODEL_DEFAULT,
 }

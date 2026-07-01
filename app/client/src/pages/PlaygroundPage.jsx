@@ -13,7 +13,7 @@ import { getTranscriptionOrNull, transcribe, prepare } from '../api/transcriptio
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
 
-function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error }) {
+function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error, isRunning }) {
   const segments = transcription?.segments || null
   const rowRefs = useRef({})
   const listRef = useRef(null)
@@ -75,7 +75,12 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
       <div ref={listRef} style={{ flex: 1, overflowY: 'auto' }}>
         {!segments ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: '0 16px' }}>
-            {error ? (
+            {isRunning ? (
+              <>
+                <Loader2 size={16} style={{ color: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Transcribing with {prov?.label || providerId}…</span>
+              </>
+            ) : error ? (
               <>
                 <span style={{ color: 'var(--error, #f87171)', fontSize: 13 }}>✕</span>
                 <span style={{ color: 'var(--error, #f87171)', fontSize: 11, textAlign: 'center', lineHeight: 1.5, wordBreak: 'break-word' }}>{error}</span>
@@ -582,6 +587,7 @@ export default function PlaygroundPage() {
               currentTime={currentTime}
               disabledProviderId={rightProvider}
               error={errors[leftProvider] || null}
+              isRunning={!!running[leftProvider]}
             />
           </Panel>
           <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
@@ -594,6 +600,7 @@ export default function PlaygroundPage() {
               currentTime={currentTime}
               disabledProviderId={leftProvider}
               error={errors[rightProvider] || null}
+              isRunning={!!running[rightProvider]}
             />
           </Panel>
         </Group>
