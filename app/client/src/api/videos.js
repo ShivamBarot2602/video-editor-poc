@@ -1,7 +1,10 @@
-import { getJson, postJson } from './http'
+import { getJson, getJsonOrNull, postJson } from './http'
 
 // GET /api/videos — list all video sessions.
 export const listVideos = () => getJson('/api/videos')
+
+// GET /api/videos/:id — a single video's metadata, or null if not found.
+export const getVideoOrNull = (videoId) => getJsonOrNull(`/api/videos/${videoId}`, null)
 
 // Upload a video. Same contract as before — resolves with { videoId, ... } and
 // reports 0–100 progress — but the bytes now go BROWSER → S3 directly via a

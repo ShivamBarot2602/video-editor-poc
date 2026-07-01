@@ -21,7 +21,7 @@ const PROVIDER = 'mistral'
 const MODEL    = 'voxtral-mini-latest'
 const BASE_URL = 'https://api.mistral.ai'
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.MISTRAL_API_KEY
   if (!apiKey) throw new Error('MISTRAL_API_KEY is not set')
 
@@ -29,26 +29,27 @@ module.exports = async function run({ audioPath, language }) {
   const wantDiarize = true
   const allowWordTimestamps = wantWordTimestamps && !wantDiarize
 
-  const form = new FormData()
-  form.append('model', MODEL)
-  form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
-  form.append('diarize', String(wantDiarize))
+  const timestampGranularity = wantDiarize || !language ? 'segment' : (allowWordTimestamps ? 'word' : null)
 
-  if (language) {
-    form.append('language', language)
-  }
-
-  if (wantDiarize) {
-    form.append('timestamp_granularities[]', 'segment')
-  } else if (allowWordTimestamps) {
-    // Word-level timestamps only available when language is auto-detected
-    form.append('timestamp_granularities[]', 'word')
-  } else if (!language) {
-    form.append('timestamp_granularities[]', 'segment')
-  }
-
+  // Mistral's /v1/audio/transcriptions is multipart/form-data ONLY — a plain
+  // JSON body 422s even when using file_url ("make sure the request is
+  // formatted as a multipart/form-data request"), despite file_url being
+  // documented as a request field alongside file. So file_url still goes
+  // through FormData, just as a text field instead of a file stream.
   let response
   try {
+    const form = new FormData()
+    form.append('model', MODEL)
+    if (audioUrl) {
+      console.log(`  [mistral] Transcribing via file_url (no upload)…`)
+      form.append('file_url', audioUrl)
+    } else {
+      form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
+    }
+    form.append('diarize', String(wantDiarize))
+    if (language) form.append('language', language)
+    if (timestampGranularity) form.append('timestamp_granularities[]', timestampGranularity)
+
     const res = await axios.post(`${BASE_URL}/v1/audio/transcriptions`, form, {
       headers: {
         Authorization: `Bearer ${apiKey}`,

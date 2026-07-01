@@ -8,11 +8,12 @@
 // Reads process.env, so this module must load after dotenv (it does — routes are
 // required by index.js after dotenv.config()).
 const MAX_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '500', 10)
+// Video only — burn/thumbnail/clips all require an actual video stream, so
+// audio-only uploads (stored as original.<video-ext> via normalizeVideoExtension)
+// can't use this app's core features anyway.
 const ALLOWED_MIME_TYPES = [
   'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
   'video/webm', 'video/mpeg', 'video/3gpp', 'video/x-flv',
-  'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/ogg',
-  'audio/flac', 'audio/webm',
 ]
 
 // ─── Thumbnail pipeline (routes/thumbnails) ──────────────────────────────────

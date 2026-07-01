@@ -404,11 +404,11 @@ export default function PlaygroundPage() {
     }
 
     // ── Step 2: Fire all providers in parallel ────────────────────────────
-    // Each provider gets skipExtract: true so the server reuses the prepared
-    // audio.wav instead of re-running ffmpeg N times.
+    // The server reuses audio.wav automatically once it exists in S3 (the
+    // prepare() call above created it) — no per-request flag needed.
     const transcribeOne = async (p) => {
       try {
-        const res = await transcribe(selectedVideo.id, { provider: p.id, skipExtract: true })
+        const res = await transcribe(selectedVideo.id, { provider: p.id })
         if (res.ok) {
           const data = await res.json()
           // Update this provider's result as soon as it resolves — don't wait for others

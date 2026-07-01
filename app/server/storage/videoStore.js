@@ -83,6 +83,33 @@ async function listSessionIds() {
   return [...ids]
 }
 
+// Raw object listing (key/size/lastModified) for a single session — ONE S3
+// call, so callers can derive existence/providers/size/etc. without N more
+// round trips. Keys come back relative to the session (prefix stripped).
+async function listSessionObjects(id) {
+  const objects = await s3.listObjects(videoPrefix(id))
+  const base = videoPrefix(id)
+  return objects.map(o => ({ ...o, rel: o.key.slice(base.length) }))
+}
+
+// Raw object listing across EVERY session in one S3 call, grouped by videoId.
+// Same shape as listSessionObjects, keyed by id — avoids listing per-session
+// when building something like the Recent Videos list.
+async function listAllSessionObjects() {
+  const objects = await s3.listObjects(C.key(''))
+  const base = C.key('')
+  const byId = new Map()
+  for (const o of objects) {
+    const rest = o.key.slice(base.length)
+    const id = rest.split('/')[0]
+    if (!id) continue
+    const rel = rest.slice(id.length + 1)
+    if (!byId.has(id)) byId.set(id, [])
+    byId.get(id).push({ ...o, rel })
+  }
+  return byId
+}
+
 // ─── original / derived media ────────────────────────────────────────────────
 
 // Basename (e.g. "original.mp4") of the uploaded source, or null.
@@ -163,6 +190,12 @@ async function downloadAudio(id, destDir) {
   const local = path.join(destDir, FILES.AUDIO)
   await s3.downloadToFile(audioKey(id), local)
   return local
+}
+
+// Public GET URL for audio.wav — passed directly to STT providers that accept
+// a URL instead of an uploaded file, so bytes never round-trip through us.
+function publicUrlAudio(id) {
+  return C.publicUrl(audioKey(id))
 }
 
 async function uploadAudio(id, localPath) {
@@ -483,12 +516,12 @@ async function uploadLocalDir(localDir, keyFor) {
 
 module.exports = {
   // boot / session
-  init, newId, videoExists, listSessionIds,
+  init, newId, videoExists, listSessionIds, listSessionObjects, listAllSessionObjects,
   // original / media
   findOriginalName, originalExists, originalKey, statOriginal,
   downloadOriginal, publicUrlOriginal,
   burnedKey, findBurnedName, hasBurned, uploadBurned, publicUrlBurned,
-  audioKey, audioExists, downloadAudio, uploadAudio,
+  audioKey, audioExists, downloadAudio, uploadAudio, publicUrlAudio,
   writeAss, thumbnailV2Exists, uploadThumbnailV2, publicUrlThumbnailV2,
   // meta
   readMeta, writeMeta,

@@ -9,27 +9,33 @@ const { buildMetadata, formatTranscript } = require('./utils')
 const PROVIDER = 'deepgram'
 const MODEL = 'nova-3'
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY is not set')
 
   const { createClient } = await import('@deepgram/sdk')
   const client = createClient(apiKey)
 
-  console.log(`  [deepgram] Uploading to Nova-3…`)
-  const audioBuffer = fs.readFileSync(audioPath)
+  const options = {
+    model: MODEL,
+    smart_format: true,
+    diarize: true,
+    utterances: true,
+    words: true,
+    ...(language ? { language } : { detect_language: true }),
+  }
 
-  const { result, error } = await client.listen.prerecorded.transcribeFile(
-    audioBuffer,
-    {
-      model: MODEL,
-      smart_format: true,
-      diarize: true,
-      utterances: true,
-      words: true,
-      ...(language ? { language } : { detect_language: true }),
-    }
-  )
+  // URL-based transcription (transcribeUrl) skips the upload entirely —
+  // Deepgram fetches audio.wav from S3 itself.
+  let result, error
+  if (audioUrl) {
+    console.log(`  [deepgram] Transcribing via URL (no upload)…`)
+    ;({ result, error } = await client.listen.prerecorded.transcribeUrl({ url: audioUrl }, options))
+  } else {
+    console.log(`  [deepgram] Uploading to Nova-3…`)
+    const audioBuffer = fs.readFileSync(audioPath)
+    ;({ result, error } = await client.listen.prerecorded.transcribeFile(audioBuffer, options))
+  }
 
   if (error) throw new Error(`Deepgram error: ${JSON.stringify(error)}`)
 

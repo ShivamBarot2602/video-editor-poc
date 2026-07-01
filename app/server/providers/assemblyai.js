@@ -8,15 +8,17 @@ const { buildMetadata, formatTranscript } = require("./utils");
 const PROVIDER = "assemblyai";
 const MODEL = "universal-2";
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.ASSEMBLYAI_API_KEY;
   if (!apiKey) throw new Error("ASSEMBLYAI_API_KEY is not set");
 
   const { AssemblyAI } = require("assemblyai");
   const client = new AssemblyAI({ apiKey });
 
+  // `audio` accepts either a public URL (skips AssemblyAI's own upload step)
+  // or a local path (SDK uploads it for us).
   const params = {
-    audio: audioPath,
+    audio: audioUrl || audioPath,
     speaker_labels: true,
     speech_models: ["universal-2"],
     ...(language
@@ -29,7 +31,7 @@ module.exports = async function run({ audioPath, language }) {
         }),
   };
 
-  console.log(`  [assemblyai] Uploading and transcribing…`);
+  console.log(audioUrl ? `  [assemblyai] Transcribing via URL (no upload)…` : `  [assemblyai] Uploading and transcribing…`);
   const transcript = await client.transcripts.transcribe(params);
 
   if (transcript.status === "error") {

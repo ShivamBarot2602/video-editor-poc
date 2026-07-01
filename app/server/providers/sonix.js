@@ -36,21 +36,25 @@ async function pollUntilDone(apiKey, mediaId) {
   throw new Error('Sonix transcription timed out after 30 minutes')
 }
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.SONIX_API_KEY
   if (!apiKey) throw new Error('SONIX_API_KEY is not set')
 
   // Language is required by Sonix API; default to English if not provided
   const languageCode = language || 'en'
 
-  // Upload file
-  console.log(`  [sonix] Uploading file…`)
   const form = new FormData()
-  form.append('file', fs.createReadStream(audioPath), {
-    filename: path.basename(audioPath),
-    contentType: 'audio/wav',
-  })
-  
+  if (audioUrl) {
+    console.log(`  [sonix] Submitting via file_url (no upload)…`)
+    form.append('file_url', audioUrl)
+  } else {
+    console.log(`  [sonix] Uploading file…`)
+    form.append('file', fs.createReadStream(audioPath), {
+      filename: path.basename(audioPath),
+      contentType: 'audio/wav',
+    })
+  }
+
   form.append('language', languageCode)
 
   const uploadRes = await axios.post(`${BASE_URL}/media`, form, {

@@ -22,25 +22,29 @@ const MODEL    = 'grok-stt'
 const BASE_URL = 'https://api.x.ai'
 const LIMIT_MB = 500
 
-module.exports = async function run({ audioPath, language }) {
+module.exports = async function run({ audioPath, audioUrl, language }) {
   const apiKey = process.env.XAI_API_KEY
   if (!apiKey) throw new Error('XAI_API_KEY is not set')
-
-  const sizeMB = getFileSizeMB(audioPath)
-  if (sizeMB > LIMIT_MB) {
-    throw new Error(
-      `Audio is ${sizeMB.toFixed(1)} MB — xAI has a ${LIMIT_MB} MB limit. ` +
-      `Use AssemblyAI or Deepgram for longer videos.`
-    )
-  }
 
   // file must be the last field in the multipart form (per xAI docs)
   const form = new FormData()
   form.append('diarize', 'true')
   if (language) form.append('language', language)
-  form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
 
-  console.log(`  [xai] Transcribing ${sizeMB.toFixed(1)} MB with ${MODEL}…`)
+  if (audioUrl) {
+    form.append('url', audioUrl)
+    console.log(`  [xai] Transcribing via URL with ${MODEL} (no upload)…`)
+  } else {
+    const sizeMB = getFileSizeMB(audioPath)
+    if (sizeMB > LIMIT_MB) {
+      throw new Error(
+        `Audio is ${sizeMB.toFixed(1)} MB — xAI has a ${LIMIT_MB} MB limit. ` +
+        `Use AssemblyAI or Deepgram for longer videos.`
+      )
+    }
+    form.append('file', fs.createReadStream(audioPath), { filename: 'audio.wav' })
+    console.log(`  [xai] Transcribing ${sizeMB.toFixed(1)} MB with ${MODEL}…`)
+  }
 
   let response
   try {

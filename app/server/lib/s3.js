@@ -118,16 +118,23 @@ async function head(key) {
   }
 }
 
-// All keys under a prefix (paginated). Returns full keys (including the prefix).
-async function listKeys(prefix) {
-  const keys = []
+// Full object listing under a prefix (paginated): [{ key, size, lastModified }].
+// One round trip per 1000 objects — use this (not N separate listKeys calls)
+// whenever multiple facts about the same prefix are needed at once.
+async function listObjects(prefix) {
+  const out = []
   let ContinuationToken
   do {
-    const out = await getClient().send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken }))
-    for (const o of out.Contents || []) keys.push(o.Key)
-    ContinuationToken = out.IsTruncated ? out.NextContinuationToken : undefined
+    const res = await getClient().send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken }))
+    for (const o of res.Contents || []) out.push({ key: o.Key, size: o.Size, lastModified: o.LastModified })
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
   } while (ContinuationToken)
-  return keys
+  return out
+}
+
+// Convenience: just the keys, for call sites that only need existence/names.
+async function listKeys(prefix) {
+  return (await listObjects(prefix)).map(o => o.key)
 }
 
 // ─── deletes ───────────────────────────────────────────────────────────────--
@@ -164,6 +171,7 @@ module.exports = {
   downloadToFile,
   exists,
   head,
+  listObjects,
   listKeys,
   deleteObject,
   deleteByPrefix,

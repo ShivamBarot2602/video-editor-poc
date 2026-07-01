@@ -1,9 +1,9 @@
 const transcribeService = require('../services/transcribe')
 
-// POST /api/transcribe/:id  { provider, language, skipExtract }
+// POST /api/transcribe/:id  { provider, language }
 async function run(req, res) {
   const { id } = req.params
-  const { provider = 'assemblyai', language, skipExtract = false } = req.body
+  const { provider = 'assemblyai', language } = req.body
 
   if (!await transcribeService.videoExists(id)) {
     return res.status(404).json({ error: 'Video not found' })
@@ -16,7 +16,7 @@ async function run(req, res) {
   }
 
   try {
-    const result = await transcribeService.run({ id, provider, language, skipExtract })
+    const result = await transcribeService.run({ id, provider, language })
     res.json(result)
   } catch (err) {
     console.error(`[${id}][${provider}] Transcription error:`, err.message)
