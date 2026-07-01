@@ -15,6 +15,11 @@ const ALLOWED_MIME_TYPES = [
   'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
   'video/webm', 'video/mpeg', 'video/3gpp', 'video/x-flv',
 ]
+// Doubles as the single-vs-multipart threshold: a file that fits in one part
+// just gets a plain presigned PUT, no multipart machinery. S3 allows parts
+// from 5MiB-5GiB (no minimum on the last part) — 10MB keeps part counts
+// reasonable (500MB max upload ÷ 10MB = 50 parts, well under S3's 10,000 cap).
+const UPLOAD_PART_SIZE_BYTES = 10 * 1024 * 1024
 
 // ─── Thumbnail pipeline (routes/thumbnails) ──────────────────────────────────
 const MAX_EXTRACT = 60            // max candidate frames to extract
@@ -38,6 +43,7 @@ const CLIP_COUNT_MAX = 5
 module.exports = {
   MAX_FILE_SIZE_MB,
   ALLOWED_MIME_TYPES,
+  UPLOAD_PART_SIZE_BYTES,
   MAX_EXTRACT,
   POST_DEDUP_KEEP,
   TOP_PICK_COUNT,

@@ -17,9 +17,13 @@ const {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
 } = require('@aws-sdk/client-s3')
 const { Upload } = require('@aws-sdk/lib-storage')
-const { createPresignedPost: sdkCreatePresignedPost } = require('@aws-sdk/s3-presigned-post')
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 
 const { S3_BUCKET, AWS_REGION, credentials, PRESIGN_EXPIRES_S } = require('../config/storage')
 
@@ -156,10 +160,49 @@ async function deleteByPrefix(prefix) {
 
 // ─── presigning (upload only) ──────────────────────────────────────────────--
 
-// Presigned POST for browser → S3 direct upload. `conditions` enforce size/type
-// at S3 (e.g. ['content-length-range', 0, max]); `fields` are echoed back.
-function createPresignedPost(key, { conditions = [], fields = {}, expiresIn = PRESIGN_EXPIRES_S } = {}) {
-  return sdkCreatePresignedPost(getClient(), { Bucket, Key: key, Conditions: conditions, Fields: fields, Expires: expiresIn })
+// Presigned PUT for a browser → S3 direct single-request upload (small files —
+// whatever fits in one multipart part, so no multipart machinery needed at all).
+// `contentType` is signed in; the caller MUST send an identical Content-Type
+// header on the actual PUT or S3 rejects it with a signature mismatch.
+function presignPut(key, contentType, { expiresIn = PRESIGN_EXPIRES_S } = {}) {
+  const cmd = new PutObjectCommand({
+    Bucket, Key: key,
+    ...(contentType ? { ContentType: contentType } : {}),
+  })
+  return getSignedUrl(getClient(), cmd, { expiresIn })
+}
+
+// Start a multipart upload; ContentType is set here (once) — UploadPart itself
+// carries no content-type. Returns the uploadId used by every subsequent call.
+async function createMultipartUpload(key, contentType) {
+  const out = await getClient().send(new CreateMultipartUploadCommand({
+    Bucket, Key: key,
+    ...(contentType ? { ContentType: contentType } : {}),
+  }))
+  return out.UploadId
+}
+
+// Presigned PUT for one part of a multipart upload. No body to sign — the
+// browser PUTs raw bytes directly and must read the ETag off the response.
+function presignUploadPart(key, uploadId, partNumber, { expiresIn = PRESIGN_EXPIRES_S } = {}) {
+  const cmd = new UploadPartCommand({ Bucket, Key: key, UploadId: uploadId, PartNumber: partNumber })
+  return getSignedUrl(getClient(), cmd, { expiresIn })
+}
+
+// Finalize a multipart upload. `parts` is [{ partNumber, eTag }] — every part
+// the client successfully uploaded, order doesn't matter (S3 sorts by PartNumber).
+async function completeMultipartUpload(key, uploadId, parts) {
+  await getClient().send(new CompleteMultipartUploadCommand({
+    Bucket, Key: key, UploadId: uploadId,
+    MultipartUpload: { Parts: parts.map(p => ({ PartNumber: p.partNumber, ETag: p.eTag })) },
+  }))
+}
+
+// Abort a multipart upload, discarding any parts already uploaded to S3. Called
+// automatically when a client-side upload fails past its retry budget, so
+// orphaned parts don't sit around until the bucket lifecycle rule sweeps them.
+async function abortMultipartUpload(key, uploadId) {
+  await getClient().send(new AbortMultipartUploadCommand({ Bucket, Key: key, UploadId: uploadId }))
 }
 
 module.exports = {
@@ -175,5 +218,9 @@ module.exports = {
   listKeys,
   deleteObject,
   deleteByPrefix,
-  createPresignedPost,
+  presignPut,
+  createMultipartUpload,
+  presignUploadPart,
+  completeMultipartUpload,
+  abortMultipartUpload,
 }

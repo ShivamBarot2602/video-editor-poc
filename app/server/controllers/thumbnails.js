@@ -39,6 +39,21 @@ async function serveFile(req, res) {
   }
 }
 
+// GET /api/thumbnails/:videoId/download/:relpath — force-download the file.
+// Proxies the bytes same-origin with Content-Disposition: attachment so the
+// browser saves it (a redirect to the public S3 URL would open inline instead).
+async function downloadFile(req, res) {
+  try {
+    const { buffer, filename, contentType } = await thumbnailService.resolveFileDownload(req.params.videoId, req.params.relpath)
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Length', buffer.length)
+    res.send(buffer)
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message })
+  }
+}
+
 // GET /api/thumbnails/:videoId/stream — SSE pipeline
 async function stream(req, res) {
   const { videoId } = req.params
@@ -104,4 +119,4 @@ async function stream(req, res) {
   }
 }
 
-module.exports = { get, patch, serveFile, stream }
+module.exports = { get, patch, serveFile, downloadFile, stream }

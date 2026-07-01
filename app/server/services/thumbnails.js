@@ -35,6 +35,25 @@ async function resolveFileUrl(videoId, rawRelpath) {
   return store.publicUrlThumbnailFile(videoId, rel)
 }
 
+const MIME_BY_EXT = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+}
+
+// Resolve a thumbnail-subtree file to its bytes for a forced download. Returns
+// { buffer, filename, contentType }. Throws Error with .status (400 / 403 / 404).
+async function resolveFileDownload(videoId, rawRelpath) {
+  const rel = store.resolveThumbnailRelpath(videoId, rawRelpath) // throws 400 / 403
+  const buffer = await store.readThumbnailFileBuffer(videoId, rel)
+  if (!buffer) {
+    const err = new Error('File not found'); err.status = 404; throw err
+  }
+  const ext = path.extname(rel).toLowerCase()
+  const contentType = MIME_BY_EXT[ext] || 'application/octet-stream'
+  // A recognizable, filesystem-safe name: thumbnail_<id8>_<basename>.
+  const filename = `thumbnail_${videoId.slice(0, 8)}_${path.basename(rel)}`
+  return { buffer, filename, contentType }
+}
+
 /**
  * The thumbnail generation pipeline. Runs inside an ephemeral temp dir: downloads
  * the original, extracts/scores/reranks/polishes locally, uploads frames +
@@ -47,7 +66,12 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
   emit({ type: 'start' })
 
   await withTempDir(`thumbs-${videoId}`, async (dir) => {
+    console.time(`${tag} download total`)
+
     const origPath = await store.downloadOriginal(videoId, dir)
+
+    console.timeEnd(`${tag} download total`)
+    
     const framesDir = path.join(dir, 'frames')
     console.log(`${tag} Pipeline start (workDir=${dir})`)
 
@@ -280,4 +304,4 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
   })
 }
 
-module.exports = { getState, setSelectedKey, originalExists, resolveFileUrl, runPipeline }
+module.exports = { getState, setSelectedKey, originalExists, resolveFileUrl, resolveFileDownload, runPipeline }

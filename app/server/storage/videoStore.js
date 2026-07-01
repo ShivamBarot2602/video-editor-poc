@@ -396,6 +396,13 @@ function publicUrlThumbnailFile(id, rel) {
   return C.publicUrl(vkey(id, rel))
 }
 
+// Raw bytes of a thumbnail-subtree file, or null if missing. Used to proxy a
+// same-origin download (Content-Disposition: attachment) instead of redirecting
+// to the public S3 URL, which would open inline rather than download.
+async function readThumbnailFileBuffer(id, rel) {
+  return s3.getBuffer(vkey(id, rel))
+}
+
 // ─── clips ───────────────────────────────────────────────────────────────────
 
 const clipsSuggestionsKey = (id, provider) => vkey(id, P.clipsName(provider))
@@ -534,7 +541,7 @@ module.exports = {
   readThumbnailState, writeThumbnailState,
   framesExist, frameStatsExist, readFrameStats, writeFrameStats,
   downloadFrames, uploadFrames, writePolishedImage,
-  resolveThumbnailRelpath, thumbnailFileExists, publicUrlThumbnailFile,
+  resolveThumbnailRelpath, thumbnailFileExists, publicUrlThumbnailFile, readThumbnailFileBuffer,
   // clips
   clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions, listClipProviders,
   savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,

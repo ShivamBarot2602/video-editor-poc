@@ -3,13 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
-  ArrowLeft, Loader2, RefreshCw, Play, Info,
+  ArrowLeft, Loader2, RefreshCw, Play, Info, Download, Eye, X,
 } from 'lucide-react'
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
 import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
 import { listVideos } from '../api/videos'
-import { getThumbnails, patchThumbnailSelection } from '../api/thumbnails'
+import { getThumbnails } from '../api/thumbnails'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { openThumbnailStream } from '../api/thumbnails'
 
@@ -245,14 +245,9 @@ function ThumbnailsEditor({ videoId }) {
     }
   }, [])
 
-  // ─── select / unselect a thumbnail ───────────────────────────────────────
-  async function handleChoose(key) {
-    const next = state?.selectedKey === key ? null : key
-    try {
-      const s = await patchThumbnailSelection(videoId, next)
-      if (s) setState(s)
-    } catch (_) { /* ignore */ }
-  }
+  // ─── lightbox preview ─────────────────────────────────────────────────────
+  // Holds { url, downloadUrl, label } for the full-size overlay, or null.
+  const [preview, setPreview] = useState(null)
 
   // ─── derived ─────────────────────────────────────────────────────────────
   // During a live run show the progressive `runCandidates`; otherwise the saved state.
@@ -292,12 +287,11 @@ function ThumbnailsEditor({ videoId }) {
           <Panel id="thumbnails-right" defaultSize="68%" minSize="40%" style={{ overflow: 'hidden', display: 'flex' }}>
             <RightPane
               candidates={candidates}
-              selectedKey={state?.selectedKey || null}
               running={running}
               phase={phase}
               live={liveRun}
               stateLoading={stateLoading}
-              onChoose={handleChoose}
+              onPreview={setPreview}
               onSeek={(t) => {
                 if (videoRef.current && Number.isFinite(t)) {
                   videoRef.current.currentTime = t
@@ -310,6 +304,8 @@ function ThumbnailsEditor({ videoId }) {
           </Panel>
         </Group>
       </div>
+
+      <Lightbox preview={preview} onClose={() => setPreview(null)} />
     </div>
   )
 }
@@ -593,7 +589,7 @@ function PhaseDot({ state }) {
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Right pane: candidate rows                                               */
-function RightPane({ candidates, selectedKey, running, phase, live, stateLoading, onChoose, onSeek, meta, videoAspectRatio }) {
+function RightPane({ candidates, running, phase, live, stateLoading, onPreview, onSeek, meta, videoAspectRatio }) {
   const phaseLabel = (PHASES.find(p => p.id === phase)?.label) || 'Generating'
   if (stateLoading) {
     return <CenteredHint><Loader2 size={14} className="spin" /> Loading…</CenteredHint>
@@ -646,8 +642,7 @@ function RightPane({ candidates, selectedKey, running, phase, live, stateLoading
             key={c.idx}
             rank={rank + 1}
             candidate={c}
-            selectedKey={selectedKey}
-            onChoose={onChoose}
+            onPreview={onPreview}
             onSeek={onSeek}
             videoAspectRatio={videoAspectRatio}
           />
@@ -669,7 +664,7 @@ function CenteredHint({ children }) {
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Single pick row: original + N polished cells                              */
-function PickRow({ rank, candidate, selectedKey, onChoose, onSeek, videoAspectRatio }) {
+function PickRow({ rank, candidate, onPreview, onSeek, videoAspectRatio }) {
   const polishedKeys = Object.keys(candidate.polished || {})
   const cells = useMemo(() => {
     const list = [{
@@ -725,8 +720,7 @@ function PickRow({ rank, candidate, selectedKey, onChoose, onSeek, videoAspectRa
           <ThumbCell
             key={cell.key}
             cell={cell}
-            chosen={selectedKey === cell.key}
-            onChoose={() => onChoose(cell.key)}
+            onPreview={onPreview}
             timestamp={cell.providerId === 'original' ? candidate.t : null}
             aspectRatio={videoAspectRatio}
           />
@@ -762,22 +756,30 @@ function ScorePill({ score }) {
   )
 }
 
-function ThumbCell({ cell, chosen, onChoose, timestamp, aspectRatio = '16 / 9' }) {
+function ThumbCell({ cell, onPreview, timestamp, aspectRatio = '16 / 9' }) {
   const meta = PROVIDER_META[cell.providerId] || PROVIDER_META.original
   const Icon = meta.icon
   const failed = cell.status === 'error'
+  const ready = !failed && !!cell.url
+  // Same-origin download route (attachment) — swap /file/ → /download/ so the
+  // browser saves the image instead of opening the public S3 URL inline.
+  const downloadUrl = cell.url ? cell.url.replace('/file/', '/download/') : null
+
+  const cellBtn = {
+    flex: 1, fontSize: 11, padding: '5px 8px',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+    textDecoration: 'none',
+  }
 
   return (
     <div
       style={{
         background: 'var(--surface)',
-        border: `1px solid ${chosen ? 'var(--accent)' : 'var(--border)'}`,
-        outline: chosen ? '1px solid var(--accent)' : 'none',
+        border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
         position: 'relative',
-        transition: 'border-color 150ms, outline-color 150ms',
       }}
     >
       <div style={{
@@ -830,32 +832,129 @@ function ThumbCell({ cell, chosen, onChoose, timestamp, aspectRatio = '16 / 9' }
           }}>{fmtTime(timestamp)}</span>
         )}
 
-        {/* Chosen badge */}
-        {chosen && (
-          <span style={{
-            position: 'absolute', bottom: 8, right: 8,
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '4px 8px', borderRadius: 999,
-            background: 'var(--accent)', color: '#fff',
-            fontSize: 10, fontWeight: 700,
-            boxShadow: '0 2px 8px rgba(15,103,234,0.5)',
-          }}>
-            <Check size={10} strokeWidth={3} /> CHOSEN
-          </span>
-        )}
       </div>
 
       <div style={{ padding: 8, display: 'flex', gap: 6 }}>
+        {ready ? (
+          <a
+            className="btn btn-outline btn-sm"
+            style={cellBtn}
+            href={downloadUrl}
+            download
+            aria-label={`Download ${meta.label} thumbnail`}
+          >
+            <Download size={12} /> Download
+          </a>
+        ) : (
+          <button className="btn btn-outline btn-sm" style={cellBtn} disabled>
+            <Download size={12} /> Download
+          </button>
+        )}
         <button
-          className={chosen ? 'btn btn-secondary btn-sm' : 'btn btn-outline btn-sm'}
-          style={{ flex: 1, fontSize: 11, padding: '5px 8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-          onClick={onChoose}
-          disabled={failed}
-          aria-pressed={chosen}
+          className="btn btn-ghost btn-sm"
+          style={cellBtn}
+          onClick={() => onPreview({ url: cell.url, downloadUrl, label: meta.label })}
+          disabled={!ready}
+          aria-label={`Preview ${meta.label} thumbnail`}
         >
-          {chosen ? <><Check size={11} /> Chosen</> : 'Choose'}
+          <Eye size={12} /> Preview
         </button>
       </div>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* Full-size preview lightbox — Esc / backdrop / X to dismiss                 */
+function Lightbox({ preview, onClose }) {
+  const closeRef = useRef(null)
+
+  useEffect(() => {
+    if (!preview) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    // Lock background scroll while open; move focus to the close button.
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeRef.current?.focus()
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [preview, onClose])
+
+  if (!preview) return null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${preview.label} thumbnail preview`}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.82)',
+        display: 'flex', flexDirection: 'column',
+        animation: 'lb-fade 150ms ease-out',
+      }}
+    >
+      {/* Toolbar */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 16px', flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{preview.label}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {preview.downloadUrl && (
+            <a
+              className="btn btn-secondary btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, textDecoration: 'none', fontSize: 12 }}
+              href={preview.downloadUrl}
+              download
+            >
+              <Download size={13} /> Download
+            </a>
+          )}
+          <button
+            ref={closeRef}
+            className="btn btn-ghost btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#fff' }}
+            onClick={onClose}
+            aria-label="Close preview"
+          >
+            <X size={14} /> Close
+          </button>
+        </div>
+      </div>
+
+      {/* Image stage */}
+      <div
+        onClick={onClose}
+        style={{
+          flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 24px 24px',
+        }}
+      >
+        <img
+          src={preview.url}
+          alt={`${preview.label} thumbnail`}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
+            borderRadius: 'var(--radius)', boxShadow: '0 12px 48px rgba(0,0,0,0.5)',
+          }}
+        />
+      </div>
+
+      <style>{`
+        @keyframes lb-fade { from { opacity: 0 } to { opacity: 1 } }
+        @media (prefers-reduced-motion: reduce) {
+          [role="dialog"] { animation: none !important; }
+        }
+      `}</style>
     </div>
   )
 }
