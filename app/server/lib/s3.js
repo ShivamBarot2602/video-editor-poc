@@ -19,7 +19,6 @@ const {
   ListObjectsV2Command,
 } = require('@aws-sdk/client-s3')
 const { Upload } = require('@aws-sdk/lib-storage')
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 const { createPresignedPost: sdkCreatePresignedPost } = require('@aws-sdk/s3-presigned-post')
 
 const { S3_BUCKET, AWS_REGION, credentials, PRESIGN_EXPIRES_S } = require('../config/storage')
@@ -52,12 +51,13 @@ async function putObject(key, body, contentType) {
 }
 
 // Stream a local file up via managed multipart upload (handles large videos).
-async function uploadFile(key, localPath, contentType) {
+async function uploadFile(key, localPath, contentType, contentDisposition) {
   const up = new Upload({
     client: getClient(),
     params: {
       Bucket, Key: key, Body: fs.createReadStream(localPath),
       ...(contentType ? { ContentType: contentType } : {}),
+      ...(contentDisposition ? { ContentDisposition: contentDisposition } : {}),
     },
   })
   await up.done()
@@ -147,19 +147,7 @@ async function deleteByPrefix(prefix) {
   }
 }
 
-// ─── presigning ──────────────────────────────────────────────────────────────
-
-// Presigned GET URL for delivery (302-redirect target). expiresIn in seconds.
-// responseContentDisposition forces a download (the `download` attr is ignored
-// cross-origin, so we set it on the URL instead).
-function presignGet(key, { expiresIn = PRESIGN_EXPIRES_S, responseContentType, responseContentDisposition } = {}) {
-  const cmd = new GetObjectCommand({
-    Bucket, Key: key,
-    ...(responseContentType ? { ResponseContentType: responseContentType } : {}),
-    ...(responseContentDisposition ? { ResponseContentDisposition: responseContentDisposition } : {}),
-  })
-  return getSignedUrl(getClient(), cmd, { expiresIn })
-}
+// ─── presigning (upload only) ──────────────────────────────────────────────--
 
 // Presigned POST for browser → S3 direct upload. `conditions` enforce size/type
 // at S3 (e.g. ['content-length-range', 0, max]); `fields` are echoed back.
@@ -179,6 +167,5 @@ module.exports = {
   listKeys,
   deleteObject,
   deleteByPrefix,
-  presignGet,
   createPresignedPost,
 }

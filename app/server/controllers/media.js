@@ -9,7 +9,7 @@ const { SAFE_TOKEN } = require('../config/constants')
 async function serveOriginal(req, res) {
   const { id } = req.params
   if (!await mediaService.videoExists(id)) return res.status(404).json({ error: 'Video not found' })
-  const url = await mediaService.presignOriginal(id)
+  const url = await mediaService.originalUrl(id)
   if (!url) return res.status(404).json({ error: 'Original file missing' })
   res.redirect(302, url)
 }
@@ -18,7 +18,7 @@ async function serveOriginal(req, res) {
 async function serveBurned(req, res) {
   const { id } = req.params
   if (!await mediaService.videoExists(id)) return res.status(404).json({ error: 'Video not found' })
-  const url = await mediaService.presignBurned(id)
+  const url = await mediaService.burnedUrl(id)
   if (!url) return res.status(404).json({ error: 'Burned video not ready' })
   res.redirect(302, url)
 }
@@ -27,7 +27,7 @@ async function serveBurned(req, res) {
 async function serveClip(req, res) {
   const { clipId } = req.params
   if (!SAFE_TOKEN.test(clipId)) return res.status(400).json({ error: 'Invalid clip id' })
-  const url = await mediaService.presignClip(req.params.id, clipId)
+  const url = await mediaService.clipUrl(req.params.id, clipId)
   if (!url) return res.status(404).json({ error: 'Clip not exported yet' })
   res.redirect(302, url)
 }

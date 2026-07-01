@@ -119,11 +119,11 @@ async function downloadOriginal(id, destDir) {
   return local
 }
 
-// Presigned GET URL for the source (inline playback). Null if missing.
-async function presignOriginal(id) {
+// Public GET URL for the source (inline playback, Range-capable). Null if missing.
+async function publicUrlOriginal(id) {
   const name = await findOriginalName(id)
   if (!name) return null
-  return s3.presignGet(vkey(id, name), { responseContentType: contentTypeFor(name) })
+  return C.publicUrl(vkey(id, name))
 }
 
 // burned.<ext>
@@ -140,18 +140,16 @@ async function hasBurned(id) {
 
 async function uploadBurned(id, ext, localPath) {
   const key = burnedKey(id, ext)
-  await s3.uploadFile(key, localPath, contentTypeFor(key))
+  // Burned video is a download link in the UI. Objects are public (no per-request
+  // response-content-disposition override on unsigned GETs), so bake the
+  // attachment disposition into the object metadata at upload time.
+  await s3.uploadFile(key, localPath, contentTypeFor(key), `attachment; filename="${P.burnedName(ext)}"`)
 }
 
-async function presignBurned(id) {
+async function publicUrlBurned(id) {
   const name = await findBurnedName(id)
   if (!name) return null
-  // Burned video is a download link in the UI — force attachment (the `download`
-  // attribute is ignored on a cross-origin redirect to S3).
-  return s3.presignGet(vkey(id, name), {
-    responseContentType: contentTypeFor(name),
-    responseContentDisposition: `attachment; filename="${name}"`,
-  })
+  return C.publicUrl(vkey(id, name))
 }
 
 // audio.wav
@@ -187,8 +185,8 @@ async function uploadThumbnailV2(id, localPath) {
   await s3.uploadFile(thumbnailV2Key(id), localPath, 'image/jpeg')
 }
 
-async function presignThumbnailV2(id) {
-  return s3.presignGet(thumbnailV2Key(id), { responseContentType: 'image/jpeg' })
+function publicUrlThumbnailV2(id) {
+  return C.publicUrl(thumbnailV2Key(id))
 }
 
 // ─── meta ────────────────────────────────────────────────────────────────────
@@ -361,8 +359,8 @@ async function thumbnailFileExists(id, rel) {
   return s3.exists(vkey(id, rel))
 }
 
-async function presignThumbnailFile(id, rel) {
-  return s3.presignGet(vkey(id, rel), { responseContentType: contentTypeFor(rel) })
+function publicUrlThumbnailFile(id, rel) {
+  return C.publicUrl(vkey(id, rel))
 }
 
 // ─── clips ───────────────────────────────────────────────────────────────────
@@ -425,9 +423,9 @@ async function uploadClipOutput(id, clipId, localPath) {
   await s3.uploadFile(clipOutputKey(id, clipId), localPath, 'video/mp4')
 }
 
-async function presignClipOutput(id, clipId) {
+async function publicUrlClipOutput(id, clipId) {
   if (!(await clipOutputExists(id, clipId))) return null
-  return s3.presignGet(clipOutputKey(id, clipId), { responseContentType: 'video/mp4' })
+  return C.publicUrl(clipOutputKey(id, clipId))
 }
 
 async function deleteClipOutput(id, clipId) {
@@ -445,9 +443,9 @@ async function uploadClipThumb(id, clipId, n, localPath) {
   await s3.uploadFile(clipThumbKey(id, clipId, n), localPath, 'image/jpeg')
 }
 
-async function presignClipThumb(id, clipId, n) {
+async function publicUrlClipThumb(id, clipId, n) {
   if (!(await clipThumbExists(id, clipId, n))) return null
-  return s3.presignGet(clipThumbKey(id, clipId, n), { responseContentType: 'image/jpeg' })
+  return C.publicUrl(clipThumbKey(id, clipId, n))
 }
 
 // clip_debug_<provider>.log — best-effort persistence of the LLM debug log.
@@ -488,10 +486,10 @@ module.exports = {
   init, newId, videoExists, listSessionIds,
   // original / media
   findOriginalName, originalExists, originalKey, statOriginal,
-  downloadOriginal, presignOriginal,
-  burnedKey, findBurnedName, hasBurned, uploadBurned, presignBurned,
+  downloadOriginal, publicUrlOriginal,
+  burnedKey, findBurnedName, hasBurned, uploadBurned, publicUrlBurned,
   audioKey, audioExists, downloadAudio, uploadAudio,
-  writeAss, thumbnailV2Exists, uploadThumbnailV2, presignThumbnailV2,
+  writeAss, thumbnailV2Exists, uploadThumbnailV2, publicUrlThumbnailV2,
   // meta
   readMeta, writeMeta,
   // transcription
@@ -503,11 +501,11 @@ module.exports = {
   readThumbnailState, writeThumbnailState,
   framesExist, frameStatsExist, readFrameStats, writeFrameStats,
   downloadFrames, uploadFrames, writePolishedImage,
-  resolveThumbnailRelpath, thumbnailFileExists, presignThumbnailFile,
+  resolveThumbnailRelpath, thumbnailFileExists, publicUrlThumbnailFile,
   // clips
   clipsSuggestionsExist, readClipSuggestions, writeClipSuggestions, listClipProviders,
   savedClipsExist, readSavedClips, readSavedClipsStrict, writeSavedClips,
-  clipOutputExists, uploadClipOutput, presignClipOutput, deleteClipOutput,
-  clipThumbExists, uploadClipThumb, presignClipThumb,
+  clipOutputExists, uploadClipOutput, publicUrlClipOutput, deleteClipOutput,
+  clipThumbExists, uploadClipThumb, publicUrlClipThumb,
   writeClipDebug, cleanStaleSuggestionFiles,
 }

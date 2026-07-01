@@ -30,7 +30,14 @@ function normalizePrefix(raw) {
 }
 const S3_KEY_PREFIX = normalizePrefix(process.env.S3_KEY_PREFIX)
 
+// TTL for the upload presigned-POST only (GET delivery uses public URLs now).
 const PRESIGN_EXPIRES_S = parseInt(process.env.S3_PRESIGN_EXPIRES_S || '3600', 10)
+
+// Public base URL for GET delivery. Objects are public-read; the browser hits S3
+// (or a CDN) directly with Range support — no presigned GET. Override with a
+// CloudFront domain later via S3_PUBLIC_BASE_URL.
+const PUBLIC_BASE_URL = (process.env.S3_PUBLIC_BASE_URL
+  || `https://${S3_BUCKET}.s3.${AWS_REGION}.amazonaws.com`).replace(/\/+$/, '')
 
 const TMP_WORK_DIR = process.env.TMP_WORK_DIR
   ? path.resolve(process.env.TMP_WORK_DIR)
@@ -53,13 +60,21 @@ function key(...segments) {
   return S3_KEY_PREFIX + segments.filter(Boolean).join('/')
 }
 
+// Public GET URL for a full object key (each path segment URL-encoded).
+function publicUrl(objectKey) {
+  const encoded = objectKey.split('/').map(encodeURIComponent).join('/')
+  return `${PUBLIC_BASE_URL}/${encoded}`
+}
+
 module.exports = {
   AWS_REGION,
   S3_BUCKET,
   S3_KEY_PREFIX,
   PRESIGN_EXPIRES_S,
+  PUBLIC_BASE_URL,
   TMP_WORK_DIR,
   credentials,
   configured,
   key,
+  publicUrl,
 }

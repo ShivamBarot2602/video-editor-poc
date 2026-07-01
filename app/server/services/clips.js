@@ -270,9 +270,9 @@ async function getSuggestions(id, provider) {
   return store.readClipSuggestions(id, provider)
 }
 
-// Presigned URL for a clip's thumbnail frame, or null if absent.
+// Public URL for a clip's thumbnail frame, or null if absent.
 async function thumbUrl(id, clipId, idx) {
-  return store.presignClipThumb(id, clipId, idx)
+  return store.publicUrlClipThumb(id, clipId, idx)
 }
 
 // GET /api/clips/:id/export/stream — cut a clip via ffmpeg, emitting SSE events.

@@ -25,14 +25,14 @@ async function originalExists(videoId) {
   return store.originalExists(videoId)
 }
 
-// Resolve a thumbnail-subtree file to a presigned URL. Throws Error with .status
+// Resolve a thumbnail-subtree file to a public URL. Throws Error with .status
 // (400 / 403 / 404).
 async function resolveFileUrl(videoId, rawRelpath) {
   const rel = store.resolveThumbnailRelpath(videoId, rawRelpath) // throws 400 / 403
   if (!(await store.thumbnailFileExists(videoId, rel))) {
     const err = new Error('File not found'); err.status = 404; throw err
   }
-  return store.presignThumbnailFile(videoId, rel)
+  return store.publicUrlThumbnailFile(videoId, rel)
 }
 
 /**
