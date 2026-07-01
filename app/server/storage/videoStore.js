@@ -347,9 +347,12 @@ async function writeFrameStats(id, scored) {
 }
 
 // Download every frame under <id>/frames/ into destDir; returns basenames.
+// destDir is created if missing — fs.createWriteStream (used under the hood by
+// downloadToFile) does NOT create parent directories, so callers can't skip this.
 async function downloadFrames(id, destDir) {
   const prefix = vkey(id, DIRS.FRAMES) + '/'
   const keys = await s3.listKeys(prefix)
+  fs.mkdirSync(destDir, { recursive: true })
   const names = []
   for (const k of keys) {
     const name = path.posix.basename(k)

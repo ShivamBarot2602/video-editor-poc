@@ -13,22 +13,6 @@ async function get(req, res) {
   res.json(state)
 }
 
-// PATCH /api/thumbnails/:videoId  { selectedKey }
-async function patch(req, res) {
-  const { videoId } = req.params
-  const state = await thumbnailService.getState(videoId)
-  if (!state) return res.status(404).json({ error: 'No thumbnails generated yet' })
-
-  const { selectedKey } = req.body || {}
-  if (selectedKey !== null && typeof selectedKey !== 'string') {
-    return res.status(400).json({ error: 'selectedKey must be string or null' })
-  }
-  const prev = state.selectedKey
-  const updated = await thumbnailService.setSelectedKey(videoId, state, selectedKey)
-  console.log(`[${videoId}][thumbnails] selectedKey: ${prev ?? 'null'} → ${updated.selectedKey ?? 'null'}`)
-  res.json(updated)
-}
-
 // GET /api/thumbnails/:videoId/file/:relpath — traversal-guarded redirect to S3
 async function serveFile(req, res) {
   try {
@@ -119,4 +103,4 @@ async function stream(req, res) {
   }
 }
 
-module.exports = { get, patch, serveFile, downloadFile, stream }
+module.exports = { get, serveFile, downloadFile, stream }

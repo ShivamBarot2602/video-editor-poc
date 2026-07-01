@@ -14,13 +14,6 @@ async function getState(videoId) {
   return store.readThumbnailState(videoId)
 }
 
-// Persist a new selectedKey onto an already-loaded state object.
-async function setSelectedKey(videoId, state, selectedKey) {
-  state.selectedKey = selectedKey || null
-  await store.writeThumbnailState(videoId, state)
-  return state
-}
-
 async function originalExists(videoId) {
   return store.originalExists(videoId)
 }
@@ -66,37 +59,34 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
   emit({ type: 'start' })
 
   await withTempDir(`thumbs-${videoId}`, async (dir) => {
-    console.time(`${tag} download total`)
-
-    const origPath = await store.downloadOriginal(videoId, dir)
-
-    console.timeEnd(`${tag} download total`)
-    
     const framesDir = path.join(dir, 'frames')
     console.log(`${tag} Pipeline start (workDir=${dir})`)
 
     const meta = await store.readMeta(videoId)
-    const filename = meta.filename || path.basename(origPath)
     const transcriptHint = await store.readTranscriptHint(videoId, TRANSCRIPT_PROVIDER_PRIORITY, TRANSCRIPT_HINT_MAX_CHARS)
 
     const baseUrl = `/api/thumbnails/${videoId}/file/`
     const fileUrl = (rel) => baseUrl + encodeURIComponent(rel)
     const frameRel = (absPath) => `${'frames'}/${path.basename(absPath)}`
 
-    // Probe video dimensions once — drives polish output aspect + UI cell ratio.
-    let videoSize = { width: 0, height: 0, aspect: 'unknown', ratio: 0 }
-    try {
-      videoSize = await getVideoSize(origPath)
-      console.log(`${tag} videoSize=${videoSize.width}x${videoSize.height} aspect=${videoSize.aspect} ratio=${videoSize.ratio.toFixed(3)}`)
-    } catch (e) {
-      console.warn(`${tag} ffprobe size failed: ${e.message} — defaulting to landscape`)
-      videoSize = { width: 0, height: 0, aspect: 'landscape', ratio: 16 / 9 }
+    // The original video is only needed for frame extraction and to ffprobe its
+    // dimensions — on a full cache hit neither is required, so it's downloaded
+    // lazily (at most once) instead of unconditionally up front. For a large
+    // video this is the difference between the cached path being instant vs.
+    // paying a full download every time thumbnails are reopened.
+    let origPath = null
+    const ensureOriginal = async () => {
+      if (!origPath) {
+        console.time(`${tag} download total`)
+        origPath = await store.downloadOriginal(videoId, dir)
+        console.timeEnd(`${tag} download total`)
+      }
+      return origPath
     }
-
-    console.log(`${tag} filename="${filename}" transcriptHint=${transcriptHint ? `"${transcriptHint.slice(0, 60)}…"` : 'none'}`)
 
     // ─── Stage 1: extract (cached) ───────────────────────────────────────────
     let frames
+    let videoSize = null
     if (await store.framesExist(videoId) && await store.frameStatsExist(videoId)) {
       const stored = await store.readFrameStats(videoId) // null on parse failure
       if (stored) {
@@ -105,15 +95,42 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
         await store.downloadFrames(videoId, framesDir)
         frames = stored.map(f => ({ ...f, path: path.join(framesDir, path.basename(f.path)) }))
         console.log(`${tag} Cache hit: ${frames.length} frames + scores reused`)
+
+        // Reuse dimensions a prior successful run already probed + persisted —
+        // they can't have changed (videos are immutable once uploaded), so this
+        // is the only thing that lets a full cache hit skip downloadOriginal entirely.
+        const prevState = await store.readThumbnailState(videoId)
+        if (prevState?.video?.width > 0) {
+          videoSize = prevState.video
+          console.log(`${tag} Reusing cached video size ${videoSize.width}x${videoSize.height} (no original download needed)`)
+        }
       } else {
         console.warn(`${tag} Cache parse failed; regenerating`)
       }
     }
+
+    if (!videoSize) {
+      const p = await ensureOriginal()
+      try {
+        videoSize = await getVideoSize(p)
+        console.log(`${tag} videoSize=${videoSize.width}x${videoSize.height} aspect=${videoSize.aspect} ratio=${videoSize.ratio.toFixed(3)}`)
+      } catch (e) {
+        console.warn(`${tag} ffprobe size failed: ${e.message} — defaulting to landscape`)
+        videoSize = { width: 0, height: 0, aspect: 'landscape', ratio: 16 / 9 }
+      }
+    }
+
+    // findOriginalName is an S3 key listing (no download) — cheap fallback when
+    // meta.filename is missing, matches what path.basename(origPath) would give.
+    const filename = meta.filename || await store.findOriginalName(videoId) || 'video'
+    console.log(`${tag} filename="${filename}" transcriptHint=${transcriptHint ? `"${transcriptHint.slice(0, 60)}…"` : 'none'}`)
+
     if (!frames) {
       emit({ type: 'phase', phase: 'extracting' })
       console.log(`${tag} Extracting frames…`)
       const t0 = Date.now()
-      const raw = await extractCandidateFrames(origPath, framesDir, { maxFrames: MAX_EXTRACT })
+      const p = await ensureOriginal()
+      const raw = await extractCandidateFrames(p, framesDir, { maxFrames: MAX_EXTRACT })
       console.log(`${tag} Extracted ${raw.length} frames in ${Date.now() - t0}ms`)
 
       emit({ type: 'phase', phase: 'scoring', count: raw.length })
@@ -263,20 +280,6 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
       }
     })
 
-    // Preserve previous selectedKey if it still references an extant frame.
-    const prev = await store.readThumbnailState(videoId)
-    let selectedKey = null
-    if (prev?.selectedKey) {
-      const stillExists = candidates.some(c => {
-        const idx = c.idx
-        if (prev.selectedKey === `${idx}_original`) return true
-        return Object.entries(c.polished || {}).some(([prov, info]) =>
-          prev.selectedKey === `${idx}_${prov}` && info.status === 'ok'
-        )
-      })
-      if (stillExists) selectedKey = prev.selectedKey
-    }
-
     const state = {
       generatedAt: new Date().toISOString(),
       rerankProvider: usedReranker || null,
@@ -294,14 +297,13 @@ async function runPipeline({ videoId, reranker, runStart }, emit) {
         topPicks: topPicks.length,
       },
       candidates,
-      selectedKey,
     }
     await store.writeThumbnailState(videoId, state)
-    console.log(`${tag} thumbnails.json saved (selectedKey=${state.selectedKey ?? 'null'}, candidates=${candidates.length})`)
+    console.log(`${tag} thumbnails.json saved (candidates=${candidates.length})`)
     console.log(`${tag} Pipeline done in ${Date.now() - runStart}ms`)
 
     emit({ type: 'done', state })
   })
 }
 
-module.exports = { getState, setSelectedKey, originalExists, resolveFileUrl, resolveFileDownload, runPipeline }
+module.exports = { getState, originalExists, resolveFileUrl, resolveFileDownload, runPipeline }
