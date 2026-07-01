@@ -37,7 +37,7 @@ function Spinner() {
 }
 
 export default function TranscriptionPanel({
-  transcription, isTranscribing,
+  transcription, isTranscribing, isLoadingTranscription = false,
   selectedProvider, onProviderChange, onTranscribe,
   exportFormats = [], onExport,
   availableProviders = [],
@@ -250,7 +250,7 @@ export default function TranscriptionPanel({
                 aria-expanded={exportMenuOpen}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
-                <Download size={11} /> Export
+                <Download size={11} /> Export Transcribe
                 <ChevronDown
                   size={12}
                   style={{ transition: 'transform 150ms', transform: exportMenuOpen ? 'rotate(180deg)' : 'none' }}
@@ -332,7 +332,7 @@ export default function TranscriptionPanel({
       )}
 
       {/* Note below controls when no transcription */}
-      {prov && !transcription && !isTranscribing && (
+      {prov && !transcription && !isTranscribing && !isLoadingTranscription && (
         <div style={{ padding: '4px 12px 0', fontSize: 10, color: 'var(--text-dim)' }}>
           {prov.note}
         </div>
@@ -349,10 +349,15 @@ export default function TranscriptionPanel({
           ...(listMaxHeight == null ? null : { maxHeight: listMaxHeight }),
         }}
       >
-        {!transcription && !isTranscribing && (
+        {!transcription && !isTranscribing && !isLoadingTranscription && (
           <p style={{ color: 'var(--text-dim)', padding: '20px 12px', textAlign: 'center', fontSize: 12 }}>
             Select a provider and click Transcribe to get started.
           </p>
+        )}
+        {isLoadingTranscription && !isTranscribing && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 12px', color: 'var(--text-dim)', justifyContent: 'center', fontSize: 12 }}>
+            <Spinner /> Loading {selectedProvider} transcription…
+          </div>
         )}
         {isTranscribing && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 12px', color: 'var(--text-dim)', justifyContent: 'center', fontSize: 12 }}>

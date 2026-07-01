@@ -93,7 +93,7 @@ async function exportStream(req, res) {
 // GET /api/clips/:id/suggest/stream?method=video&count=&bucket=&res=
 async function suggestStream(req, res) {
   const { id } = req.params
-  const { method, bucket = 'auto', count } = req.query
+  const { method, bucket = 'auto', count, model } = req.query
 
   sseHeaders(res)
   const sendEvent = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`)
@@ -109,7 +109,7 @@ async function suggestStream(req, res) {
 
   runningVideo.add(id)
   try {
-    await clipService.suggestFromVideo({ id, bucket, count }, sendEvent)
+    await clipService.suggestFromVideo({ id, bucket, count, model }, sendEvent)
     res.end()
   } catch (err) {
     console.error(`[${id}] video suggest error:`, err.message)

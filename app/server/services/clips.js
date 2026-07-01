@@ -6,7 +6,7 @@ const clipSuggest = require('../providers/clipSuggest')
 const { resolveBucket } = require('../lib/clipPrompt')
 const { getVideoDuration, getVideoSize } = require('../lib/frameExtraction')
 const { cutClip, extractFrameAt } = require('../lib/ffmpeg')
-const { VIDEO_PROVIDER, SAFE_TOKEN, CLIP_COUNT_MIN, CLIP_COUNT_MAX } = require('../config/constants')
+const { VIDEO_PROVIDER, SAFE_TOKEN, CLIP_COUNT_MIN, CLIP_COUNT_MAX, DEFAULT_RES_MAX_S, VIDEO_MODEL_DEFAULT } = require('../config/constants')
 
 // Expected-failure helper: carries an HTTP status the controller maps directly.
 function httpError(status, message) {
@@ -46,7 +46,7 @@ async function uploadDebugLog(id, provider, debugPath) {
  * - truncate to `count`, assign stable id `<provider>-clip-NN`
  * Never throws on a salvageable response — returns { clips, warnings }.
  */
-function normalizeClips(raw, { videoDuration, count, segments, provider }) {
+function normalizeClips(raw, { videoDuration, count, segments, provider, bucketSeconds }) {
   const warnings = []
   const boundaries = []
   for (const s of Array.isArray(segments) ? segments : []) {
@@ -112,6 +112,22 @@ function normalizeClips(raw, { videoDuration, count, segments, provider }) {
   if (accepted.length > count) accepted.length = count
   if (accepted.length < count) {
     warnings.push(`Model returned ${accepted.length} usable clips (requested ${count}).`)
+  }
+
+  // Log (don't patch) length violations — the model is supposed to honour the
+  // range; surfacing it lets the user see when it misbehaved (→ try Pro).
+  const min = bucketSeconds?.min
+  const max = bucketSeconds?.max
+  if (Number.isFinite(min) && Number.isFinite(max)) {
+    for (const c of accepted) {
+      if (c.duration > max + 0.5) {
+        console.warn(`[clips] ${provider} returned an over-long clip: ${c.duration}s (max ${max}s) at [${c.start}-${c.end}]`)
+        warnings.push(`⚠ Model returned a ${Math.round(c.duration)}s clip (limit ${min}-${max}s). Try the Pro model for tighter results.`)
+      } else if (c.duration < min - 0.5) {
+        console.warn(`[clips] ${provider} returned an under-short clip: ${c.duration}s (min ${min}s) at [${c.start}-${c.end}]`)
+        warnings.push(`⚠ Model returned a ${Math.round(c.duration)}s clip (below the ${min}s minimum).`)
+      }
+    }
   }
 
   // Present in chronological order; id carries provider + 1-based index.
@@ -181,6 +197,7 @@ async function suggest({ id, suggestProvider, transcriptProvider, bucket, count 
       count: wantCount,
       segments: tx.segments,
       provider: suggestProvider,
+      bucketSeconds: { min: b.min, max: b.max },
     })
 
     const obj = {
@@ -329,7 +346,7 @@ async function exportClip({ id, clipId, suggestProvider, source }, emit) {
 
 // GET /api/clips/:id/suggest/stream (method=video) — Gemini video understanding.
 // Emits its own validation errors; throws only on unexpected failure.
-async function suggestFromVideo({ id, bucket, count }, emit) {
+async function suggestFromVideo({ id, bucket, count, model }, emit) {
   if (!await store.originalExists(id)) return emit({ type: 'error', message: 'Video not found' })
   if (!clipSuggest.videoMethodAvailable()) {
     return emit({ type: 'error', message: 'GEMINI_API_KEY not set on the server' })
@@ -348,21 +365,38 @@ async function suggestFromVideo({ id, bucket, count }, emit) {
     try { size = await getVideoSize(originalPath) } catch (_) {}
 
     const warnings = []
-    const mediaResolution = 'low'
+
+    // Default media resolution (~300 tok/s, sharp temporal grounding) up to the
+    // 1h limit; only drop to low for very long videos so they still fit context.
+    let mediaResolution = 'default'
+    if (videoDuration > DEFAULT_RES_MAX_S) {
+      mediaResolution = 'low'
+      warnings.push(`Video is over ${Math.round(DEFAULT_RES_MAX_S / 60)} min — using low media resolution to fit.`)
+    }
+
+    // Ask for exactly as many clips as the video can physically hold at MIN
+    // length with no overlap. If that's fewer than requested, say why.
+    const maxFit = Math.max(1, Math.floor(videoDuration / b.min))
+    const targetCount = Math.min(wantCount, maxFit)
+    if (targetCount < wantCount) {
+      warnings.push(`Video is ~${Math.round(videoDuration / 60)} min — at ${b.min}s+ per clip with no overlaps, at most ${targetCount} clip(s) fit (you asked for ${wantCount}).`)
+    }
+
     const filename = (await store.readMeta(id)).filename
 
-    console.log(`[${id}] video suggest start: count=${wantCount} bucket=${bucket} res=${mediaResolution} dur=${videoDuration.toFixed(1)}s`)
+    console.log(`[${id}] video suggest start: model=${model || VIDEO_MODEL_DEFAULT} count=${targetCount}/${wantCount} bucket=${bucket} res=${mediaResolution} dur=${videoDuration.toFixed(1)}s`)
     emit({ type: 'start' })
 
     const debugPath = path.join(dir, `clip_debug_${VIDEO_PROVIDER}.log`)
     const result = await clipSuggest.geminiVideo.suggestFromVideo({
-      videoPath: originalPath, dir, count: wantCount, bucket, videoDuration,
-      filename, language: null, debugPath, mediaResolution,
+      videoPath: originalPath, dir, count: targetCount, bucket, videoDuration,
+      filename, language: null, debugPath, mediaResolution, model,
       onPhase: (phase, data) => emit({ type: 'phase', phase, ...(data || {}) }),
     })
 
     const { clips, warnings: normWarnings } = normalizeClips(result.clips, {
-      videoDuration, count: wantCount, segments: [], provider: VIDEO_PROVIDER,
+      videoDuration, count: targetCount, segments: [], provider: VIDEO_PROVIDER,
+      bucketSeconds: { min: b.min, max: b.max },
     })
     warnings.push(...normWarnings)
 
@@ -395,6 +429,7 @@ async function suggestFromVideo({ id, bucket, count }, emit) {
         bucket,
         bucketSeconds: { min: b.min, max: b.max },
         requestedCount: wantCount,
+        feasibleCount: targetCount,
         video_duration_s: +videoDuration.toFixed(2),
         video_width: size.width,
         video_height: size.height,

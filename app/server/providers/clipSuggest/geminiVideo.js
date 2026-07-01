@@ -4,9 +4,48 @@ const axios = require('axios')
 const { buildVideoClipSystemPrompt, buildVideoClipUserPrompt } = require('../../lib/clipPrompt')
 const { writeClipDebug } = require('../../lib/clipDebug')
 const { uploadVideo, waitForActive } = require('../../lib/geminiFiles')
+const { VIDEO_MODELS, VIDEO_MODEL_DEFAULT } = require('../../config/constants')
 
-const MODEL = 'gemini-2.5-flash'
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
+const MODEL = VIDEO_MODEL_DEFAULT
+const ENDPOINT = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+
+// Structured output that pins what the schema CAN pin:
+//   - exact clip count  → minItems == maxItems on the array
+//   - positions in range → minimum/maximum on start/end/thumbnails, bounded to
+//     [0, videoDuration] so the model cannot hallucinate a timestamp past the
+//     video end (flash does this on long videos — those clips then get dropped
+//     as out-of-range, which is what left us short of COUNT).
+// Clip LENGTH (end - start) is a derived delta a schema can't express, so it
+// stays a hardened prompt rule + a logged warning.
+function buildResponseSchema(count, videoDuration) {
+  const sec = { type: 'NUMBER', minimum: 0, maximum: +videoDuration.toFixed(2) }
+  return {
+    type: 'OBJECT',
+    properties: {
+      clips: {
+        type: 'ARRAY',
+        minItems: count,
+        maxItems: count,
+        items: {
+          type: 'OBJECT',
+          properties: {
+            start: sec,
+            end: sec,
+            title: { type: 'STRING' },
+            hook: { type: 'STRING' },
+            caption: { type: 'STRING' },
+            reason: { type: 'STRING' },
+            score: { type: 'INTEGER' },
+            thumbnails: { type: 'ARRAY', items: sec, minItems: 3, maxItems: 3 },
+          },
+          required: ['start', 'end', 'title', 'hook', 'caption', 'reason', 'score', 'thumbnails'],
+          propertyOrdering: ['start', 'end', 'title', 'hook', 'caption', 'reason', 'score', 'thumbnails'],
+        },
+      },
+    },
+    required: ['clips'],
+  }
+}
 
 // Files API resources live ~48h. Reuse a cached upload only inside this window
 // (and re-verify it's still ACTIVE before trusting it).
@@ -39,10 +78,11 @@ function loadJson(file) {
  */
 async function suggestFromVideo({
   videoPath, dir, count, bucket, videoDuration, filename, language,
-  debugPath, mediaResolution = 'default', onPhase, timeoutMs = 500000,
+  debugPath, mediaResolution = 'default', model, onPhase, timeoutMs = 500000,
 }) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error('GEMINI_API_KEY not set')
+  const useModel = VIDEO_MODELS.includes(model) ? model : MODEL
 
   // ── 1) Upload (or reuse a recent, still-ACTIVE upload) ──────────────────────
   const cachePath = path.join(dir, CACHE_FILE)
@@ -78,9 +118,13 @@ async function suggestFromVideo({
   // Whole prompt comes from the builders — no string assembly in the provider.
   const system = buildVideoClipSystemPrompt()
   const user = buildVideoClipUserPrompt({ bucket, count, videoDuration, language, filename })
-  console.log(`[clipSuggest:geminiVideo] model=${MODEL} count=${count} bucket=${bucket} res=${mediaResolution} sysChars=${system.length}`)
+  console.log(`[clipSuggest:geminiVideo] model=${useModel} count=${count} bucket=${bucket} res=${mediaResolution} sysChars=${system.length}`)
 
-  const generationConfig = { temperature: 0.3, responseMimeType: 'application/json' }
+  const generationConfig = {
+    temperature: 0.2,
+    responseMimeType: 'application/json',
+    responseSchema: buildResponseSchema(count, videoDuration), // pins count + bounds positions to [0, duration]
+  }
   if (mediaResolution === 'low') generationConfig.mediaResolution = 'MEDIA_RESOLUTION_LOW'
 
   const body = {
@@ -104,7 +148,7 @@ async function suggestFromVideo({
   const t0 = Date.now()
   let response
   try {
-    response = await axios.post(ENDPOINT, body, {
+    response = await axios.post(ENDPOINT(useModel), body, {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       timeout: timeoutMs,
       maxBodyLength: Infinity,
@@ -119,11 +163,11 @@ async function suggestFromVideo({
   if (response.status < 200 || response.status >= 300) {
     const detail = typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
     console.error(`[clipSuggest:geminiVideo] HTTP ${response.status} in ${Date.now() - t0}ms: ${detail.slice(0, 600)}`)
-    writeClipDebug(debugPath, { provider: 'geminivideo', model: MODEL, system, user, raw: response.data, error: `HTTP ${response.status}` })
+    writeClipDebug(debugPath, { provider: 'geminivideo', model: useModel, system, user, raw: response.data, error: `HTTP ${response.status}` })
     throw new Error(`clipSuggest (geminiVideo) HTTP ${response.status}: ${detail.slice(0, 400)}`)
   }
   console.log(`[clipSuggest:geminiVideo] API call ok in ${Date.now() - t0}ms`)
-  writeClipDebug(debugPath, { provider: 'geminivideo', model: MODEL, system, user, raw: response.data })
+  writeClipDebug(debugPath, { provider: 'geminivideo', model: useModel, system, user, raw: response.data })
 
   // Stitch all text parts from candidate 0.
   const cand = response.data?.candidates?.[0]
@@ -150,7 +194,7 @@ async function suggestFromVideo({
   }
   console.log(`[clipSuggest:geminiVideo] parsed ${clips.length} clips`)
 
-  return { model: MODEL, clips, truncated: false }
+  return { model: useModel, clips, truncated: false }
 }
 
-module.exports = { suggestFromVideo, MODEL }
+module.exports = { suggestFromVideo, MODEL, VIDEO_MODELS }
