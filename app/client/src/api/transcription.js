@@ -26,3 +26,9 @@ export async function prepare(videoId) {
 // Download URL for a server-rendered subtitle export (srt, …).
 export const subtitleDownloadUrl = (videoId, provider, formatId) =>
   `/api/transcription/${videoId}/${provider}/${formatId}`
+
+// POST current editor style → server renders .ass and streams the file back
+// as text. Returns the raw response so the caller can pull the blob and
+// trigger a browser download.
+export const downloadAss = (videoId, provider, style) =>
+  postRaw(`/api/transcription/${videoId}/${provider}/ass`, { style })

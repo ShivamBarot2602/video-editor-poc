@@ -28,6 +28,7 @@ export const DEFAULT_STYLE = {
 // with edits). Add VTT/ASS later by registering it here AND in the server's
 // lib/subtitleFormats.js — no other client changes needed.
 export const EXPORT_FORMATS = [
-  { id: 'json', label: 'JSON', description: 'Full transcript and metadata', kind: 'json' },
-  { id: 'srt',  label: 'SRT',  description: 'SubRip subtitles',           kind: 'subtitle' },
+  { id: 'json', label: 'JSON', description: 'Full transcript and metadata',                       kind: 'json' },
+  { id: 'srt',  label: 'SRT',  description: 'SubRip subtitles',                                   kind: 'subtitle' },
+  { id: 'ass',  label: 'ASS',  description: 'Advanced SubStation Alpha — with current editor style', kind: 'ass' },
 ]
