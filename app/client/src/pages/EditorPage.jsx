@@ -8,7 +8,7 @@ import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
 import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
 import { getVideoOrNull } from '../api/videos'
-import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl } from '../api/transcription'
+import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl, downloadAss } from '../api/transcription'
 import { readJsonLines } from '../api/stream'
 
 // DEFAULT_STYLE + EXPORT_FORMATS now live in config/subtitleStyle.js; they are
@@ -176,10 +176,10 @@ export default function EditorPage() {
     }
   }, [videoId, selectedProvider])
 
-  // JSON is built client-side (enriched with speaker_display); subtitle formats
-  // (srt, future vtt/ass) download the server-rendered file, which the server
-  // keeps in sync with edits.
-  const handleExport = useCallback((formatId) => {
+  // JSON is built client-side (enriched with speaker_display); SRT downloads the
+  // server-rendered file (kept in sync with edits). ASS also renders server-side
+  // but uses the current editor style, so it goes over POST with a style body.
+  const handleExport = useCallback(async (formatId) => {
     if (!transcription || !videoId || !selectedProvider) return
 
     if (formatId === 'json') {
@@ -202,11 +202,29 @@ export default function EditorPage() {
       return
     }
 
+    if (formatId === 'ass') {
+      try {
+        const res = await downloadAss(videoId, selectedProvider, style)
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || `HTTP ${res.status}`)
+        }
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `transcription_${selectedProvider}.ass`; a.click()
+        URL.revokeObjectURL(url)
+      } catch (err) {
+        toast.error(`ASS export failed: ${err.message}`)
+      }
+      return
+    }
+
     const a = document.createElement('a')
     a.href = subtitleDownloadUrl(videoId, selectedProvider, formatId)
     a.download = `transcription_${selectedProvider}.${formatId}`
     a.click()
-  }, [transcription, videoId, selectedProvider, speakerAliases])
+  }, [transcription, videoId, selectedProvider, speakerAliases, style])
 
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return

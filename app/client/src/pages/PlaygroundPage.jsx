@@ -13,7 +13,7 @@ import { getTranscriptionOrNull, transcribe, prepare } from '../api/transcriptio
 
 const SIDEBAR_PREVIEW_MAX_HEIGHT = 'clamp(180px, 42vh, 420px)'
 
-function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error, isRunning }) {
+function ProviderPanel({ providerId, onProviderChange, transcription, onUse, currentTime, disabledProviderId, error, isRunning, isLoading }) {
   const segments = transcription?.segments || null
   const rowRefs = useRef({})
   const listRef = useRef(null)
@@ -75,10 +75,12 @@ function ProviderPanel({ providerId, onProviderChange, transcription, onUse, cur
       <div ref={listRef} style={{ flex: 1, overflowY: 'auto' }}>
         {!segments ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: '0 16px' }}>
-            {isRunning ? (
+            {isRunning || isLoading ? (
               <>
                 <Loader2 size={16} style={{ color: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Transcribing with {prov?.label || providerId}…</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  {isRunning ? `Transcribing with ${prov?.label || providerId}…` : `Loading ${prov?.label || providerId} transcription…`}
+                </span>
               </>
             ) : error ? (
               <>
@@ -270,6 +272,10 @@ export default function PlaygroundPage() {
   const [transcriptions, setTranscriptions] = useState({})
   const [running, setRunning] = useState({})
   const [errors, setErrors] = useState({})
+  // Providers whose cached transcription is being fetched from S3 (e.g. on
+  // initial video load). Distinct from `running`, which tracks a fresh
+  // transcription pass. UI shows the same spinner for both.
+  const [loadingProviders, setLoadingProviders] = useState({})
   const [leftProvider, setLeftProvider] = useState('assemblyai')
   const [rightProvider, setRightProvider] = useState('deepgram')
   const [currentTime, setCurrentTime] = useState(0)
@@ -293,6 +299,12 @@ export default function PlaygroundPage() {
     PROVIDERS.forEach(p => { initialChecked[p.id] = video.providers.includes(p.id) })
     setChecked(initialChecked)
     setTranscriptions({})
+    // Flag every provider whose transcription is being fetched so the
+    // ProviderPanel shows a loader instead of "Not yet transcribed" while the
+    // S3 fetch is in flight.
+    const initialLoading = {}
+    video.providers.forEach(pid => { initialLoading[pid] = true })
+    setLoadingProviders(initialLoading)
     video.providers.forEach(async (pid) => {
       try {
         const data = await getTranscriptionOrNull(video.id, pid)
@@ -300,6 +312,9 @@ export default function PlaygroundPage() {
           setTranscriptions(prev => ({ ...prev, [pid]: data }))
         }
       } catch (_) {}
+      finally {
+        setLoadingProviders(prev => { const next = { ...prev }; delete next[pid]; return next })
+      }
     })
   }
 
@@ -588,6 +603,7 @@ export default function PlaygroundPage() {
               disabledProviderId={rightProvider}
               error={errors[leftProvider] || null}
               isRunning={!!running[leftProvider]}
+              isLoading={!!loadingProviders[leftProvider]}
             />
           </Panel>
           <Separator className="panel-resize-handle" style={{ margin: '0 5px' }} />
@@ -601,6 +617,7 @@ export default function PlaygroundPage() {
               disabledProviderId={leftProvider}
               error={errors[rightProvider] || null}
               isRunning={!!running[rightProvider]}
+              isLoading={!!loadingProviders[rightProvider]}
             />
           </Panel>
         </Group>
