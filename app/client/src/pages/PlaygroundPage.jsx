@@ -266,6 +266,10 @@ export default function PlaygroundPage() {
 
   const videoRef = useRef(null)
   const selectAllRef = useRef(null)
+  // Tracks the videoId whose transcriptions have been kicked off. React 18
+  // StrictMode double-mounts effects in dev, which would otherwise fire the
+  // S3 fetch for every provider twice on load. This ref dedupes.
+  const loadedForVideoIdRef = useRef(null)
   const [allVideos, setAllVideos] = useState(null)      // all videos — for empty-state list
   const [selectedVideo, setSelectedVideo] = useState(null)
   const [checked, setChecked] = useState({})
@@ -295,6 +299,12 @@ export default function PlaygroundPage() {
 
   /* Load transcriptions for a video */
   const loadTranscriptions = (video) => {
+    // Dedupe re-entry for the same videoId. React 18 StrictMode double-mounts
+    // the initial useEffect in dev, which without this guard fires the S3
+    // fetch twice for every provider.
+    if (loadedForVideoIdRef.current === video.id) return
+    loadedForVideoIdRef.current = video.id
+
     const initialChecked = {}
     PROVIDERS.forEach(p => { initialChecked[p.id] = video.providers.includes(p.id) })
     setChecked(initialChecked)
@@ -573,6 +583,8 @@ export default function PlaygroundPage() {
               onClick={() => {
                 setSelectedVideo(null)
                 setTranscriptions({})
+                setLoadingProviders({})
+                loadedForVideoIdRef.current = null
                 setSearchParams({}, { replace: true })
               }}
               style={{ color: 'var(--text-dim)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
