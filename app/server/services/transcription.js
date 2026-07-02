@@ -1,4 +1,5 @@
 const store = require('../storage/videoStore')
+const { buildAss } = require('../lib/assBuilder')
 
 async function exists(id, provider) {
   return store.transcriptionExists(id, provider)
@@ -12,6 +13,19 @@ async function get(id, provider) {
 // Built export → { content, contentType, fileName }, built from the saved JSON.
 async function resolveExport(id, provider, formatId) {
   return store.resolveSubtitleExport(id, provider, formatId)
+}
+
+// Style-parameterized `.ass` export. Unlike `.srt`, `.ass` needs the current
+// editor style (colors, font, positioning) so the download matches what would
+// be burned. Style JSON comes from the request body (see controllers/transcription).
+async function resolveAssExport(id, provider, style) {
+  const tx = await store.readTranscription(id, provider)
+  return {
+    fileName: `transcription_${provider}.ass`,
+    ext: 'ass',
+    contentType: 'text/plain; charset=utf-8',
+    content: buildAss(tx, style),
+  }
 }
 
 /**
@@ -55,4 +69,4 @@ async function applyEdits(id, provider, { aliases, edits }) {
   return tx
 }
 
-module.exports = { exists, get, resolveExport, applyEdits }
+module.exports = { exists, get, resolveExport, resolveAssExport, applyEdits }

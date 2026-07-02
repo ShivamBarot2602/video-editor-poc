@@ -60,4 +60,28 @@ async function download(req, res) {
   }
 }
 
-module.exports = { get, patch, download }
+// POST /api/transcription/:id/:provider/ass
+// Body: { style: <DEFAULT_STYLE shape> }
+// Renders the .ass with the client's current editor style so the download
+// matches what would be burned. Kept as a POST (not GET) because the style
+// JSON is several KB and not safe to encode as a query string.
+async function downloadAss(req, res) {
+  const { id, provider } = req.params
+  if (!await txService.exists(id, provider)) return res.status(404).json({ error: 'Transcription not found' })
+
+  const style = req.body?.style
+  if (!style || typeof style !== 'object') {
+    return res.status(400).json({ error: 'style payload required' })
+  }
+
+  try {
+    const exp = await txService.resolveAssExport(id, provider, style)
+    res.setHeader('Content-Type', exp.contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${exp.fileName}"`)
+    res.send(exp.content)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+module.exports = { get, patch, download, downloadAss }
