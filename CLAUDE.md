@@ -27,8 +27,9 @@ There are no test scripts. No linting config exists.
 
 Monorepo with two workspaces managed via root `package.json`:
 
-- `app/server/` — Express.js API (Node, CommonJS)
+- `app/server/` — Express.js API (Node ≥22.12, CommonJS)
 - `app/client/` — React 18 SPA (Vite, ES modules)
+- `app/shared/` — code + assets used by both: `assBuilder.mjs` (the ASS subtitle builder; server consumes it via a `require(esm)` shim at `app/server/lib/assBuilder.js`, client imports it through the `@shared` Vite alias) and `fonts/` (TTFs loaded by both the JASSUB preview and ffmpeg's `fontsdir`, so preview and burn rasterize identical glyphs)
 
 ### Server
 
@@ -75,7 +76,9 @@ React Router v7 SPA. Routes:
 | `/playground` | `PlaygroundPage` | Provider comparison playground |
 | `/report` | `ProviderReportPage` | STT provider comparison report |
 
-`EditorPage` is the core UI. It holds all editor state: `transcription`, `style` (persisted to `localStorage` keyed `style_<videoId>`), `burnState`, `speakerAliases`, `selectedProvider`. The `DEFAULT_STYLE` export from `EditorPage.jsx` is the canonical subtitle style schema used by both the editor and `assBuilder`.
+`EditorPage` is the core UI. It holds all editor state: `transcription`, `style` (persisted to `localStorage` keyed `style_<videoId>`), `burnState`, `speakerAliases`, `selectedProvider`. `DEFAULT_STYLE` in `config/subtitleStyle.js` is the canonical subtitle style schema used by the editor, the preview, and `assBuilder` (re-exported from `EditorPage.jsx` for backward compatibility).
+
+**WYSIWYG preview:** `VideoPlayer` builds the same `.ass` the server burns (`buildAss` from `@shared/assBuilder.mjs`) and renders it with `AssPreview` — a [JASSUB](https://github.com/ThaUnknown/jassub) (libass/WASM) canvas overlaid on the video, so the preview is pixel-accurate to the burned output including karaoke, wrapping, and letterboxing. Style/transcription changes flow through a debounced `setTrack`; a `manualRender` is forced when the video is paused (frame callbacks don't fire then). `position: 'custom'` + `customPosition {x, y}` (normalized 0–1, block center in 1920×1080 PlayRes space) enables free placement via `SubtitleDragLayer`, and maps to `\an5\pos(...)` in the ASS. `jassub` is patched via `patch-package` (`app/client/patches/`) to disable `desynchronized` canvas contexts (Chromium/Windows artifacts).
 
 `vite.config.js` proxies `/api` to `localhost:3001` in dev, and to the Render.com backend in production.
 
@@ -92,7 +95,9 @@ Single-user login gates the whole app (it's publicly deployed). Credentials come
 
 ### Subtitle pipeline
 
-`POST /api/burn` → `assBuilder.buildAss(transcription, style)` → `.ass` file → `ffmpeg ass filter` → `burned.<ext>`. The burn route uses SSE (`text/event-stream`) to stream `{type: 'start'}`, `{type: 'progress', percent}`, `{type: 'done', burnedUrl}` events to the client.
+`POST /api/burn` → `buildAss(transcription, style)` (from `app/shared/assBuilder.mjs`) → `.ass` file → `ffmpeg ass filter` with `fontsdir=app/shared/fonts` → `burned.<ext>`. The burn route uses SSE (`text/event-stream`) to stream `{type: 'start'}`, `{type: 'progress', percent}`, `{type: 'done', burnedUrl}` events to the client.
+
+The client preview renders the identical `.ass` through libass (JASSUB), so any change to `buildAss` or the fonts dir affects preview and burn equally — that equivalence is the point; don't fork the two paths. Fonts must exist as files in `app/shared/fonts/`: the UI-selectable families are registered in `AssPreview.jsx` (`AVAILABLE_FONTS`, lowercase keys) and `config/subtitleStyle.js` (`FONT_FAMILIES`); script-fallback fonts (Indic etc.) go in `FALLBACK_FONTS`.
 
 ## Environment
 

@@ -1,13 +1,14 @@
-import { useRef, useEffect, useState } from 'react'
-import SubtitleOverlay from './SubtitleOverlay'
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import { buildAss } from '@shared/assBuilder.mjs'
+import AssPreview from './AssPreview'
+import SubtitleDragLayer from './SubtitleDragLayer'
 
-export default function VideoPlayer({ videoId, transcription, style, videoRef: externalRef, onTimeChange, fillHeight = false }) {
+export default function VideoPlayer({ videoId, transcription, style, onStyleChange, videoRef: externalRef, onTimeChange, fillHeight = false }) {
   const internalRef = useRef(null)
   const containerRef = useRef(null)
   const videoRef = externalRef || internalRef
 
   const [currentTime, setCurrentTime] = useState(0)
-  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 })
 
   // Track current playback time
   useEffect(() => {
@@ -28,18 +29,15 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
     }
   }, [videoRef, onTimeChange])
 
-  // Track rendered video size (accounts for letterboxing)
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-    const obs = new ResizeObserver(() => {
-      const video = videoRef.current
-      if (!video) return
-      setVideoDimensions({ width: video.clientWidth, height: video.clientHeight })
-    })
-    obs.observe(container)
-    return () => obs.disconnect()
-  }, [videoRef])
+  // Same .ass content the server burns — rendered through libass (JASSUB) so
+  // the preview is WYSIWYG rather than an approximation.
+  const assContent = useMemo(() => (
+    transcription && style ? buildAss(transcription, style) : null
+  ), [transcription, style])
+
+  const handleDragPosition = useCallback((customPosition) => {
+    onStyleChange?.(prev => ({ ...prev, position: 'custom', customPosition }))
+  }, [onStyleChange])
 
   const videoUrl = `/api/video/${videoId}`
 
@@ -58,6 +56,11 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
         <video
           ref={videoRef}
           src={videoUrl}
+          // anonymous = cookies still sent same-origin (auth on /api/video/:id,
+          // both dev proxy and the Vercel /api rewrite), omitted on the S3
+          // presigned redirect (bucket CORS allows *). Untainted video lets
+          // jassub read the frame color space instead of warning every frame.
+          crossOrigin="anonymous"
           controls
           style={{
             width: '100%',
@@ -68,17 +71,14 @@ export default function VideoPlayer({ videoId, transcription, style, videoRef: e
               : { maxHeight: '60vh' }
             ),
           }}
-          onLoadedMetadata={() => {
-            const v = videoRef.current
-            if (v) setVideoDimensions({ width: v.clientWidth, height: v.clientHeight })
-          }}
         />
-        {transcription && (
-          <SubtitleOverlay
-            segments={transcription.segments}
-            currentTime={currentTime}
-            style={style}
-            containerDimensions={videoDimensions}
+        {assContent && <AssPreview videoRef={videoRef} assContent={assContent} />}
+        {style?.position === 'custom' && (
+          <SubtitleDragLayer
+            videoRef={videoRef}
+            containerRef={containerRef}
+            customPosition={style.customPosition}
+            onChange={handleDragPosition}
           />
         )}
       </div>

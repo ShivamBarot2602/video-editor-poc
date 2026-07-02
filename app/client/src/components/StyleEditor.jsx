@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Flame, Download, RefreshCw, Check } from 'lucide-react'
+import { FONT_FAMILIES } from '../config/subtitleStyle'
 
-const FONTS = ['Arial', 'Source Sans Pro', 'Roboto', 'Impact', 'Times New Roman', 'Courier New']
+const FONTS = FONT_FAMILIES
 const KARAOKE_STYLES = [
   { id: 'word-highlight',     label: 'Word Highlight' },
   { id: 'fill-left-to-right', label: 'Fill Left → Right' },
@@ -107,7 +108,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             </select>
           </Field>
 
-          <SliderField label="Font Size" value={style.fontSize} min={12} max={72} unit="px" onChange={set('fontSize')} />
+          <SliderField label="Font Size" value={style.fontSize} min={12} max={200} unit="px" onChange={set('fontSize')} />
 
           <Field label="Weight">
             <SegmentBtns
@@ -150,9 +151,28 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 </button>
               )))}
             </div>
+            <button
+              onClick={() => onChange(prev => ({ ...prev, position: 'custom', customPosition: prev.customPosition || { x: 0.5, y: 0.9 } }))}
+              style={{
+                marginTop: 4, padding: '6px 0', fontSize: 10, borderRadius: 4, cursor: 'pointer',
+                border: '1px solid', fontFamily: 'inherit', width: '100%',
+                borderColor: style.position === 'custom' ? 'var(--accent)' : 'var(--border)',
+                background: style.position === 'custom' ? 'var(--accent-dim)' : 'var(--surface-2)',
+                color: style.position === 'custom' ? 'var(--accent)' : 'var(--text-dim)',
+              }}
+            >
+              Custom (drag on video)
+            </button>
+            {style.position === 'custom' && (
+              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>
+                Drag the handle on the video preview to place subtitles anywhere.
+              </p>
+            )}
           </Field>
 
-          <SliderField label="Vertical Margin" value={style.verticalMargin} min={0} max={200} unit="px" onChange={set('verticalMargin')} />
+          {style.position !== 'custom' && (
+            <SliderField label="Vertical Margin" value={style.verticalMargin} min={0} max={200} unit="px" onChange={set('verticalMargin')} />
+          )}
 
           <Field label="Max Lines">
             <SegmentBtns

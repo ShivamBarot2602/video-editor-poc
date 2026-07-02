@@ -6,7 +6,7 @@ import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panel
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import StyleEditor from '../components/StyleEditor'
-import { DEFAULT_STYLE, EXPORT_FORMATS } from '../config/subtitleStyle'
+import { DEFAULT_STYLE, EXPORT_FORMATS, migrateStyleFonts } from '../config/subtitleStyle'
 import { getVideoOrNull } from '../api/videos'
 import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl } from '../api/transcription'
 import { readJsonLines } from '../api/stream'
@@ -39,6 +39,7 @@ export default function EditorPage() {
   )
   const [availableProviders, setAvailableProviders] = useState([])
   const [style, setStyle] = useState(DEFAULT_STYLE)
+  const [styleLoaded, setStyleLoaded] = useState(false)
   const [burnState, setBurnState] = useState({ status: 'idle', progress: 0, burnedUrl: null })
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(0)
@@ -54,6 +55,7 @@ export default function EditorPage() {
     if (!videoId) { navigate('/'); return }
 
     let cancelled = false
+    setStyleLoaded(false) // block the save effect until this videoId's saved style has been read
     const load = async () => {
       setLoading(true)
       try {
@@ -66,20 +68,23 @@ export default function EditorPage() {
         setBurnState({ status: 'idle', progress: 0, burnedUrl: video.hasBurned ? `/api/video/${videoId}/burned` : null })
 
         const saved = localStorage.getItem(`style_${videoId}`)
-        if (saved) { try { setStyle(JSON.parse(saved)) } catch (_) {} }
+        if (saved) { try { setStyle(migrateStyleFonts(JSON.parse(saved))) } catch (_) {} }
       } catch (err) {
         if (!cancelled) toast.error('Failed to load video')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) { setLoading(false); setStyleLoaded(true) }
       }
     }
     load()
     return () => { cancelled = true }
   }, [videoId, navigate])
 
+  // Gated on styleLoaded so this can't fire with the DEFAULT_STYLE initial
+  // state and clobber a real saved style before the load effect above has
+  // had a chance to read it (race: save-on-mount vs. async load-on-mount).
   useEffect(() => {
-    if (videoId) localStorage.setItem(`style_${videoId}`, JSON.stringify(style))
-  }, [style, videoId])
+    if (videoId && styleLoaded) localStorage.setItem(`style_${videoId}`, JSON.stringify(style))
+  }, [style, videoId, styleLoaded])
 
   // Single owner of transcription fetching: runs on mount (once availableProviders
   // loads), on provider switch, and on videoId change.
@@ -305,6 +310,7 @@ export default function EditorPage() {
                   videoId={videoId}
                   transcription={transcription}
                   style={style}
+                  onStyleChange={setStyle}
                   videoRef={videoRef}
                   onTimeChange={setCurrentTime}
                   fillHeight

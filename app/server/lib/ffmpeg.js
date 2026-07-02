@@ -1,5 +1,6 @@
 const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
+const path = require('path')
 
 /**
  * Extract mono 16kHz WAV audio from any audio/video file.
@@ -46,9 +47,13 @@ function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
 
     // Escape backslashes and colons in the path for the ass filter (Windows-safe too)
     const escapedAss = assPath.replace(/\\/g, '/').replace(/:/g, '\\:')
+    // Same TTFs the client preview (JASSUB) renders with — keeps burn output
+    // identical to the WYSIWYG preview regardless of host system fonts.
+    const fontsDir = path.join(__dirname, '../../shared/fonts')
+    const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/:/g, '\\:')
 
     ffmpeg(inputPath)
-      .videoFilters(`ass='${escapedAss}'`)
+      .videoFilters(`ass='${escapedAss}':fontsdir='${escapedFontsDir}'`)
       .audioCodec('copy')
       .output(outputPath)
       .on('progress', ({ percent }) => {
