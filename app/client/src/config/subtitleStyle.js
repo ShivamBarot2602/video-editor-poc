@@ -51,12 +51,14 @@ export const DEFAULT_STYLE = {
   position: 'bottom-center',
   customPosition: null,     // { x, y } normalized 0-1, center of block — set when position === 'custom'
   verticalMargin: 30,
-  backgroundBox: 'off',     // 'off' | 'solid' | 'blur'
+  backgroundBox: 'off',     // 'off' | 'solid'
   backgroundOpacity: 70,
+  boxPadding: 20,           // px padding text→box edge (only when box is solid)
   karaokeStyle: 'word-highlight',
   animationIn: 'none',      // 'none' | 'fade'
   wordTimingOffset: 0,
   maxLines: 2,
+  wordsPerLine: 0,          // 0 = auto (fit by width); >0 = force N words per line
   outputFormat: 'mp4',      // 'mp4' | 'webm'
   quality: 23,              // CRF value
 }

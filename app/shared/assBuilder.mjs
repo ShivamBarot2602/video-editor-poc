@@ -13,10 +13,11 @@
  *   4  5  6
  *   1  2  3
  *
- * Karaoke tags:
- *   \k<cs>   — hard switch at word start (Word Highlight)
- *   \kf<cs>  — fill left-to-right during word (Fill L→R)
- *   \ko<cs>  — outline karaoke (Color Sweep; closest ASS equivalent)
+ * Karaoke effects:
+ *   Word Highlight — \k<cs>  hard colour switch at word start
+ *   Fill L→R       — \kf<cs> fill left-to-right during word
+ *   Color Sweep    — \1c + \t transforms: a single lit word travels the line
+ *                    (\ko outline karaoke is near-invisible, so not used)
  *
  * Free positioning (style.position === 'custom'):
  *   style.customPosition = { x, y } — center of the subtitle block, normalized
@@ -31,10 +32,13 @@ const POSITION_TO_ALIGNMENT = {
   'bottom-left': 1, 'bottom-center': 2, 'bottom-right': 3,
 }
 
+// word-highlight → hard switch, fill-left-to-right → smooth fill. color-sweep
+// is NOT a native karaoke tag: '\ko' only tints the outline (invisible with a
+// box or thin outline), so it's rendered via \t colour transforms instead
+// (buildSweepText) — a highlight that flashes each word and returns.
 const KARAOKE_TAG = {
   'word-highlight': 'k',
   'fill-left-to-right': 'kf',
-  'color-sweep': 'ko',
 }
 
 const PLAY_RES_X = 1920
@@ -95,27 +99,66 @@ function assTime(seconds) {
   return `${h}:${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}`
 }
 
-function buildKaraokeText(segment, karaokeStyle) {
+// Separator before word index `i`: force a line break (\N) every wordsPerLine
+// words so libass renders exactly the requested number of lines (Max Lines);
+// otherwise a plain space. No separator before the first word.
+function wordSep(i, wordsPerLine) {
+  if (i === 0) return ''
+  return (wordsPerLine > 0 && i % wordsPerLine === 0) ? '\\N' : ' '
+}
+
+// Plain (non-karaoke) text broken into lines every wordsPerLine words.
+function breakPlainText(text, wordsPerLine) {
+  const parts = escapeAssText(text).split(' ')
+  return parts.map((p, i) => wordSep(i, wordsPerLine) + p).join('')
+}
+
+function buildKaraokeText(segment, karaokeStyle, wordsPerLine) {
   const words = segment.words || []
   const tag = KARAOKE_TAG[karaokeStyle] || 'k'
 
-  if (words.length === 0) return escapeAssText(segment.text)
+  if (words.length === 0) return breakPlainText(segment.text, wordsPerLine)
 
   return words.map((w, i) => {
     const nextStart = words[i + 1]?.start ?? segment.end
     const durationCs = Math.max(1, Math.round((nextStart - w.start) * 100))
-    return `{\\${tag}${durationCs}}${escapeAssText(w.word)}`
-  }).join(' ')
+    return `${wordSep(i, wordsPerLine)}{\\${tag}${durationCs}}${escapeAssText(w.word)}`
+  }).join('')
+}
+
+// Color Sweep: a moving highlight. Each word starts at baseColor, ramps to
+// flashColor over ~120ms at its spoken time, then returns to baseColor — so a
+// single lit word travels along the line as speech progresses. \t times are ms
+// relative to the event (line) start. Distinct from \k (permanent switch) and
+// \kf (fill), and works regardless of outline/box (uses \1c fill colour).
+function buildSweepText(segment, wordsPerLine, baseColor, flashColor) {
+  const words = segment.words || []
+  if (words.length === 0) return breakPlainText(segment.text, wordsPerLine)
+
+  const lineStart = segment.start
+  return words.map((w, i) => {
+    const nextStart = words[i + 1]?.start ?? segment.end
+    const t0 = Math.max(0, Math.round((w.start - lineStart) * 1000))
+    const t1 = t0 + 120
+    const t2 = Math.max(t1 + 1, Math.round((nextStart - lineStart) * 1000))
+    const anim = `\\1c${baseColor}&\\t(${t0},${t1},\\1c${flashColor}&)\\t(${t1},${t2},\\1c${baseColor}&)`
+    return `${wordSep(i, wordsPerLine)}{${anim}}${escapeAssText(w.word)}`
+  }).join('')
 }
 
 // ─── Pagination ──────────────────────────────────────────────────────────────
 
 // PlayResX=1920, maxWidth=90%; avgCharWidth ≈ fontSize × 0.55; avgWordLen ≈ 6 chars.
-function calcWordsPerPage(fontSize, maxLines) {
+// Returns both the per-line word budget (used to inject \N breaks so Max Lines
+// is honoured) and the per-page total (used to paginate long segments).
+// `manualWordsPerLine` > 0 overrides the width-based estimate.
+function calcLayout(fontSize, maxLines, manualWordsPerLine) {
   const usableWidth  = PLAY_RES_X * 0.9
   const avgWordWidth = fontSize * 0.55 * 6
-  const wordsPerLine = Math.max(3, Math.floor(usableWidth / avgWordWidth))
-  return wordsPerLine * Math.max(1, maxLines || 2)
+  const autoPerLine  = Math.max(3, Math.floor(usableWidth / avgWordWidth))
+  const wordsPerLine = manualWordsPerLine > 0 ? manualWordsPerLine : autoPerLine
+  const lines = Math.max(1, maxLines || 2)
+  return { wordsPerLine, wordsPerPage: wordsPerLine * lines }
 }
 
 /**
@@ -179,8 +222,12 @@ function buildAss(transcription, style) {
     verticalMargin = 30,
     backgroundBox = 'off',
     backgroundOpacity = 70,
+    boxPadding = 20,
     karaokeStyle = 'word-highlight',
+    animationIn = 'none',
+    wordTimingOffset = 0,
     maxLines = 2,
+    wordsPerLine = 0,
     customPosition = null,
   } = style || {}
 
@@ -193,33 +240,51 @@ function buildAss(transcription, style) {
   const safeFontWeight = numOr(fontWeight, 100, 900, 400)
   const safeVerticalMargin = Math.round(numOr(verticalMargin, 0, 2000, 30))
   const safeMaxLines = Math.round(numOr(maxLines, 1, 10, 2))
+  const safeWordsPerLine = Math.round(numOr(wordsPerLine, 0, 30, 0))
+  const safeBoxPadding = numOr(boxPadding, 0, 100, 20)
+  // ms → seconds; shifts each event's start/end so the whole subtitle (and its
+  // karaoke schedule, which is anchored to the event start) leads/lags the audio.
+  const offsetSec = numOr(wordTimingOffset, -5000, 5000, 0) / 1000
 
   const useCustom = position === 'custom' && customPosition && typeof customPosition === 'object'
   const customX = numOr(customPosition?.x, 0, 1, 0.5)
   const customY = numOr(customPosition?.y, 0, 1, 0.9)
-  const posTag = useCustom
-    ? `{\\an5\\pos(${Math.round(customX * PLAY_RES_X)},${Math.round(customY * PLAY_RES_Y)})}`
-    : ''
   const alignment = useCustom ? 5 : (POSITION_TO_ALIGNMENT[position] ?? 2)
+
+  // Per-event override block: free-position tag + fade-in animation. Emitted
+  // once at the front of each Dialogue's text, before any karaoke tags.
+  const posInner = useCustom
+    ? `\\an5\\pos(${Math.round(customX * PLAY_RES_X)},${Math.round(customY * PLAY_RES_Y)})`
+    : ''
+  const fadeInner = animationIn === 'fade' ? '\\fad(200,0)' : ''
+  const overridePrefix = (posInner || fadeInner) ? `{${posInner}${fadeInner}}` : ''
 
   // In ASS karaoke: SecondaryColour = upcoming/unspoken state, PrimaryColour = post-highlight state.
   // We want: upcoming words shown in primaryColor (white), highlighted/spoken in karaokeColor (yellow).
   // So: PrimaryColour ← karaokeColor, SecondaryColour ← primaryColor.
   const primaryAss   = hexToAss(karaokeColor, '#FFD700')  // color words transition TO (highlighted/spoken)
   const secondaryAss = hexToAss(primaryColor, '#FFFFFF')  // color words start as (upcoming/unspoken)
-  const outlineAss   = hexToAss(outlineColor, '#000000')
   const hasBox       = backgroundBox === 'solid' || backgroundBox === 'blur'
+  // In box mode (BorderStyle=4) the Outline value both grows the box AND strokes
+  // the glyphs in OutlineColour. We want the growth (= padding) but not the
+  // stroke, so force a fully-transparent outline colour — the box still pads out
+  // from the glyphs, but no visible stroke is drawn. Outside box mode it's the
+  // real text outline colour.
+  const outlineAss   = hasBox ? '&HFF000000' : hexToAss(outlineColor, '#000000')
   const isBold       = (safeFontWeight >= 600) || !!bold
   const boxAlpha     = opacityToAssAlpha(backgroundOpacity)
   const backAss      = hasBox ? `&H${boxAlpha}000000` : '&H00000000'
   const borderStyle  = hasBox ? 4 : 1
-  const outline      = hasBox ? 0 : safeOutlineThickness
+  // BorderStyle=4: libass uses the Outline value as box padding (text→box edge),
+  // not as a text outline — so a solid box and a text outline can't coexist.
+  const outline      = hasBox ? safeBoxPadding : safeOutlineThickness
 
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${PLAY_RES_X}
 PlayResY: ${PLAY_RES_Y}
 ScaledBorderAndShadow: yes
+WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
@@ -228,7 +293,7 @@ Style: Default,${safeFontFamily},${safeFontSize},${primaryAss},${secondaryAss},$
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
 
-  const wordsPerPage = calcWordsPerPage(safeFontSize, safeMaxLines)
+  const { wordsPerLine: perLine, wordsPerPage } = calcLayout(safeFontSize, safeMaxLines, safeWordsPerLine)
 
   const events = []
   for (const seg of (transcription.segments || [])) {
@@ -241,10 +306,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
       ? { ...seg, text: seg.text_edited, words: [] }
       : seg
     for (const page of paginateSegment(effSeg, wordsPerPage)) {
-      const start = assTime(page.start)
-      const end   = assTime(page.end)
-      const text  = posTag + buildKaraokeText(page, karaokeStyle)
-      events.push(`Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`)
+      const start = assTime(Math.max(0, page.start + offsetSec))
+      const end   = assTime(Math.max(0, page.end + offsetSec))
+      const body  = karaokeStyle === 'color-sweep'
+        ? buildSweepText(page, perLine, secondaryAss, primaryAss)
+        : buildKaraokeText(page, karaokeStyle, perLine)
+      events.push(`Dialogue: 0,${start},${end},Default,,0,0,0,,${overridePrefix}${body}`)
     }
   }
 
