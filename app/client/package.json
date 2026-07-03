@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@sentry/react": "^8.13.0",
+    "@vercel/functions": "^3.7.5",
     "jassub": "^2.5.6",
     "lucide-react": "^1.14.0",
     "react": "^18.3.0",

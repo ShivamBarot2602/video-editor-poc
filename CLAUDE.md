@@ -80,7 +80,7 @@ React Router v7 SPA. Routes:
 
 **WYSIWYG preview:** `VideoPlayer` builds the same `.ass` the server burns (`buildAss` from `@shared/assBuilder.mjs`) and renders it with `AssPreview` — a [JASSUB](https://github.com/ThaUnknown/jassub) (libass/WASM) canvas overlaid on the video, so the preview is pixel-accurate to the burned output including karaoke, wrapping, and letterboxing. Style/transcription changes flow through a debounced `setTrack`; a `manualRender` is forced when the video is paused (frame callbacks don't fire then). `position: 'custom'` + `customPosition {x, y}` (normalized 0–1, block center in 1920×1080 PlayRes space) enables free placement via `SubtitleDragLayer`, and maps to `\an5\pos(...)` in the ASS. `jassub` is patched via `patch-package` (`app/client/patches/`) to disable `desynchronized` canvas contexts (Chromium/Windows artifacts).
 
-`vite.config.js` proxies `/api` to `localhost:3001` in dev, and to the Render.com backend in production.
+The client always calls relative `/api` (same-origin everywhere — no CORS). Routing to the backend, in order: `BACKEND_URL` env var → `vite.config.js` proxy locally (dev + `vite preview`) and `middleware.js` (Vercel Routing Middleware) on deployments; unset, it falls back to `localhost:3001` in dev and the static `vercel.json` rewrite (production Render URL) when deployed. Set `BACKEND_URL` in Vercel's Preview environment to point PR preview clients at a preview backend.
 
 The client provider list (`app/client/src/providers.js`) is a static registry used for UI. Keep it in sync with `app/server/providers/index.js` when adding new providers.
 
