@@ -2,24 +2,6 @@ const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
 const path = require('path')
 
-// x264 memory/CPU caps for re-encode paths (burn, clip cut). Without these,
-// x264 sizes itself for the HOST machine: threads = all physical cores (on a
-// shared cloud host that can be 16+, each adding 1080p frame buffers) and
-// preset medium keeps a deep lookahead — measured 709MB peak RSS on a 1080p
-// source, which OOMs small containers (Render 512MB). With these caps the
-// same encode peaks at ~260MB. Extra threads are useless on fractional-vCPU
-// instances anyway; env-tunable so bigger deployments can raise them.
-const X264_THREADS = process.env.FFMPEG_THREADS || '1'
-const X264_PRESET = process.env.FFMPEG_PRESET || 'veryfast'
-const X264_MEMORY_OPTS = [
-  '-threads', X264_THREADS,
-  '-preset', X264_PRESET,
-  // ref=1: single reference frame; rc-lookahead=10: shallow rate-control
-  // window. Both trade a little compression efficiency for a flat memory
-  // profile at 1080p.
-  '-x264-params', 'ref=1:rc-lookahead=10',
-]
-
 /**
  * Extract mono 16kHz WAV audio from any audio/video file.
  */
@@ -73,7 +55,6 @@ function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
     ffmpeg(inputPath)
       .videoFilters(`ass='${escapedAss}':fontsdir='${escapedFontsDir}'`)
       .audioCodec('copy')
-      .outputOptions(X264_MEMORY_OPTS)
       .output(outputPath)
       .on('progress', ({ percent }) => {
         if (typeof onProgress === 'function' && percent != null) {
@@ -135,7 +116,7 @@ function cutClip(inputPath, outputPath, start, duration, onProgress) {
       .setDuration(duration)
       .videoCodec('libx264')
       .audioCodec('aac')
-      .outputOptions([...X264_MEMORY_OPTS, '-movflags', '+faststart'])
+      .outputOptions(['-preset', 'veryfast', '-movflags', '+faststart'])
       .output(outputPath)
       .on('progress', ({ percent }) => {
         if (typeof onProgress === 'function' && percent != null) {
