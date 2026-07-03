@@ -16,10 +16,10 @@ const X264_MEMORY_OPTS = [
   '-threads', X264_THREADS,
   '-preset', X264_PRESET,
   '-tune', 'zerolatency',       // Forces immediate frame output, preventing RAM queueing
-  // ref=1: single reference frame; rc-lookahead=10: shallow rate-control
+  // ref=1: single reference frame; rc-lookahead=20: shallow rate-control
   // window. Both trade a little compression efficiency for a flat memory
   // profile at 1080p.
-  '-x264-params', 'ref=1:rc-lookahead=15:bframes=0:sliced-threads=1'
+  '-x264-params', 'ref=1:rc-lookahead=20:bframes=0:sliced-threads=1'
 ]
 
 /**
