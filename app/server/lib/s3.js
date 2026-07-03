@@ -60,6 +60,11 @@ async function uploadFile(key, localPath, contentType, contentDisposition, onPro
   const total = fs.statSync(localPath).size
   const up = new Upload({
     client: getClient(),
+    // Cap in-flight part buffers (queueSize × partSize = 10MB) — the default
+    // (4 × 5MB) plus ffmpeg plus node baseline is tight on 512MB containers,
+    // and extra upload concurrency buys nothing on fractional-vCPU instances.
+    queueSize: 2,
+    partSize: 5 * 1024 * 1024,
     params: {
       Bucket, Key: key, Body: fs.createReadStream(localPath),
       ...(contentType ? { ContentType: contentType } : {}),
