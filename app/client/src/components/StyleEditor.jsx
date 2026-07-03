@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Flame, Download, RefreshCw, Check } from 'lucide-react'
+import { FONT_FAMILIES } from '../config/subtitleStyle'
 
-const FONTS = ['Arial', 'Source Sans Pro', 'Roboto', 'Impact', 'Times New Roman', 'Courier New']
+const FONTS = FONT_FAMILIES
 const KARAOKE_STYLES = [
   { id: 'word-highlight',     label: 'Word Highlight' },
   { id: 'fill-left-to-right', label: 'Fill Left → Right' },
@@ -29,12 +30,13 @@ function Field({ label, children }) {
   )
 }
 
-function SliderField({ label, value, min, max, onChange, unit = '' }) {
+function SliderField({ label, value, min, max, onChange, unit = '', format }) {
+  const display = format ? format(value) : `${value}${unit}`
   return (
     <Field label={label}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <input type="range" min={min} max={max} value={value} onChange={e => onChange(Number(e.target.value))} style={{ flex: 1 }} />
-        <span style={{ color: 'var(--text-dim)', fontSize: 10, minWidth: 24, textAlign: 'right' }}>{value}{unit}</span>
+        <span style={{ color: 'var(--text-dim)', fontSize: 10, minWidth: 30, textAlign: 'right' }}>{display}</span>
       </div>
     </Field>
   )
@@ -78,12 +80,84 @@ function Spinner() {
   )
 }
 
+// Animated mini-preview of the karaoke effect + fade. Mirrors buildAss's
+// semantics: word-highlight/fill = spoken words stay lit (cumulative);
+// color-sweep = only the current word is lit (moving highlight); fade replays
+// on each loop. Purely illustrative — the pixel-accurate WYSIWYG is the video.
+const PREVIEW_WORDS = ["can't", 'stop', 'laughing', 'again']
+
+function EffectPreview({ style }) {
+  const [active, setActive] = useState(-1)
+  const [cycle, setCycle] = useState(0)
+
+  useEffect(() => {
+    let i = -1
+    setActive(-1)
+    const id = setInterval(() => {
+      i += 1
+      if (i > PREVIEW_WORDS.length) { i = -1; setCycle(c => c + 1) }
+      setActive(Math.min(i, PREVIEW_WORDS.length - 1))
+    }, 500)
+    return () => clearInterval(id)
+  }, [style.karaokeStyle])
+
+  const base = 'var(--text-muted)'
+  const hi = style.karaokeColor
+  const sweep = style.karaokeStyle === 'color-sweep'
+  const fill = style.karaokeStyle === 'fill-left-to-right'
+  const colorFor = i => (active < 0 ? base : sweep ? (i === active ? hi : base) : (i <= active ? hi : base))
+
+  const box = style.backgroundBox === 'solid' || style.backgroundBox === 'blur'
+  const boxBg = box ? `rgba(0,0,0,${(style.backgroundOpacity ?? 70) / 100})` : 'transparent'
+  const pad = box ? Math.min(18, (style.boxPadding ?? 20) / 2) : 0
+  const textShadow = !box && style.outlineThickness > 0
+    ? `${style.outlineColor} 1px 1px 0, ${style.outlineColor} -1px -1px 0, ${style.outlineColor} 1px -1px 0, ${style.outlineColor} -1px 1px 0`
+    : 'none'
+  const fade = style.animationIn === 'fade'
+
+  return (
+    <Field label="Preview">
+      <div style={{
+        background: 'var(--surface-2)', border: '1px dashed var(--border)',
+        borderRadius: 6, padding: '18px 8px', textAlign: 'center', overflow: 'hidden',
+      }}>
+        <span
+          key={fade ? cycle : 'static'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', justifyContent: 'center',
+            background: boxBg, borderRadius: box ? 4 : 0,
+            padding: box ? `${4 + pad}px ${8 + pad}px` : 0,
+            animation: fade ? 'fade-in 450ms ease' : 'none',
+          }}
+        >
+          {PREVIEW_WORDS.map((w, i) => (
+            <span key={i} style={{
+              color: colorFor(i), fontSize: 14, fontWeight: style.fontWeight, textShadow,
+              transition: fill ? 'color 350ms ease' : 'color 120ms ease',
+            }}>{w}</span>
+          ))}
+        </span>
+      </div>
+    </Field>
+  )
+}
+
 export default function StyleEditor({ style, onChange, onReset, canBurn, burnState, onBurn }) {
   const [tab, setTab] = useState('Type')
   const set = key => val => onChange(prev => ({ ...prev, [key]: val }))
-  const { status, progress, burnedUrl } = burnState || {}
+  const { status, phase, progress, burnedUrl } = burnState || {}
   const isBurning = status === 'burning'
   const isDone = status === 'done'
+  // Every phase (S3 download → ffmpeg → S3 upload) streams its own 0–100;
+  // progress resets on each phase event. Fall back to an indeterminate pulse
+  // until the first percent of a phase arrives.
+  const burnLabel = phase === 'preparing' ? `Preparing video… ${progress}%`
+    : phase === 'uploading' ? `Finalizing… ${progress}%`
+    : `Burning… ${progress}%`
+  const burnHint = phase === 'preparing' ? 'Fetching original from storage…'
+    : phase === 'uploading' ? 'Uploading burned video…'
+    : 'FFmpeg rendering…'
+  const indeterminate = (phase === 'preparing' || phase === 'uploading') && progress === 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -107,7 +181,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             </select>
           </Field>
 
-          <SliderField label="Font Size" value={style.fontSize} min={12} max={72} unit="px" onChange={set('fontSize')} />
+          <SliderField label="Font Size" value={style.fontSize} min={12} max={200} unit="px" onChange={set('fontSize')} />
 
           <Field label="Weight">
             <SegmentBtns
@@ -126,6 +200,11 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
           </Field>
 
           <SliderField label="Outline Thickness" value={style.outlineThickness} min={0} max={8} unit="px" onChange={set('outlineThickness')} />
+          {style.backgroundBox !== 'off' && (
+            <p style={{ fontSize: 10, color: 'var(--warning, #e0a030)', margin: 0, lineHeight: 1.4 }}>
+              ⚠ Outline is disabled while a solid box is on — the box replaces it. Turn the box off (Position tab) to use an outline.
+            </p>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost btn-sm" onClick={onReset} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -150,9 +229,28 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 </button>
               )))}
             </div>
+            <button
+              onClick={() => onChange(prev => ({ ...prev, position: 'custom', customPosition: prev.customPosition || { x: 0.5, y: 0.9 } }))}
+              style={{
+                marginTop: 4, padding: '6px 0', fontSize: 10, borderRadius: 4, cursor: 'pointer',
+                border: '1px solid', fontFamily: 'inherit', width: '100%',
+                borderColor: style.position === 'custom' ? 'var(--accent)' : 'var(--border)',
+                background: style.position === 'custom' ? 'var(--accent-dim)' : 'var(--surface-2)',
+                color: style.position === 'custom' ? 'var(--accent)' : 'var(--text-dim)',
+              }}
+            >
+              Custom (drag on video)
+            </button>
+            {style.position === 'custom' && (
+              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>
+                Drag the handle on the video preview to place subtitles anywhere.
+              </p>
+            )}
           </Field>
 
-          <SliderField label="Vertical Margin" value={style.verticalMargin} min={0} max={200} unit="px" onChange={set('verticalMargin')} />
+          {style.position !== 'custom' && (
+            <SliderField label="Vertical Margin" value={style.verticalMargin} min={0} max={200} unit="px" onChange={set('verticalMargin')} />
+          )}
 
           <Field label="Max Lines">
             <SegmentBtns
@@ -162,17 +260,26 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             />
           </Field>
 
+          <SliderField
+            label="Words / Line"
+            value={style.wordsPerLine ?? 0}
+            min={0} max={12}
+            onChange={set('wordsPerLine')}
+            format={v => (v === 0 ? 'Auto' : String(v))}
+          />
+
           <Field label="Background Box">
             <SegmentBtns
-              options={[{ id: 'off', label: 'Off' }, { id: 'solid', label: 'Solid' }, { id: 'blur', label: 'Blur' }]}
-              value={style.backgroundBox}
+              options={[{ id: 'off', label: 'Off' }, { id: 'solid', label: 'Solid' }]}
+              value={style.backgroundBox === 'blur' ? 'solid' : style.backgroundBox}
               onChange={set('backgroundBox')}
             />
           </Field>
 
-          {style.backgroundBox !== 'off' && (
+          {style.backgroundBox !== 'off' && (<>
             <SliderField label="Box Opacity" value={style.backgroundOpacity} min={0} max={100} unit="%" onChange={set('backgroundOpacity')} />
-          )}
+            <SliderField label="Box Padding" value={style.boxPadding ?? 20} min={0} max={60} unit="px" onChange={set('boxPadding')} />
+          </>)}
         </>}
 
         {/* ── EFFECTS ── */}
@@ -193,19 +300,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
 
           <SliderField label="Word Timing Offset" value={style.wordTimingOffset} min={-500} max={500} unit="ms" onChange={set('wordTimingOffset')} />
 
-          {/* Live preview */}
-          <Field label="Preview">
-            <div style={{
-              background: 'var(--surface-2)', border: '1px dashed var(--border)',
-              borderRadius: 6, padding: '10px 8px', textAlign: 'center',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: style.fontWeight }}>can't stop</span>
-                <span style={{ color: style.karaokeColor, fontSize: 12, fontWeight: 700 }}>laughing</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: style.fontWeight }}>again</span>
-              </div>
-            </div>
-          </Field>
+          <EffectPreview style={style} />
         </>}
 
         {/* ── EXPORT ── */}
@@ -227,7 +322,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 disabled={isBurning || !canBurn}
                 style={{ padding: '9px', fontSize: 13 }}
               >
-                {isBurning ? <><Spinner /> Burning… {progress}%</> : <><Flame size={14} /> Burn Subtitles</>}
+                {isBurning ? <><Spinner /> {burnLabel}</> : <><Flame size={14} /> Burn Subtitles</>}
               </button>
             )}
 
@@ -240,10 +335,16 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             {isBurning && (
               <>
                 <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
+                  <div style={{
+                    width: indeterminate ? '100%' : `${progress}%`,
+                    height: '100%',
+                    background: 'var(--accent)',
+                    transition: 'width 300ms ease',
+                    ...(indeterminate ? { animation: 'pulse 1.2s ease-in-out infinite', opacity: 0.5 } : {}),
+                  }} />
                 </div>
                 <p style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center' }}>
-                  FFmpeg rendering…
+                  {burnHint}
                 </p>
               </>
             )}

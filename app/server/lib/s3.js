@@ -55,15 +55,27 @@ async function putObject(key, body, contentType) {
 }
 
 // Stream a local file up via managed multipart upload (handles large videos).
-async function uploadFile(key, localPath, contentType, contentDisposition) {
+// onProgress (optional) receives 0–100 as parts complete.
+async function uploadFile(key, localPath, contentType, contentDisposition, onProgress) {
+  const total = fs.statSync(localPath).size
   const up = new Upload({
     client: getClient(),
+    // Cap in-flight part buffers (queueSize × partSize = 10MB) — the default
+    // (4 × 5MB) plus ffmpeg plus node baseline is tight on 512MB containers,
+    // and extra upload concurrency buys nothing on fractional-vCPU instances.
+    queueSize: 5,
+    partSize: 5 * 1024 * 1024,
     params: {
       Bucket, Key: key, Body: fs.createReadStream(localPath),
       ...(contentType ? { ContentType: contentType } : {}),
       ...(contentDisposition ? { ContentDisposition: contentDisposition } : {}),
     },
   })
+  if (typeof onProgress === 'function' && total > 0) {
+    up.on('httpUploadProgress', ({ loaded }) => {
+      if (loaded != null) onProgress(Math.min(100, Math.round((loaded / total) * 100)))
+    })
+  }
   await up.done()
 }
 
@@ -93,8 +105,19 @@ async function getBuffer(key) {
 }
 
 // Download an object to a local file path. Throws if the key is missing.
-async function downloadToFile(key, localPath) {
+// onProgress (optional) receives 0–100 as bytes arrive (needs ContentLength).
+async function downloadToFile(key, localPath, onProgress) {
   const out = await getClient().send(new GetObjectCommand({ Bucket, Key: key }))
+  const total = out.ContentLength
+  if (typeof onProgress === 'function' && total > 0) {
+    let loaded = 0
+    let lastSent = -1
+    out.Body.on('data', (chunk) => {
+      loaded += chunk.length
+      const pct = Math.min(100, Math.round((loaded / total) * 100))
+      if (pct !== lastSent) { lastSent = pct; onProgress(pct) }
+    })
+  }
   await pipeline(out.Body, fs.createWriteStream(localPath))
 }
 

@@ -21,18 +21,26 @@ async function burn(req, res) {
 
   const sendEvent = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`)
 
+  // Open the SSE stream immediately — the S3 download of the original (before
+  // ffmpeg even starts) can take minutes for large videos, and holding the
+  // headers back until it finishes leaves the client staring at a dead request.
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.flushHeaders()
+  sendEvent({ type: 'start' })
+
+  // SSE comment lines keep proxies (Vercel rewrite, Render) from dropping the
+  // connection as idle during phases that emit no progress events.
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n') } catch (_) { /* stream closed */ }
+  }, 15000)
+
   try {
     const burnedUrl = await burnService.run(
       { id, style, transcription },
       {
-        // Fires after the .ass is written, before burning — matches original order.
-        onStreamStart: () => {
-          res.setHeader('Content-Type', 'text/event-stream')
-          res.setHeader('Cache-Control', 'no-cache')
-          res.setHeader('Connection', 'keep-alive')
-          res.flushHeaders()
-          sendEvent({ type: 'start' })
-        },
+        onPhase: (phase) => sendEvent({ type: 'phase', phase }),
         onProgress: (progress) => sendEvent({ type: 'progress', percent: progress }),
       }
     )
@@ -42,11 +50,13 @@ async function burn(req, res) {
   } catch (err) {
     console.error(`[${id}] Burn error:`, err.message)
     try {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`)
+      sendEvent({ type: 'error', message: err.message })
       res.end()
     } catch (_) {
       // response may already be closed
     }
+  } finally {
+    clearInterval(heartbeat)
   }
 }
 

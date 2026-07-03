@@ -62,8 +62,14 @@ app.use(cors({ origin: true, credentials: true }))
 app.use(express.json())
 app.use(cookieParser())
 
-// Log incoming HTTP requests
-app.use(morgan('dev'))
+// Request logging, both edges:
+//  --> logged the moment a request arrives (immediate) — visible even while a
+//      long handler (transcribe, burn SSE) is still running
+//  <-- logged when the response finishes, with status + timing
+app.use(morgan('--> :method :url', { immediate: true }))
+// :total-time (not :response-time) — the latter stops at headers-sent, which
+// under-reports streaming responses (burn SSE) by minutes.
+app.use(morgan('<-- :method :url :status :res[content-length] - :total-time ms'))
 
 // Public routes — auth (login/logout/me) and health checks stay open.
 app.use('/api/auth', authRouter)
