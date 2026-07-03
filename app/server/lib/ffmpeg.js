@@ -16,7 +16,6 @@ const X264_MEMORY_OPTS = [
   '-threads', X264_THREADS,
   '-preset', X264_PRESET,
   '-tune', 'zerolatency',       // Forces immediate frame output, preventing RAM queueing
-  '-maxalloc', '120000000',     // Slightly higher ceiling to give 2 threads room to work
   // ref=1: single reference frame; rc-lookahead=10: shallow rate-control
   // window. Both trade a little compression efficiency for a flat memory
   // profile at 1080p.
