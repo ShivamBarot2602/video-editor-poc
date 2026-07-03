@@ -4,7 +4,6 @@ const store = require('../storage/videoStore')
 const { withTempDir } = require('../lib/tempWork')
 const { buildAss } = require('../lib/assBuilder')
 const { burnSubtitles } = require('../lib/ffmpeg')
-const { normalizeVideoExtension } = require('../lib/videoExtensions')
 
 async function videoExists(id) {
   return store.videoExists(id)
@@ -39,16 +38,20 @@ async function run({ id, style, transcription }, { onPhase, onProgress }) {
     onPhase(name)
   }
 
+  // Output container follows the user's chosen format (mp4|webm), NOT the source
+  // extension — the burn always re-encodes (ass filter), so we pick the target.
+  const format = style?.outputFormat === 'webm' ? 'webm' : 'mp4'
+
   return withTempDir(`burn-${id}`, async (dir) => {
     phase('preparing') // pulling the original from S3
     const orig = await store.downloadOriginal(id, dir, onProgress)
-    const ext = normalizeVideoExtension(path.extname(orig))
+    const ext = format === 'webm' ? '.webm' : '.mp4'
     const assPath = path.join(dir, 'subtitles.ass')
     fs.writeFileSync(assPath, assContent, 'utf8')
     const burnedPath = path.join(dir, `burned${ext}`)
 
     phase('burning')
-    await burnSubtitles(orig, assPath, burnedPath, onProgress)
+    await burnSubtitles(orig, assPath, burnedPath, onProgress, { format, quality: style?.quality })
 
     phase('uploading') // pushing burned file back to S3
     await store.uploadBurned(id, ext, burnedPath, onProgress)

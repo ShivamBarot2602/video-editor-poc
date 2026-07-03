@@ -55,12 +55,27 @@ function compressAudio(inputPath, outputPath) {
   })
 }
 
+// Clamp a user-supplied CRF (quality) to a sane range. Lower = better quality,
+// bigger file. Shared range for x264 (0–51) and vp9 (0–63); we cap at 51 which
+// is valid for both. Non-numeric → 23 (visually transparent default).
+function clampCrf(quality) {
+  const n = Number(quality)
+  if (!Number.isFinite(n)) return 23
+  return Math.min(51, Math.max(0, Math.round(n)))
+}
+
 /**
  * Burn an .ass subtitle file into a video.
  * Streams progress (0–100) via the onProgress callback.
- * Leaves the audio stream untouched (-c:a copy).
+ *
+ * @param {object} [opts]
+ * @param {'mp4'|'webm'} [opts.format='mp4'] output container/codec:
+ *   - mp4  → H.264 (libx264), audio copied through (fast; source is normally AAC)
+ *   - webm → VP9 (libvpx-vp9) + Opus; audio MUST be re-encoded (can't copy AAC
+ *     into WebM). VP9 is substantially slower than veryfast x264.
+ * @param {number} [opts.quality] CRF; lower = higher quality (default 23).
  */
-function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
+function burnSubtitles(inputPath, assPath, outputPath, onProgress, opts = {}) {
   return new Promise((resolve, reject) => {
     // Delete existing burned file so ffmpeg doesn't prompt for overwrite
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
@@ -72,10 +87,35 @@ function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
     const fontsDir = path.join(__dirname, '../../shared/fonts')
     const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/:/g, '\\:')
 
-    ffmpeg(inputPath)
+    const format = opts.format === 'webm' ? 'webm' : 'mp4'
+    const crf = clampCrf(opts.quality)
+
+    const command = ffmpeg(inputPath)
       .videoFilters(`ass='${escapedAss}':fontsdir='${escapedFontsDir}'`)
-      .audioCodec('copy')
-      .outputOptions(X264_MEMORY_OPTS)
+
+    if (format === 'webm') {
+      // VP9 constant-quality: -b:v 0 + -crf. row-mt + cpu-used keep it from
+      // being unbearably slow (still much slower than x264).
+      command
+        .videoCodec('libvpx-vp9')
+        .audioCodec('libopus')
+        .outputOptions([
+          '-threads', X264_THREADS,
+          '-crf', String(crf),
+          '-b:v', '0',
+          '-row-mt', '1',
+          '-deadline', 'good',
+          '-cpu-used', '4',
+        ])
+    } else {
+      // H.264 path — memory-capped x264 opts + user CRF. Audio copied through.
+      command
+        .videoCodec('libx264')
+        .audioCodec('copy')
+        .outputOptions([...X264_MEMORY_OPTS, '-crf', String(crf)])
+    }
+
+    command
       .output(outputPath)
       .on('progress', ({ percent }) => {
         if (typeof onProgress === 'function' && percent != null) {

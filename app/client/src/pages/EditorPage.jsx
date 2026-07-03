@@ -373,6 +373,8 @@ export default function EditorPage() {
             canBurn={Boolean(transcription)}
             burnState={burnState}
             onBurn={handleBurn}
+            speakers={transcription?.metadata?.speakers || []}
+            speakerAliases={speakerAliases}
           />
         </Panel>
 
