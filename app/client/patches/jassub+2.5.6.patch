@@ -1,3 +1,14 @@
+diff --git a/node_modules/jassub/dist/wasm/jassub-worker.js b/node_modules/jassub/dist/wasm/jassub-worker.js
+index 56c5c9c..89b7f10 100644
+--- a/node_modules/jassub/dist/wasm/jassub-worker.js
++++ b/node_modules/jassub/dist/wasm/jassub-worker.js
+@@ -1097,4 +1097,3 @@ async function Module(moduleArg = {}) {
+ export default Module;
+ var isPthread = globalThis.name == "em-pthread";
+ isPthread && Module();
+\ No newline at end of file
+-//# sourceMappingURL=jassub-worker.js.map
+\ No newline at end of file
 diff --git a/node_modules/jassub/dist/worker/renderers/2d-renderer.js b/node_modules/jassub/dist/worker/renderers/2d-renderer.js
 index 512c189..75a02d1 100644
 --- a/node_modules/jassub/dist/worker/renderers/2d-renderer.js

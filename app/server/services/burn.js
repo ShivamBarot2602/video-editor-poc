@@ -22,24 +22,37 @@ async function resolveTranscription(id, provider) {
 
 /**
  * Build the .ass, then burn subtitles into the video, streaming progress.
- * The .ass is written (to S3 + a temp file) BEFORE the stream starts, matching
- * the original order: onStreamStart fires the SSE headers + 'start', then
- * burnSubtitles runs with onProgress. Returns the burned video URL.
+ * The caller opens the SSE stream before calling this; phase transitions are
+ * reported via onPhase so the client isn't left staring at 0% during the
+ * S3 download (large originals take minutes) or the final upload.
+ * Returns the burned video URL.
  */
-async function run({ id, style, transcription }, { onStreamStart, onProgress }) {
+async function run({ id, style, transcription }, { onPhase, onProgress }) {
   const assContent = buildAss(transcription, style)
   await store.writeAss(id, assContent)
 
+  // Each phase gets its own 0–100 progress; the client keys the bar off the
+  // phase event that precedes it. Phase transitions are logged server-side so
+  // a stalled burn can be located in the logs without client access.
+  const phase = (name) => {
+    console.log(`[${id}] burn: ${name}`)
+    onPhase(name)
+  }
+
   return withTempDir(`burn-${id}`, async (dir) => {
-    const orig = await store.downloadOriginal(id, dir)
+    phase('preparing') // pulling the original from S3
+    const orig = await store.downloadOriginal(id, dir, onProgress)
     const ext = normalizeVideoExtension(path.extname(orig))
     const assPath = path.join(dir, 'subtitles.ass')
     fs.writeFileSync(assPath, assContent, 'utf8')
     const burnedPath = path.join(dir, `burned${ext}`)
 
-    onStreamStart()
+    phase('burning')
     await burnSubtitles(orig, assPath, burnedPath, onProgress)
-    await store.uploadBurned(id, ext, burnedPath)
+
+    phase('uploading') // pushing burned file back to S3
+    await store.uploadBurned(id, ext, burnedPath, onProgress)
+    console.log(`[${id}] burn: done`)
     return `/api/video/${id}/burned`
   })
 }

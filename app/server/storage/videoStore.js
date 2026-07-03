@@ -138,11 +138,12 @@ async function statOriginal(id) {
 }
 
 // Download the source video into destDir; returns the local path (keeps ext).
-async function downloadOriginal(id, destDir) {
+// onProgress (optional) receives 0–100 as bytes arrive.
+async function downloadOriginal(id, destDir, onProgress) {
   const name = await findOriginalName(id)
   if (!name) throw new Error('Original video not found')
   const local = path.join(destDir, name)
-  await s3.downloadToFile(vkey(id, name), local)
+  await s3.downloadToFile(vkey(id, name), local, onProgress)
   return local
 }
 
@@ -165,12 +166,13 @@ async function hasBurned(id) {
   return (await findBurnedName(id)) !== null
 }
 
-async function uploadBurned(id, ext, localPath) {
+// onProgress (optional) receives 0–100 as upload parts complete.
+async function uploadBurned(id, ext, localPath, onProgress) {
   const key = burnedKey(id, ext)
   // Burned video is a download link in the UI. Objects are public (no per-request
   // response-content-disposition override on unsigned GETs), so bake the
   // attachment disposition into the object metadata at upload time.
-  await s3.uploadFile(key, localPath, contentTypeFor(key), `attachment; filename="${P.burnedName(ext)}"`)
+  await s3.uploadFile(key, localPath, contentTypeFor(key), `attachment; filename="${P.burnedName(ext)}"`, onProgress)
 }
 
 async function publicUrlBurned(id) {

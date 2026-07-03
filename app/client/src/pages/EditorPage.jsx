@@ -233,7 +233,7 @@ export default function EditorPage() {
 
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return
-    setBurnState({ status: 'burning', progress: 0, burnedUrl: null })
+    setBurnState({ status: 'burning', phase: 'preparing', progress: 0, burnedUrl: null })
     const toastId = toast.loading('Burning subtitles…')
 
     // Derive bold flag from fontWeight for ASS compat
@@ -244,7 +244,8 @@ export default function EditorPage() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Burn failed') }
 
       await readJsonLines(res, (event) => {
-        if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
+        if (event.type === 'phase') setBurnState(s => ({ ...s, phase: event.phase, progress: 0 }))
+        else if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
         else if (event.type === 'done') {
           setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
           toast.success('Subtitles burned!', { id: toastId })

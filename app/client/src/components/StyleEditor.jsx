@@ -82,9 +82,19 @@ function Spinner() {
 export default function StyleEditor({ style, onChange, onReset, canBurn, burnState, onBurn }) {
   const [tab, setTab] = useState('Type')
   const set = key => val => onChange(prev => ({ ...prev, [key]: val }))
-  const { status, progress, burnedUrl } = burnState || {}
+  const { status, phase, progress, burnedUrl } = burnState || {}
   const isBurning = status === 'burning'
   const isDone = status === 'done'
+  // Every phase (S3 download → ffmpeg → S3 upload) streams its own 0–100;
+  // progress resets on each phase event. Fall back to an indeterminate pulse
+  // until the first percent of a phase arrives.
+  const burnLabel = phase === 'preparing' ? `Preparing video… ${progress}%`
+    : phase === 'uploading' ? `Finalizing… ${progress}%`
+    : `Burning… ${progress}%`
+  const burnHint = phase === 'preparing' ? 'Fetching original from storage…'
+    : phase === 'uploading' ? 'Uploading burned video…'
+    : 'FFmpeg rendering…'
+  const indeterminate = (phase === 'preparing' || phase === 'uploading') && progress === 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -247,7 +257,7 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
                 disabled={isBurning || !canBurn}
                 style={{ padding: '9px', fontSize: 13 }}
               >
-                {isBurning ? <><Spinner /> Burning… {progress}%</> : <><Flame size={14} /> Burn Subtitles</>}
+                {isBurning ? <><Spinner /> {burnLabel}</> : <><Flame size={14} /> Burn Subtitles</>}
               </button>
             )}
 
@@ -260,10 +270,16 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
             {isBurning && (
               <>
                 <div style={{ height: 3, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                  <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
+                  <div style={{
+                    width: indeterminate ? '100%' : `${progress}%`,
+                    height: '100%',
+                    background: 'var(--accent)',
+                    transition: 'width 300ms ease',
+                    ...(indeterminate ? { animation: 'pulse 1.2s ease-in-out infinite', opacity: 0.5 } : {}),
+                  }} />
                 </div>
                 <p style={{ fontSize: 10, color: 'var(--text-dim)', textAlign: 'center' }}>
-                  FFmpeg rendering…
+                  {burnHint}
                 </p>
               </>
             )}
