@@ -9,15 +9,18 @@ const path = require('path')
 // source, which OOMs small containers (Render 512MB). With these caps the
 // same encode peaks at ~260MB. Extra threads are useless on fractional-vCPU
 // instances anyway; env-tunable so bigger deployments can raise them.
-const X264_THREADS = process.env.FFMPEG_THREADS || '1'
+const X264_THREADS = process.env.FFMPEG_THREADS || '2'
 const X264_PRESET = process.env.FFMPEG_PRESET || 'veryfast'
+
 const X264_MEMORY_OPTS = [
   '-threads', X264_THREADS,
   '-preset', X264_PRESET,
+  '-tune', 'zerolatency',       // Forces immediate frame output, preventing RAM queueing
+  '-maxalloc', '120000000',     // Slightly higher ceiling to give 2 threads room to work
   // ref=1: single reference frame; rc-lookahead=10: shallow rate-control
   // window. Both trade a little compression efficiency for a flat memory
   // profile at 1080p.
-  '-x264-params', 'ref=1:rc-lookahead=20',
+  '-x264-params', 'ref=1:rc-lookahead=15:bframes=0:sliced-threads=1'
 ]
 
 /**
