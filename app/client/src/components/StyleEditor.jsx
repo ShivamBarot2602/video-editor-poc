@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Flame, Download, RefreshCw, Check,Info } from 'lucide-react'
 import { FONT_FAMILIES, PRESETS, DEFAULT_STYLE } from '../config/subtitleStyle'
 
@@ -38,34 +38,48 @@ const POSITIONS = [
 const TABS = ['Type', 'Position', 'Effects', 'Export']
 
 // Small ⓘ dot with a short hover popover explaining a control.
+// Plain lucide Info glyph + tooltip. Tooltip is FIXED-positioned (computed from
+// the dot's rect) so it escapes the sidebar's overflow:auto clip — otherwise the
+// top-most control's tooltip hides behind the tab bar. Flips below/above by
+// available space and clamps horizontally to the viewport. Themed to match the
+// thumbnail page's tooltip (--surface / --border / --text-bright).
 function InfoDot({ text }) {
-  const [show, setShow] = useState(false)
+  const ref = useRef(null)
+  const [pos, setPos] = useState(null)
+  const show = () => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    const W = 200, EST_H = 64, M = 8
+    const left = Math.min(Math.max(M, r.left), window.innerWidth - W - M)
+    const below = r.bottom + EST_H + M < window.innerHeight
+    setPos({ left, top: below ? r.bottom + 6 : r.top - 6, above: !below })
+  }
+  const hide = () => setPos(null)
   return (
     <span
-      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      ref={ref}
+      style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-faint)', cursor: 'help', flexShrink: 0 }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      tabIndex={0}
+      onFocus={show}
+      onBlur={hide}
+      aria-label={text}
     >
-      {/* <span style={{
-        width: 12, height: 12, borderRadius: 99, border: '1px solid var(--border)',
-        color: 'var(--text-dim)', fontSize: 9, lineHeight: '11px', textAlign: 'center',
-        display: 'inline-block', cursor: 'help', fontStyle: 'normal', fontWeight: 700,
-      }}>i</span> */}
-      <span style={{
-        width: 12, height: 12, borderRadius: 99, border: '1px solid var(--border)',
-        color: 'var(--text-dim)', fontSize: 9, lineHeight: '11px', textAlign: 'center',
-        display: 'inline-block', cursor: 'help', fontStyle: 'normal', fontWeight: 700,
-      }}>
-        <Info size={12} />
-      </span>
-      {show && (
-        <span style={{
-          position: 'absolute', bottom: '150%', left: 0, width: 160, zIndex: 50,
-          background: 'var(--surface-3, #23232a)', color: 'var(--text-muted)',
-          fontSize: 10, lineHeight: 1.4, padding: '6px 8px', borderRadius: 5,
-          border: '1px solid var(--border)', boxShadow: '0 4px 14px rgba(0,0,0,0.45)',
-          textTransform: 'none', letterSpacing: 0, fontWeight: 400, pointerEvents: 'none',
-        }}>{text}</span>
+      <Info size={12} />
+      {pos && (
+        <span
+          role="tooltip"
+          style={{
+            position: 'fixed', left: pos.left, top: pos.top,
+            transform: pos.above ? 'translateY(-100%)' : 'none',
+            width: 200, zIndex: 1000, padding: '6px 9px', borderRadius: 6,
+            background: 'var(--surface)', color: 'var(--text-bright)',
+            border: '1px solid var(--border)', boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+            fontSize: 11, lineHeight: 1.45, fontWeight: 400, letterSpacing: 0,
+            textTransform: 'none', pointerEvents: 'none',
+          }}
+        >{text}</span>
       )}
     </span>
   )
