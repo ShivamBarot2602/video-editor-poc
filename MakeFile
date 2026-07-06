@@ -1,0 +1,73 @@
+# Root Makefile for sp-video-editor-poc
+
+.DEFAULT_GOAL := help
+
+.PHONY: help install install-all install-ffmpeg dev server-dev client-dev build preview start server-start clean
+
+help:
+	@echo "Usage: make <target>"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  install       Install dependencies for the root workspace"
+	@echo "  install-all   Install dependencies for server and client workspaces"
+	@echo "  install-ffmpeg Install ffmpeg if it is not present on the system"
+	@echo "  dev           Start server and client concurrently"
+	@echo "  server-dev    Start the server in watch mode"
+	@echo "  client-dev    Start the Vite client dev server"
+	@echo "  build         Build the client app"
+	@echo "  preview       Preview the built client app"
+	@echo "  start         Start the server"
+	@echo "  server-start  Start the server only"
+	@echo "  clean         Remove node_modules and client build artifacts"
+
+install:
+	yarn install
+
+install-all:
+	yarn install:all
+
+install-ffmpeg:
+	@if command -v ffmpeg >/dev/null 2>&1; then \
+		echo "ffmpeg already installed"; \
+	else \
+		if [ "$(uname)" = "Darwin" ]; then \
+			if command -v brew >/dev/null 2>&1; then \
+				brew install ffmpeg; \
+			else \
+				echo "Homebrew not found. Install Homebrew or ffmpeg manually." >&2; \
+				exit 1; \
+			fi; \
+		elif [ -f /etc/debian_version ]; then \
+			sudo apt-get update && sudo apt-get install -y ffmpeg; \
+		elif [ -f /etc/alpine-release ]; then \
+			sudo apk add ffmpeg; \
+		elif [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then \
+			sudo dnf install -y ffmpeg || sudo yum install -y ffmpeg; \
+		else \
+			echo "Unsupported OS. Install ffmpeg manually: https://ffmpeg.org/download.html" >&2; \
+			exit 1; \
+		fi; \
+	fi
+
+dev:
+	yarn dev
+
+server-dev:
+	yarn --cwd app/server dev
+
+client-dev:
+	yarn --cwd app/client dev
+
+build:
+	yarn --cwd app/client build
+
+preview:
+	yarn --cwd app/client preview
+
+start:
+	yarn --cwd app/server start
+
+server-start: start
+
+clean:
+	rm -rf node_modules app/server/node_modules app/client/node_modules app/client/dist
