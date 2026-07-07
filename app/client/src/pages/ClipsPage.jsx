@@ -8,6 +8,7 @@ import ClipCard from '../components/ClipCard'
 import ClipControlsBar from '../components/ClipControlsBar'
 import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
 import SourceVideoPlayer from '../components/SourceVideoPlayer'
+import TimerToast from '../components/TimerToast'
 import { fmtSize } from '../lib/format'
 import { triggerDownload } from '../lib/dom'
 import { listVideos } from '../api/videos'
@@ -221,7 +222,7 @@ function ClipsEditor({ videoId }) {
     if (!selectedTranscriptProvider) { toast.error('Pick a transcript source first'); return }
     setSuggesting(true)
     setError(null)
-    const tid = toast.loading('Suggesting clips…')
+    const tid = toast.loading(<TimerToast label="Suggesting clips…" />)
     try {
       const data = await suggestClips(videoId, { suggestProvider, transcriptProvider: selectedTranscriptProvider, bucket, count }, 'Failed to suggest clips')
       setMetadata(data.metadata)
@@ -245,7 +246,7 @@ function ClipsEditor({ videoId }) {
     setSuggesting(true)
     setError(null)
     setAnalyzePhase({ phase: 'start', percent: 0 })
-    const tid = toast.loading('Analyzing video…')
+    const tid = toast.loading(<TimerToast label="Analyzing video…" />)
 
     let es
     const finish = () => {
