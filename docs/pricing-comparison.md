@@ -1,6 +1,6 @@
 # STT Provider Pricing Comparison
 
-> All prices verified May 2026 from official provider pricing pages.  
+> All prices verified July 2026 from official provider pricing pages.  
 > Prices in USD unless noted. Pay-as-you-go / entry tier shown.
 
 ---
@@ -17,10 +17,10 @@
 | **Sarvam AI** | `saaras:v3` | ~$0.006 | **~$0.36** | ₹30/hr (no diarize) |
 | **AssemblyAI** | `universal-2` | $0.0025 | **$0.15** | Pay-as-you-go |
 | **ElevenLabs** | `scribe_v2` | ~$0.00367 | **$0.22** | Pay-as-you-go (published; −40% Mar 2026) |
-| **Speechmatics** | `enhanced` | $0.004 | **$0.24** | Pro tier (480 min/mo included) |
+| **Speechmatics** | `enhanced` | $0.0173 | **$1.04** | Was $0.24 before 2026 restructure; Standard $0.80; Melia $0.129 |
 | **Deepgram** | `nova-3` | $0.0077 | **$0.462** | Pay-as-you-go |
-| **Gladia** | `solaria-1` | $0.0102 | **$0.61** | Starter tier |
-| **pyannoteAI** | `precision-2` | ~$0.003 | **€0.168** (~$0.183) | Diarize + STT orchestration |
+| **Gladia** | `solaria-1` | $0.0102 | **$0.61** | Starter tier; Solaria-3 flagship also available |
+| **pyannoteAI** | `precision-2` | ~$0.0019 | **€0.112** (~$0.122) | Diarization; cut from €0.168 |
 | **Sonix** | `Sonix AI` | $0.167 | **$10.00** | Standard (PAYG) |
 
 ---
@@ -37,10 +37,10 @@
 | **Sarvam AI** | +₹15/hr | **~$0.54** (₹45/hr) |
 | **AssemblyAI** | +$0.02/hr | **$0.17** |
 | **ElevenLabs** | Included | **$0.22** |
-| **Speechmatics** | Included | **$0.24** |
+| **Speechmatics** | Included | **$1.04** |
 | **Deepgram** | +$0.0020/min (+$0.12/hr) | **$0.582** |
 | **Gladia** | Included | **$0.61** |
-| **pyannoteAI** | Included (core service) | **€0.168** (~$0.183) |
+| **pyannoteAI** | Included (core service) | **€0.112** (~$0.122) |
 | **Sonix** | Included | **$10.00** |
 
 ---
@@ -51,22 +51,22 @@
 |---|---|---|---|
 | 1 | **Groq** | $0.04 | No diarization — single speaker only |
 | 2 | **xAI Grok** | $0.10 | Diarization included; synchronous |
-| 3 | **AssemblyAI** | $0.17 | +$0.02/hr add-on |
-| 4 | **Mistral** | $0.18 | Diarization included |
-| 5 | **pyannoteAI** | ~$0.183 (€0.168) | Diarize-first approach |
+| 3 | **pyannoteAI** | ~$0.122 (€0.112) | Diarize-first; rate cut from €0.168 in 2026 |
+| 4 | **AssemblyAI** | $0.17 | universal-2 + $0.02/hr add-on (u3.5-pro is $0.23) |
+| 5 | **Mistral** | $0.18 | Diarization included |
 | 6 | **Rev AI** | $0.20 | Diarization included |
 | 7 | **ElevenLabs** | $0.22 | Diarization included; published rate (−40% Mar 2026) |
-| 8 | **Speechmatics** | $0.24 | Diarization included |
-| 9 | **OpenAI** | $0.36 | Diarization included (same price) |
-| 10 | **Sarvam AI** | ~$0.54 (₹45) | Indian languages only |
-| 11 | **Deepgram** | $0.582 | +$0.12/hr add-on |
-| 12 | **Gladia** | $0.61 | Starter tier; Growth: $0.20/hr |
+| 8 | **OpenAI** | $0.36 | Diarization included (same price) |
+| 9 | **Sarvam AI** | ~$0.54 (₹45) | Indian languages only |
+| 10 | **Deepgram** | $0.582 | +$0.12/hr add-on |
+| 11 | **Gladia** | $0.61 | Starter tier; Growth: $0.20/hr |
+| 12 | **Speechmatics** | $1.04 | `enhanced` (was $0.24); Standard $0.80; Melia $0.129 |
 | 13 | **Sonix** | $10.00 | PAYG; Pro plan ≈ $2/hr at full usage |
 
-> **xAI Grok** at **$0.10/hr** is now the cheapest diarization-capable provider with a synchronous API.  
-> **AssemblyAI** at **$0.17/hr** (universal-2 + diarization) offers the best balance of features, accuracy, and cost.  
-> **ElevenLabs** cut Scribe v2 batch ~40% in March 2026 (now **$0.22/hr**), moving it from one of the priciest options into the mid-tier.  
-> **Gladia Growth plan** (with volume commitment) drops to **$0.20/hr** — competitive with AssemblyAI.
+> **xAI Grok** at **$0.10/hr** is the cheapest diarization-capable provider with a synchronous API; **pyannoteAI** cut to **€0.112/hr (~$0.122)** is now the cheapest diarization-first option.  
+> **AssemblyAI** at **$0.17/hr** (universal-2 + diarization) still offers the best balance of features, accuracy, and cost; its newer `universal-3.5-pro` flagship is $0.21/$0.23.  
+> **Speechmatics** restructured in 2026: `enhanced` jumped to **$1.04/hr** (was $0.24) and Standard is $0.80/hr, but its new **Melia** multilingual model is **$0.129/hr** — the cheapest multilingual option.  
+> **Gladia Growth plan** (with volume commitment) drops to **$0.20/hr**; a newer **Solaria-3** flagship sits in the same tier as solaria-1 ($0.61).
 
 ---
 
@@ -94,9 +94,9 @@
 
 | Provider | Free Credits / Trial |
 |---|---|
-| **pyannoteAI** | 150 hours free (no card required) |
+| **pyannoteAI** | Plan-tiered free hours (Developer / Starter) |
 | **Gladia** | 10 hours/month free |
-| **Speechmatics** | 480 min/month free |
+| **Speechmatics** | Free tier (Melia: 10 hours/month) |
 | **Sarvam AI** | ₹1,000 (~$12) credits |
 | **Groq** | Free tier available (25 MB limit) |
 | **OpenAI** | Credits on new accounts |

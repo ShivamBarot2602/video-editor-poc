@@ -1,5 +1,5 @@
 // /docs/subtitles — STT provider evaluation + subtitle pipeline.
-// Data verified May 2026. Mirrors docs/STT-Provider-POC-Summary.
+// Data verified July 2026. Mirrors docs/STT-Provider-POC-Summary.
 import { DocShell, SectionTitle, Flow, Mark } from './_shared'
 
 const RECOMMENDATIONS = [
@@ -13,23 +13,25 @@ const RECOMMENDATIONS = [
     body: 'Purpose-built for Hinglish / Tanglish and Indian languages. The right call when the audience speaks Indian languages.' },
   { tag: 'Long-form video (> 1 hr)', pick: 'Rev AI', price: '$0.20/hr · up to 17 hr',
     body: 'Most permissive limits (17 hr / 5 TB). No chunking for long podcasts or interviews.' },
-  { tag: 'Best for free evaluation', pick: 'pyannoteAI', price: '€0.168/hr · 150 free hrs',
-    body: '150 hours free, no card required — diarization-first with voiceprints. Great for a no-cost pilot.' },
+  { tag: 'Best for free evaluation', pick: 'pyannoteAI', price: '€0.112/hr · free tier',
+    body: 'Diarization-first with voiceprints, at the lowest per-hour rate here. Plan-tiered free hours make it a strong no-cost pilot.' },
 ]
 
+// Sorted cheapest-first by the with-diarization rate. Model column = the id the
+// POC actually pins; newer flagships noted below the table. Verified July 2026.
 const PRICING = [
   { p: 'Groq', m: 'whisper-large-v3-turbo', base: '$0.04', diar: 'N/A (no diarize)', lang: '99+', limit: '100 MB', free: 'Free tier' },
   { p: 'xAI Grok', m: 'grok-stt', base: '$0.10', diar: '$0.10', lang: '25', limit: '500 MB', free: 'Not documented', freeWarn: true },
+  { p: 'pyannoteAI', m: 'precision-2', base: '€0.112', diar: '€0.112', lang: 'Multi', limit: 'Not stated', free: 'Free tier' },
   { p: 'AssemblyAI', m: 'universal-2', base: '$0.15', diar: '$0.17', lang: '99+', limit: '~5 GB / ~10 hr', free: 'Trial credits', hl: true },
   { p: 'Mistral', m: 'voxtral-mini-latest', base: '$0.18', diar: '$0.18', lang: '13', limit: '1 GB / 3 hr', free: 'Limited' },
-  { p: 'pyannoteAI', m: 'precision-2', base: '€0.168', diar: '€0.168', lang: 'Multi', limit: 'Not stated', free: '150 hours!' },
   { p: 'Rev AI', m: 'reverb-asr', base: '$0.20', diar: '$0.20', lang: '57', limit: '5 TB / 17 hr', free: 'Limited' },
   { p: 'ElevenLabs', m: 'scribe_v2', base: '$0.22', diar: '$0.22', lang: '90+', limit: '3 GB', free: 'Limited' },
-  { p: 'Speechmatics', m: 'enhanced', base: '$0.24', diar: '$0.24', lang: '55+', limit: '2 hr', free: '480 min/mo' },
   { p: 'OpenAI', m: 'gpt-4o-transcribe-diarize', base: '$0.36', diar: '$0.36', lang: '55+', limit: '25 MB', limitWarn: true, free: 'New acct credits' },
   { p: 'Sarvam AI', m: 'saaras:v3', base: '~$0.36', diar: '~$0.54', lang: '22 Indic', limit: '1 hr (Batch)', free: '₹1,000 credits' },
   { p: 'Deepgram', m: 'nova-3', base: '$0.462', diar: '$0.582', lang: '50+', limit: '2 GB / 10 min', limitWarn: true, free: '$200 credits' },
   { p: 'Gladia', m: 'solaria-1', base: '$0.61', diar: '$0.61', lang: '100+', limit: '1 GB / 135 min', free: '10 hr/mo' },
+  { p: 'Speechmatics', m: 'enhanced', base: '$1.04', diar: '$1.04', lang: '55+', limit: '2 hr', free: 'Free tier' },
   { p: 'Sonix', m: 'Sonix AI', base: '$10.00', diar: '$10.00', lang: '53+', limit: '100 MB', free: 'None', freeBad: true },
 ]
 
@@ -80,7 +82,7 @@ export default function SubtitlesDocPage() {
       eyebrow="POC Documentation · Subtitles"
       title="Speech-to-Text Provider Evaluation"
       lede="We integrated and tested 13 STT providers behind one normalised output, then built the subtitle pipeline on top — transcribe, diarize, edit, and burn captions into the video. This is the decision summary: which provider to use, what it costs, and what each supports."
-      meta={<>13 providers benchmarked · Prices &amp; features verified <strong>May 2026</strong> · Pipeline: upload → transcribe → diarize → subtitle / clip</>}
+      meta={<>13 providers benchmarked · Prices &amp; features verified <strong>July 2026</strong> · Pipeline: upload → transcribe → diarize → subtitle / clip</>}
     >
       {/* 1. OVERVIEW */}
       <SectionTitle n="1">Overview &amp; objective</SectionTitle>
@@ -117,8 +119,8 @@ export default function SubtitlesDocPage() {
         <strong> Sarvam AI</strong> for Indian-language audiences.
       </p>
       <p className="rpt-callout is-avoid">
-        <strong>Watch out:</strong> Sonix is $10/hr (17–250× pricier than alternatives); Deepgram caps
-        requests at 10 min and OpenAI at 25 MB — both need chunking for full-length video.
+        <strong>Watch out:</strong> Sonix is $10/hr and Speechmatics&apos; <code>enhanced</code> jumped to $1.04/hr in 2026;
+        Deepgram caps requests at 10 min and OpenAI at 25 MB — both need chunking for full-length video.
       </p>
 
       {/* 4. PRICING */}
@@ -150,8 +152,11 @@ export default function SubtitlesDocPage() {
         </table>
       </div>
       <ul className="rpt-notes">
-        <li><strong>ElevenLabs</strong> cut Scribe v2 ~40% in March 2026 (now $0.22/hr) — moved from priciest into the mid-tier.</li>
-        <li><strong>Gladia</strong> drops to $0.20/hr on its Growth plan (volume commitment); <strong>Sonix</strong> Pro subscription is ≈ $2/hr at full usage but PAYG is $10/hr.</li>
+        <li><strong>Speechmatics</strong> restructured in 2026: <code>enhanced</code> batch is now <strong>$1.04/hr</strong> (was $0.24) and Standard is $0.80/hr — but its new <strong>Melia</strong> multilingual model is just <strong>$0.129/hr</strong> (10 hr/mo free), the cheapest multilingual option here.</li>
+        <li><strong>pyannoteAI</strong> cut its rate to <strong>€0.112/hr</strong> (was €0.168); free hours are now tied to plan tiers rather than a flat 150-hour grant.</li>
+        <li><strong>AssemblyAI</strong> ships a newer <code>universal-3.5-pro</code> flagship ($0.21 base / $0.23 w/ diarization); the POC still pins <code>universal-2</code> ($0.15 / $0.17), which remains available and cheaper.</li>
+        <li><strong>Mistral</strong>&apos;s <code>voxtral-mini-latest</code> alias now resolves to <strong>Voxtral Transcribe 2</strong> (price unchanged); <strong>Gladia</strong> added a <code>Solaria-3</code> flagship (same tier; Growth plan reaches $0.20/hr on volume).</li>
+        <li><strong>ElevenLabs</strong> Scribe v2 stayed at $0.22/hr; <strong>Sonix</strong> PAYG is still $10/hr (Pro ≈ $2/hr at full usage).</li>
       </ul>
 
       {/* 5. FEATURES */}
@@ -226,7 +231,7 @@ export default function SubtitlesDocPage() {
       </ul>
 
       <footer className="rpt-footer">
-        SP Video Editor POC · STT Provider Evaluation · Internal · Verified May 2026<br />
+        SP Video Editor POC · STT Provider Evaluation · Internal · Verified July 2026<br />
         Source: provider docs &amp; pricing pages verified individually; mirrors the offline summary deck.
       </footer>
     </DocShell>

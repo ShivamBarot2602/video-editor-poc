@@ -1,7 +1,7 @@
 # Thumbnail POC — Feature Comparison
 
 > Feature matrix for the three model integrations used in this demo.
-> Data verified June 2026 from official documentation.
+> Data verified July 2026 from official documentation.
 > Models reflect the current code: `gemini-2.5-pro` (rerank), `gemini-2.5-flash-image` + `gpt-image-1.5` (polish).
 
 Legend: ✅ Supported · ⚠️ Partial / Conditional · ❌ Not supported
@@ -32,7 +32,7 @@ Legend: ✅ Supported · ⚠️ Partial / Conditional · ❌ Not supported
 | Quality / fidelity tiers | n/a | ❌ Single tier | ✅ `low / medium / high / auto` |
 | Output format control | n/a | ❌ Defaults to PNG | ✅ `png / jpeg / webp` |
 | Mask / inpaint | n/a | ❌ | ✅ Optional PNG mask |
-| JSON-mode response | ❌ (`response_mime_type` rejected on `v1`) | n/a | n/a |
+| JSON-mode response | ❌ (`response_mime_type` rejected on the rerank endpoint) | n/a | n/a |
 | Watermark | n/a | ⚠️ Invisible SynthID on every output | ❌ No watermark |
 
 ---
@@ -41,7 +41,7 @@ Legend: ✅ Supported · ⚠️ Partial / Conditional · ❌ Not supported
 
 | | Gemini 2.5 Pro | Gemini 2.5 Flash Image | OpenAI gpt-image-1.5 |
 |---|---|---|---|
-| Endpoint | `…/v1/models/gemini-2.5-pro:generateContent` | `…/v1/models/gemini-2.5-flash-image:generateContent` | `https://api.openai.com/v1/images/edits` |
+| Endpoint | `…/v1beta/models/gemini-2.5-pro:generateContent` | `…/v1/models/gemini-2.5-flash-image:generateContent` | `https://api.openai.com/v1/images/edits` |
 | Auth header | `x-goog-api-key` | `x-goog-api-key` | `Authorization: Bearer` |
 | Body type | `application/json` | `application/json` | `multipart/form-data` |
 | Image payload | base64 in `parts[].inline_data.data` | base64 in `parts[].inline_data.data` | binary stream `image` field |
@@ -56,6 +56,7 @@ Legend: ✅ Supported · ⚠️ Partial / Conditional · ❌ Not supported
 | Knob | Gemini Rerank | Gemini Polish | OpenAI Polish |
 |---|---|---|---|
 | `temperature` | 0.2 | n/a | n/a |
+| `system_instruction` | static scoring rules (v1beta endpoint) | n/a | n/a |
 | `safetySettings` | `BLOCK_NONE` × 4 | `BLOCK_NONE` × 4 | n/a |
 | `quality` | n/a | n/a | `high` (code default; `medium` is the cheaper alt) |
 | `size` | n/a | n/a | from source aspect (`auto` fallback) |
@@ -128,12 +129,13 @@ See `thumbnail-pricing.md` for the full pricing matrix and cheaper modes.
 
 | Issue | Affected model | Root cause | Resolution |
 |---|---|---|---|
-| HTTP 400 `Unknown name 'response_mime_type'` | Gemini (rerank) | `v1` `generation_config` rejects this field | Drop the field; carve JSON manually |
+| HTTP 400 `Unknown name 'response_mime_type'` | Gemini (rerank) | `generation_config` rejects this field on the rerank call | Drop the field; carve JSON manually |
+| HTTP 400 `Unknown name system_instruction` | Gemini (rerank) | stable `v1` has no `systemInstruction` field | Call the rerank on the `v1beta` endpoint |
 | HTTP 400 `Unknown name 'response_modalities'` | Gemini Flash Image | Same | Drop entire `generationConfig` |
 | `blockReason: 'OTHER'` no candidates | Gemini Flash Image | Prompt mentioned "preserve identity of real people" | Softened prompt to scene-level language |
 | `Invalid body: failed to parse multipart/form-data` | gpt-image (OpenAI) | Node native `fetch` mishandles `form-data` package | Use `axios.post(form, …)` |
 | `Non full-range YUV is non-standard` | ffmpeg 8.x mjpeg encoder | Source video `color_range=tv` | Add `format=yuvj420p` to filter chain |
-| 0 frames extracted | ffmpeg `select` expr | `eq(mod(t,1),0)` float equality on PTS | Replace with deterministic `fps=1` |
+| 0 frames extracted | ffmpeg `select` expr | `eq(mod(t,1),0)` float equality on PTS | Replace with a scene-cut-aware `select` over keyframes (adaptive-fps fallback for huge-GOP sources) |
 | Events delayed until pipeline end | fetch + ReadableStream | Vite proxy / fetch buffered the stream | Switch to native EventSource |
 
 ---

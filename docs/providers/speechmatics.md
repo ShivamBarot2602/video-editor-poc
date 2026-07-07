@@ -10,6 +10,7 @@
 |---|---|
 | `enhanced` | Highest accuracy; domain models for healthcare |
 | `standard` | Faster, cost-effective alternative |
+| `melia` | Multilingual model (batch-only); matches Standard accuracy at a lower rate |
 
 **Used in this demo:** `enhanced`
 
@@ -17,19 +18,21 @@
 
 ## Pricing
 
-> Source: [speechmatics.com/pricing](https://www.speechmatics.com/pricing) — verified May 2026
+> Source: [speechmatics.com/pricing](https://www.speechmatics.com/pricing) + Melia announcement — verified July 2026
 
-| Tier | Per Hour | Notes |
+| Model / Tier | Per Hour | Notes |
 |---|---|---|
-| Free | $0 | 480 minutes/month included |
-| Pro | From $0.24/hr | 480 min included; volume discounts above 500 hrs/month |
+| `standard` | $0.80/hr | Faster, cost-effective |
+| `enhanced` | **$1.04/hr** | Highest accuracy (was $0.24 before the 2026 restructure) |
+| `melia` | **$0.129/hr** | New multilingual model; matches Standard accuracy; batch-only; 10 hr/mo free |
+| Free | $0 | Free tier (Melia: 10 hours/month) |
 | Enterprise | Custom | No rate limits, unlimited scale |
 
 **Volume discounts (Pro):**
 - > 500 hours/month: 20% discount
 - Capped at 6,000 hours/month before Enterprise required
 
-> Standard and Enhanced models are the same price — accuracy is the only differentiator.
+> Speechmatics restructured pricing in 2026: `enhanced` jumped from $0.24 to **$1.04/hr** and Standard is now **$0.80/hr**. The new **Melia** multilingual model is the cheapest option at **$0.129/hr** (matches Standard accuracy, batch-only). This demo pins `enhanced`.
 
 ---
 
@@ -157,3 +160,4 @@ GET /v2/jobs/{id}/transcript?format=json-v2
 - Language identification enables auto-detection but is batch-only
 - Fetch transcript as `json-v2` format for full word-level data with speaker attribution
 - 2-hour job limit requires chunking for longer content
+- 2026 pricing restructure: `enhanced` is now **$1.04/hr** (was $0.24), Standard **$0.80/hr**; the new **Melia** multilingual model is **$0.129/hr** (batch-only, matches Standard accuracy, 10 hr/mo free) — the cheapest multilingual option in this demo

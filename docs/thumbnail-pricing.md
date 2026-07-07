@@ -1,6 +1,6 @@
 # Thumbnail POC — Pricing Comparison
 
-> All prices verified June 2026 from official provider pricing pages.
+> All prices verified July 2026 from official provider pricing pages.
 > Prices in USD unless noted. Pay-as-you-go / Standard tier shown.
 > Models reflect the current code: `gemini-2.5-pro` (rerank), `gemini-2.5-flash-image` + `gpt-image-1.5` (polish).
 
@@ -26,7 +26,7 @@ OpenAI `quality` is **documented at both tiers** — the code default is `high`;
 | Stage | Provider · Model | Calls | Subtotal (`medium`) | Subtotal (`high` · code default) |
 |---|---|---|---|---|
 | Frame extract | ffmpeg | 1 | $0.000 | $0.000 |
-| CV scoring | sharp (in-process) | ~30–60 | $0.000 | $0.000 |
+| CV scoring | sharp (in-process) | ~8–60 | $0.000 | $0.000 |
 | Vision rerank | Gemini 2.5 Pro | 1 | ~$0.01 | ~$0.01 |
 | Polish | Gemini 2.5 Flash Image | 3 | $0.117 | $0.117 |
 | Polish | OpenAI gpt-image-1.5 | 3 | $0.150 (3 × $0.05) | $0.600 (3 × $0.20) |
@@ -65,7 +65,7 @@ Image-input tokens: **$8 / 1M** (cached $2 / 1M); image-output tokens: **$32 / 1
 | OpenAI only (`high`) | ~$0.61 | Stronger aspect control, mature size enum |
 | Switch reranker `pro → gpt-4.1-mini` | saves ~$0.008/run | Built-in UI toggle; $0.002 vs $0.01 (marginal in absolute terms) |
 
-> **OpenAI lineup — current state (verified June 2026).** The POC runs **`gpt-image-1.5`** (launched Dec 16 2025). OpenAI's *default* flagship is now **GPT Image 2** (launched Apr 21 2026, $0.005–$0.211/img, auto high-fidelity inputs — no `input_fidelity` param). The legacy `gpt-image-1` **deprecates Oct 23 2026**; `gpt-image-1.5` is current and not deprecated. `gpt-image-1-mini` (~$0.005–$0.052/img) is the cheapest option.
+> **OpenAI lineup — current state (verified July 2026).** The POC runs **`gpt-image-1.5`** (launched Dec 16 2025). OpenAI's *default* flagship is now **GPT Image 2** (launched Apr 21 2026, $0.005–$0.211/img, auto high-fidelity inputs — no `input_fidelity` param). The legacy `gpt-image-1` **deprecates Oct 23 2026**; `gpt-image-1.5` is current and not deprecated. `gpt-image-1-mini` (~$0.005–$0.052/img) is the cheapest option.
 
 ---
 
@@ -107,7 +107,7 @@ The alternative OpenAI reranker is also token-billed:
 
 ## Re-run Cost
 
-The pipeline caches frame extraction + CV scoring on disk (`frame_stats.json`). Re-running on the **same** video only re-incurs:
+The pipeline caches frame extraction + CV scoring in S3 (`frames/` + `frame_stats.json`), hydrating them back into a temp dir on a re-run. Re-running on the **same** video only re-incurs:
 
 | Stage | Re-run cost (`high`) |
 |---|---|
@@ -124,7 +124,7 @@ Future "freeze candidates, only refresh selected pick" mode would drop re-run co
 
 | Risk | Mitigation |
 |---|---|
-| EventSource auto-reconnect re-fires pipeline | ✅ in-flight-run `Set` → 409 on re-entry |
+| EventSource auto-reconnect re-fires pipeline | ✅ in-flight-run `Set` → re-entry gets an **SSE `error` event** (HTTP 200, headers already flushed — not a 409 status) so the reconnect can't re-fire the paid pipeline |
 | Client closes tab mid-polish | ⚠️ Heartbeat stops, but in-flight HTTPS calls still bill. Future: `AbortController` from `req.on('close')`. |
 | Unbounded polish fan-out | ✅ 3 × 2 = 6 jobs OK; future `pLimit(N)` if pick count grows |
 | Anyone hits the public stream endpoint | ❌ No auth / rate-limit. **Required before production.** |

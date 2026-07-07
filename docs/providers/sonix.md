@@ -16,7 +16,7 @@
 
 ## Pricing
 
-> Source: [sonix.ai/pricing](https://sonix.ai/pricing) — verified May 2026
+> Source: [sonix.ai/pricing](https://sonix.ai/pricing) — verified July 2026
 
 | Tier | Monthly Cost | Included Hours | Effective $/hr | Overage |
 |---|---|---|---|---|

@@ -9,20 +9,23 @@
 | Model ID | Description |
 |---|---|
 | `solaria-1` | Universal model; 100+ languages, code-switching, diarization |
+| `solaria-3` | Newer flagship; best for English / European languages |
 
-**Used in this demo:** `solaria-1`
+**Used in this demo:** `solaria-1` (not deprecated; still $0.61/hr)
 
 ---
 
 ## Pricing
 
-> Source: [gladia.io/pricing](https://www.gladia.io/pricing) — verified May 2026
+> Source: [gladia.io/pricing](https://www.gladia.io/pricing) — verified July 2026
 
 | Tier | Per Hour | Notes |
 |---|---|---|
 | Starter | $0.61 | 10 free hours/month |
-| Growth | $0.20 | Volume commitment required |
+| Growth | ~$0.20 | Volume commitment required |
 | Enterprise | Custom | Unlimited concurrency |
+
+> `solaria-1` is unchanged at $0.61/hr (Growth plan reaches ~$0.20/hr on volume). A newer **Solaria-3** flagship is also available (best for English / European languages); `solaria-1` is not deprecated.
 
 Diarization, word timestamps, and all enrichment features are **included** — no add-on pricing.
 
@@ -162,5 +165,6 @@ result.transcription.utterances[]
 
 - Diarization error rate claimed 3× lower than competitors per internal benchmarks
 - `sentences: true` produces better text segmentation for subtitle generation
-- Growth plan requires volume commitment but drops cost 67% vs Starter ($0.61 → $0.20/hr)
+- Growth plan requires volume commitment but drops cost ~67% vs Starter ($0.61 → ~$0.20/hr)
 - Upload step is separate — file is stored on Gladia's CDN before the transcription job begins
+- A newer **Solaria-3** flagship is available (best for English / European languages); `solaria-1` remains at $0.61/hr and is not deprecated

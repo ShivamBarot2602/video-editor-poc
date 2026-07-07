@@ -12,13 +12,13 @@
 
 **Used in this POC:** `gemini-2.5-pro` (set in `thumbnailRerank/gemini.js`). **Default reranker** — selectable per run from the UI against the OpenAI `gpt-4.1-mini` reranker (see `openai-rerank.md`); if the chosen one fails, the pipeline falls back to the other.
 
-> The rerank file also carries an endpoint-version map with **Gemini-3 preview** entries (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3-flash` → `v1beta`) for experimentation. Only `gemini-2.5-pro` (`v1`) is active.
+> The rerank file carries an endpoint-version map (`MODEL_ENDPOINT_VERSION_MAP`): every model that we send a `system_instruction` to is pinned to **`v1beta`** — `gemini-2.5-pro` (active), `gemini-2.5-flash`, and the **Gemini-3 preview** entries (`gemini-3.1-pro-preview`, `gemini-3-flash-preview`, `gemini-3-flash`) for experimentation. Anything not in the map falls back to `v1`.
 
 ---
 
 ## Pricing
 
-> Source: [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) — verified June 2026
+> Source: [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) — verified July 2026
 
 | | Standard tier |
 |---|---|
@@ -64,7 +64,7 @@
 | | Value |
 |---|---|
 | **Auth header** | `x-goog-api-key: $GEMINI_API_KEY` |
-| **Endpoint** | `POST https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent` |
+| **Endpoint** | `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent` |
 | **Content-Type** | `application/json` |
 | **Request type** | Synchronous |
 | **SDK used** | None — direct axios. |

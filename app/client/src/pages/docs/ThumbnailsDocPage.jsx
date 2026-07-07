@@ -1,5 +1,5 @@
 // /docs/thumbnails — auto thumbnail selection + AI polish A/B.
-// Mirrors docs/Thumbnail-POC-Summary + docs/thumbnail-architecture. Verified June 2026.
+// Mirrors docs/Thumbnail-POC-Summary + docs/thumbnail-architecture. Code-synced + priced July 2026.
 import { DocShell, SectionTitle, Flow, Mark } from './_shared'
 
 const MODELS = [
@@ -36,7 +36,7 @@ const PERVIDEO = [
 
 const FLOW = [
   { n: 1, title: 'Upload video', tone: 'user', detail: 'Existing upload pipeline → videos/<uuid>/original.<ext>.' },
-  { n: 2, title: 'Sample frames + CV score', tone: 'local', meta: 'ffmpeg + sharp · $0', detail: 'ffprobe size/rotation → sample @ 1 fps (640px) → per-frame brightness/contrast/avg-hash → cvScore = 0.7·contrast + 0.3·mid-grey. Cached on disk.' },
+  { n: 2, title: 'Sample frames + CV score', tone: 'local', meta: 'ffmpeg + sharp · $0', detail: 'ffprobe size/rotation → scene-cut-aware sampling (decode keyframes only; pick scene changes ≥0.3 with a min-gap + a 6s coverage floor, 640px) → per-frame brightness/contrast/avg-hash → cvScore = 0.7·contrast + 0.3·mid-grey. Cached in S3 (frame_stats.json + frames).' },
   { n: 3, title: 'Dedup', tone: 'local', meta: '$0', detail: 'Hamming distance on the average-hash → keep ~12 unique frames.' },
   { n: 4, title: 'Vision rerank (pick one)', tone: 'paid', meta: '~$0.01 / ~$0.002', detail: 'Gemini 2.5 Pro (default) or OpenAI gpt-4.1-mini score each surviving frame 1–10 with a rationale; auto-fallback to the other on failure. Top 3 stream to the UI immediately.' },
   { n: 5, title: 'Polish top 3 — both providers in parallel', tone: 'paid', detail: 'Promise.allSettled — one provider failing never aborts the run; each cell fills live as its job returns.',
@@ -52,7 +52,9 @@ const DECISIONS = [
   ['Gemini 2.5 Pro default for rerank', 'Strongest multi-image scoring; still cheap (~$0.01/call) vs the polish leg.'],
   ['Run both image-gen providers in parallel', 'The POC outcome is an A/B comparison — show them side by side.'],
   ['Progressive SSE (picks + per-cell polished)', 'Show picks the moment rerank finishes, fill each polish cell as its job returns.'],
-  ['fps=1 sampling, not scene-cut', 'Deterministic across all codecs; CV + VLM rerank pick the best frames anyway.'],
+  ['Scene-cut-aware keyframe sampling', 'Decode I-frames only + pick scene changes with a coverage floor — shot-aware and ~50× fewer decodes than blind fps=1; falls back to adaptive fps only for huge-GOP sources.'],
+  ['Rerank optional — CV-order fallback', 'If no rerank key is set or every reranker fails, the pipeline keeps the CV-score order instead of aborting the run.'],
+  ['Transcript hint feeds rerank + polish', 'A short transcript snippet (when the video was transcribed) is passed to the VLM rerank and polish prompts for topical context.'],
   ['Direct axios over vendor SDKs', 'SDKs trailed the fields we needed (input_fidelity, image-out modality).'],
 ]
 
@@ -71,7 +73,7 @@ export default function ThumbnailsDocPage() {
       eyebrow="POC Documentation · Thumbnails"
       title="Automatic Thumbnail Selection + AI Polish"
       lede="Upload a video and the module finds the three frames that would make the best thumbnail, then produces two polished versions of each — one from Gemini, one from OpenAI — to compare side by side. The pipeline is a cost funnel: cheap local work first, expensive image generation only on the final three."
-      meta={<>4 models · A/B polish (Gemini · OpenAI) · Prices verified <strong>June 2026</strong> · Pipeline: sample → CV score → rerank → polish</>}
+      meta={<>4 models · A/B polish (Gemini · OpenAI) · Code-synced <strong>July 2026</strong> · Pipeline: scene-cut sample → CV score → rerank → polish → download</>}
     >
       {/* 1. OVERVIEW */}
       <SectionTitle n="1">Overview &amp; objective</SectionTitle>
@@ -145,7 +147,7 @@ export default function ThumbnailsDocPage() {
 
       {/* 5. PRICING */}
       <SectionTitle n="5">Pricing</SectionTitle>
-      <p className="rpt-sub">USD, pay-as-you-go. Per-call rates checked June 2026 against each provider&apos;s pricing page.</p>
+      <p className="rpt-sub">USD, pay-as-you-go. Per-call rates verified July 2026 against each provider&apos;s pricing page.</p>
       <div className="rpt-scroll">
         <table className="rpt-table">
           <thead>
@@ -189,10 +191,21 @@ export default function ThumbnailsDocPage() {
       {/* 6. TECHNICAL */}
       <SectionTitle n="6">Technical implementation</SectionTitle>
       <p className="rpt-prose">
-        One SSE endpoint (<code>GET /api/thumbnails/:id/stream?reranker=</code>) drives the whole pipeline, emitting
-        <code> phase</code> → <code>picks</code> → per-cell <code>polished</code> → <code>done</code>. Frame stats are cached
-        in <code>frame_stats.json</code>; rerank and polish re-run on every click. An <code>inFlightRuns</code> guard returns 409
-        on re-entry so an EventSource reconnect can&apos;t re-fire the paid pipeline. All calls are plain REST (axios), not vendor SDKs.
+        <strong>Endpoints:</strong> <code>GET /api/thumbnails/:id/stream?reranker=</code> (SSE pipeline) ·
+        <code> GET /:id</code> (stored state) · <code>GET /:id/file/:relpath</code> (traversal-guarded 302 → public S3 URL) ·
+        <code> GET /:id/download/:relpath</code> (force-download — proxies the bytes same-origin with{' '}
+        <code>Content-Disposition: attachment</code>). There is <strong>no PATCH / “select” route</strong>: the final action is
+        preview any variant full-size and download the one you want.
+      </p>
+      <p className="rpt-prose">
+        <strong>SSE events:</strong> <code>start</code> → <code>phase</code>{' '}
+        (<code>extracting</code>/<code>scoring</code>/<code>dedup</code>/<code>reranking</code>/<code>polishing</code>, carrying{' '}
+        <code>cached</code>, <code>skipped</code>, <code>provider</code>, <code>model</code>, <code>fallback</code> as relevant) →{' '}
+        <code>picks</code> (rows render) → per-cell <code>polished</code> / <code>polish_failed</code> → <code>done</code>.
+        The pipeline <strong>runs in a temp dir and reads/writes S3</strong> (not local disk); frames + <code>frame_stats.json</code> are
+        cached in S3 and hydrated back on a re-run, while rerank and polish always re-fire. An <code>inFlightRuns</code> guard
+        rejects a re-entrant stream by emitting an <strong>SSE <code>error</code> event</strong> (headers already flushed — HTTP 200,
+        not a 409) so an EventSource reconnect can’t re-fire the paid pipeline. All provider calls are plain REST (axios), not vendor SDKs.
       </p>
       <div className="doc-decisions">
         {DECISIONS.map(([d, why]) => (
@@ -223,8 +236,8 @@ export default function ThumbnailsDocPage() {
       </div>
 
       <footer className="rpt-footer">
-        SP Video Editor POC · Thumbnail Selection · Internal · Verified June 2026<br />
-        Source: Gemini &amp; OpenAI pricing / model docs verified individually; mirrors the offline summary deck.
+        SP Video Editor POC · Thumbnail Selection · Internal · Code-synced &amp; priced July 2026<br />
+        Architecture verified against current code; Gemini &amp; OpenAI pricing verified July 2026 (unchanged).
       </footer>
     </DocShell>
   )

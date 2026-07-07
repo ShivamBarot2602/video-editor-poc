@@ -29,7 +29,7 @@ The STT layer powers two primary use cases:
 
 ### Pricing (Batch / Async)
 
-> Last verified: May 2026
+> Last verified: July 2026
 
 | Provider | Model | Price per min | Price per hour | Max File Size | Max Duration |
 |---|---|---|---|---|---|
@@ -45,14 +45,15 @@ The STT layer powers two primary use cases:
 | **Deepgram** | Nova-3 Multilingual | $0.0092 | $0.552 | 2 GB | 10–20 min |
 | **Rev AI** | Reverb ASR | ~$0.0033 | $0.20 | 2 GB (upload) / 5 TB (URL) | 17 hr |
 | **Rev AI** | Reverb Turbo | $0.0017 | $0.10 | — | — |
-| **pyannoteAI** | Precision-2 (STT orchestration) | ~$0.0028 | €0.168 (~$0.183) | Not documented | Not documented |
+| **pyannoteAI** | Precision-2 | ~$0.0019 | €0.112 (~$0.122) | Not documented | Not documented |
 | **Google Cloud** | Chirp 3 | $0.016 | $0.96 | 480 MB | 8 hr |
 | **Google Cloud** | Chirp 3 (Dynamic Batch) | $0.004 | $0.24 | 480 MB | 8 hr |
 | **AWS Transcribe** | Standard | $0.024 | $1.44 | 2 GB | 4 hr |
 | **Azure Speech** | Batch | $0.003 | $0.18 | 1 GB | 4 hr |
 | **Gladia** | Solaria-1 | $0.0102 | $0.61 | 1 GB | 135 min (4h15 Enterprise) |
-| **Speechmatics** | Standard | $0.004 | $0.24 | 1 GB | 2 hr |
-| **Speechmatics** | Enhanced | $0.004+ | $0.24+ | 1 GB | 2 hr |
+| **Speechmatics** | Standard | $0.0133 | $0.80 | 1 GB | 2 hr |
+| **Speechmatics** | Enhanced | $0.0173 | $1.04 | 1 GB | 2 hr |
+| **Speechmatics** | Melia (multilingual) | $0.00215 | $0.129 | 1 GB | 2 hr |
 | **Mistral** | voxtral-mini-latest (→ 2602) | $0.003 | $0.18 | 1 GB | 3 hr |
 | **ElevenLabs** | Scribe v2 | ~$0.00367 | $0.22 | 3 GB | Not specified |
 | **Sonix** | Sonix AI | $0.167 | $10.00 | 100 MB (direct) | Not specified |
@@ -67,7 +68,10 @@ The STT layer powers two primary use cases:
 > **AssemblyAI** — Diarization is a +$0.02/hr add-on for Universal-3 Pro; Universal-2 also +$0.02/hr.
 > **Mistral** — `voxtral-mini-latest` is a dynamic alias; it now resolves to `voxtral-mini-2602` (Voxtral Mini Transcribe 2, Feb 2026) at $0.003/min / 3 hr cap. The prior pinned version `voxtral-mini-2507` ($0.001/min, 30 min cap) deprecates 2026-02-27.
 > **ElevenLabs** — Scribe v2 batch pricing was cut ~40% in March 2026 and is now published at **$0.22/hr** (Scribe v2 Realtime is $0.39/hr). Add-ons are now flat per-hour fees: entity detection +$0.070/hr, keyterm prompting +$0.050/hr. Supports 90+ languages and up to 48 speakers.
-> **pyannoteAI** — Diarization-first platform; STT orchestration bundles diarization + ASR at €0.168/hr (~$0.183). Precision-2 diarization alone is €0.112/hr. 150 hr free trial. Not in the broad cloud comparison originally; included here for completeness.
+> **pyannoteAI** — Diarization-first platform. Precision-2 is now **€0.112/hr (~$0.122)**, cut from €0.168 in 2026. Free hours are tied to plan tiers (Developer/Starter) rather than a flat 150-hour grant. Not in the broad cloud comparison originally; included here for completeness.
+> **Speechmatics** — restructured in 2026: `enhanced` batch is **$1.04/hr** (was $0.24), Standard **$0.80/hr**, and a new multilingual model **Melia** at **$0.129/hr** (10 hr/mo free) that matches Standard accuracy.
+> **AssemblyAI** — the POC pins `universal-2` ($0.15 / $0.17 w/ diarization); a newer `universal-3.5-pro` flagship is available at $0.21 / $0.23.
+> **Gladia** — added a `Solaria-3` flagship (best on English/European audio) in the same pricing tier; `solaria-1` is unchanged at $0.61/hr and not deprecated.
 
 ---
 
@@ -92,7 +96,7 @@ The STT layer powers two primary use cases:
 | **Gladia** | Solaria-1 | ~94% word acc | ✅ Excellent | ✅ | 100+ | ✅ | ✅ |
 | **Speechmatics** | Standard | Competitive | ✅ | ✅ | 55+ | ✅ (`language_identification`) | ✅ |
 | **Speechmatics** | Enhanced | Best-in-class (claimed) | ✅ | ✅ | 55+ | ✅ (`language_identification`) | ✅ |
-| **Mistral** | voxtral-mini-transcribe-v2 | Very High | ✅ | ✅ | 13 | ✅ | ⚠️ Unclear |
+| **Mistral** | voxtral-mini-latest (Voxtral Transcribe 2) | Very High | ✅ | ✅ | 13 | ✅ | ⚠️ Unclear |
 | **ElevenLabs** | Scribe v2 | High | ✅ | ✅ word + char | 90+ | ✅ | ⚠️ Unclear |
 | **pyannoteAI** | Precision-2 | High (diarization) | ✅ Best-in-class | ✅ | Multilingual | ✅ | ⚠️ Unclear |
 | **Sonix** | Sonix AI | 85–95% | ✅ (up to 30 speakers) | ✅ | 53 | ✅ (single-language) | ⚠️ Between speakers only |

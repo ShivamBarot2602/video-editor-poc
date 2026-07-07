@@ -9,23 +9,23 @@
 | Model ID | Description |
 |---|---|
 | `voxtral-mini-latest` | Dynamic alias — resolves to the newest Voxtral Mini transcription model (recommended) |
-| `voxtral-mini-2602` | Pinned: Voxtral Mini Transcribe 2 (current target of `-latest`) |
+| `voxtral-mini-2602` | Pinned: Voxtral Transcribe 2 (current target of `-latest`) |
 | `voxtral-mini-2507` | Pinned: previous Voxtral Mini (deprecates 2026-02-27) |
 | `voxtral-small-24b-2507` | Higher accuracy, larger model |
 
 **Used in this demo:** `voxtral-mini-latest`
 
-> Note: `voxtral-mini-latest` is a **dynamic alias** the transcription endpoint resolves to the newest Voxtral Mini transcribe model — currently `voxtral-mini-2602` (Voxtral Mini Transcribe 2), which superseded `voxtral-mini-2507` (deprecating 2026-02-27). Transcribe 2 extends the audio cap to 3 hr and adds native word-level timestamps + diarization. Pin `voxtral-mini-2602` for reproducible behaviour.
+> Note: `voxtral-mini-latest` is a **dynamic alias** the transcription endpoint resolves to the newest Voxtral Mini transcribe model. As of the Feb 2026 upgrade it now resolves to **Voxtral Transcribe 2** (`voxtral-mini-2602`), which silently superseded `voxtral-mini-2507` (deprecating 2026-02-27) behind the alias. Transcribe 2 extends the audio cap to 3 hr and adds native word-level timestamps + diarization. Price is unchanged at $0.18/hr. Pin `voxtral-mini-2602` for reproducible behaviour.
 
 ---
 
 ## Pricing
 
-> Source: [mistral.ai/news/voxtral-transcribe-2](https://mistral.ai/news/voxtral-transcribe-2) — verified May 2026
+> Source: [mistral.ai/news/voxtral-transcribe-2](https://mistral.ai/news/voxtral-transcribe-2) — verified July 2026
 
 | Model | Per Minute | Per Hour |
 |---|---|---|
-| Voxtral Mini (`voxtral-mini-latest` → Transcribe 2) | $0.003 | **$0.18** |
+| Voxtral Mini (`voxtral-mini-latest` → Voxtral Transcribe 2) | $0.003 | **$0.18** |
 | Voxtral Small 24B 2507 | $0.004 + token cost | ~$0.24+ |
 
 > Token cost for Voxtral Small: +$0.10/M input tokens, +$0.30/M output tokens (in addition to per-minute rate).
@@ -140,3 +140,4 @@ diarization:  true
 - 1 GB file limit is generous; most audio files fit without pre-processing
 - OpenAI-compatible API allows easy switching between OpenAI and Mistral with just a base URL change
 - Context biasing useful for domain-specific vocabulary (company names, product names)
+- The `voxtral-mini-latest` alias silently upgraded to **Voxtral Transcribe 2** (Feb 2026); price is unchanged at $0.18/hr across 13 languages

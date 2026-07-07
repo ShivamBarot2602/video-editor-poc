@@ -16,7 +16,7 @@
 
 ## Pricing
 
-> Source: [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [gpt-5.4-mini per-token](https://pricepertoken.com/pricing-page/model/openai-gpt-5.4-mini) — verified June 2026
+> Source: [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [gpt-5.4-mini per-token](https://pricepertoken.com/pricing-page/model/openai-gpt-5.4-mini) — verified July 2026
 
 | | Standard tier |
 |---|---|

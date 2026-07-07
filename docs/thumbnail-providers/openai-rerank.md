@@ -16,7 +16,7 @@
 
 ## Pricing
 
-> Source: [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [gpt-4.1-mini model card](https://developers.openai.com/api/docs/models/gpt-4.1-mini) — verified June 2026
+> Source: [OpenAI pricing](https://developers.openai.com/api/docs/pricing) · [gpt-4.1-mini model card](https://developers.openai.com/api/docs/models/gpt-4.1-mini) — verified July 2026
 
 | | Standard tier |
 |---|---|

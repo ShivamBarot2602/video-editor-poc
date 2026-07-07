@@ -1,6 +1,6 @@
 # Google gemini-2.5-pro — Clip Suggestion
 
-> One of two interchangeable providers for the clip-suggestion stage — a drop-in to the OpenAI provider. Reads a video transcript and returns 3–5 ranked clips, each with a title, hook, rationale, and 1–10 engagement score. Selectable per run; results stored per provider (`clips_gemini.json`). Same `{ suggest, MODEL }` contract as the OpenAI provider. Its 1M-token context and multimodal lineage make it the natural bridge to the planned video-understanding step.
+> One of two interchangeable providers for the clip-suggestion stage — a drop-in to the OpenAI provider. Reads a video transcript and returns 3–5 ranked clips, each with a title, hook, rationale, and 1–10 engagement score. Selectable per run; results stored per provider (`clips_gemini.json`). Same `{ suggest, MODEL }` contract as the OpenAI provider. Its 1M-token context and multimodal lineage are the bridge to the video-understanding method — now shipped as the separate `geminivideo` provider (see `geminivideo-clip-suggest.md`).
 
 ---
 
@@ -10,13 +10,13 @@
 |---|---|
 | `gemini-2.5-pro` | Clip suggestion from transcript (text-only here) |
 
-**Used in this POC:** `gemini-2.5-pro` (set in `providers/clipSuggest/gemini.js`), via the **v1** `generateContent` endpoint.
+**Used in this POC:** `gemini-2.5-pro` (set in `providers/clipSuggest/gemini.js`), via the **v1beta** `generateContent` endpoint (needed to pass `system_instruction`).
 
 ---
 
 ## Pricing
 
-> Source: [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) · [gemini-2.5-pro per-token](https://pricepertoken.com/pricing-page/model/google-gemini-2.5-pro) — verified June 2026
+> Source: [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing) · [gemini-2.5-pro per-token](https://pricepertoken.com/pricing-page/model/google-gemini-2.5-pro) — verified July 2026
 
 | | Standard tier |
 |---|---|
@@ -36,10 +36,10 @@
 |---|---|---|
 | System instruction | ✅ | `system_instruction` (rules + edge cases) separate from the transcript `contents` |
 | Long transcripts | ✅ | 1M context — rarely hits the ~120K-char POC cap |
-| Structured JSON (schema) | ⚠️ | **No** `responseSchema` on v1 for this model — JSON requested in-prompt; parser strips fences / carves the first `{…}` span |
+| Structured JSON (schema) | ⚠️ | Text method does **not** set `responseSchema` — JSON requested in-prompt; parser strips fences / carves the first `{…}` span (the video method DOES use `responseSchema`) |
 | Safety settings | ✅ | All categories set `BLOCK_NONE` for this POC |
 | Temperature control | ✅ | `0.3` for stable, repeatable picks |
-| Multimodal | ✅ (not used here) | Text-only in this stage; the lever for a future video-understanding provider |
+| Multimodal | ✅ (not used here) | Text-only in this stage; the lever now used by the `geminivideo` video-understanding method |
 
 ---
 
@@ -50,7 +50,7 @@
 | Input context window | 1,000,000 tokens |
 | Transcript cap (this POC) | ~120,000 chars (down-sampled beyond — rarely triggered) |
 | Request timeout (code) | 120,000 ms |
-| Endpoint version | `v1` (per `MODEL_ENDPOINT_VERSION_MAP`) |
+| Endpoint version | `v1beta` (per `MODEL_ENDPOINT_VERSION_MAP`) |
 
 ---
 
@@ -59,7 +59,7 @@
 | | Value |
 |---|---|
 | **Auth header** | `x-goog-api-key: $GEMINI_API_KEY` |
-| **Endpoint** | `POST https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent` |
+| **Endpoint** | `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent` |
 | **Content-Type** | `application/json` |
 | **Request type** | Synchronous |
 | **SDK used** | None — direct axios |
@@ -84,7 +84,7 @@
 }
 ```
 
-> **Why no `responseSchema`:** the v1 `generateContent` endpoint rejects `response_mime_type` / `responseSchema` for this model (same constraint as the thumbnail Gemini reranker). The output JSON shape is described in `system_instruction` instead, and the response is parsed defensively.
+> **Why no `responseSchema`:** the text method doesn't set `response_mime_type` / `responseSchema` for this model (same approach as the thumbnail Gemini reranker). The output JSON shape is described in `systemInstruction` instead, and the response is parsed defensively. (The `geminivideo` method, by contrast, does use `responseSchema`.)
 
 ### Response
 
@@ -111,7 +111,7 @@ The provider returns the raw clip list; the route's `normalizeClips` clamps to `
 
 ## Notes
 
-- The defensive parse (fence-strip + `{…}`-carve) mirrors the Gemini thumbnail reranker — needed because v1 won't enforce a response schema for this model.
+- The defensive parse (fence-strip + `{…}`-carve) mirrors the Gemini thumbnail reranker — the text method doesn't enforce a response schema.
 - A stable `system_instruction` lets Gemini's implicit context caching kick in on repeat runs.
 - Every run overwrites `clip_debug_gemini.log` with the exact prompts and the full `response.data` (incl. `usageMetadata`) for inspection.
 - Stronger on very long transcripts than the OpenAI provider (1M vs 400K context); the trade-off is higher per-token cost and JSON that occasionally needs the fence-strip rescue.

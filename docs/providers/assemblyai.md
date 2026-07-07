@@ -9,22 +9,24 @@
 | Model ID | Tier | Use Case |
 |---|---|---|
 | `universal-2` | Standard | 99+ languages, multilingual, best for diverse content |
-| `universal-3-pro` | Premium | 6 core languages, highest accuracy for supported langs |
+| `universal-3-pro` | Flagship | `universal-3.5-pro` (API id `universal-3-pro`) — newest, highest accuracy, 6 core languages |
 
-**Used in this demo:** `universal-2`
+**Used in this demo:** `universal-2` (still available and unchanged; consider upgrading to the newer `universal-3-pro` flagship)
 
 ---
 
 ## Pricing
 
-> Source: [assemblyai.com/pricing](https://www.assemblyai.com/pricing) — verified May 2026
+> Source: [assemblyai.com/pricing](https://www.assemblyai.com/pricing) — verified July 2026
 
 ### Pre-Recorded (Batch)
 
-| Model | Per Minute | Per Hour |
-|---|---|---|
-| `universal-2` | $0.0025 | **$0.15** |
-| `universal-3-pro` | $0.0035 | **$0.21** |
+| Model | Per Minute | Per Hour (base) | With diarization |
+|---|---|---|---|
+| `universal-2` | $0.0025 | **$0.15** | **$0.17** |
+| `universal-3-pro` (`universal-3.5-pro`) | $0.0035 | **$0.21** | **$0.23** |
+
+> Standard diarization is a +$0.02/hr add-on on both models. The demo still pins `universal-2` ($0.15 / $0.17), which remains available and cheaper; the newer `universal-3-pro` flagship is $0.21 / $0.23.
 
 ### Add-ons
 
@@ -146,5 +148,6 @@ utterances[] — speaker, start_ms, end_ms, text
 
 - Best-in-class diarization accuracy; recommended for multi-speaker content
 - `universal-2` covers 99 languages — best pick for multilingual/Indic content
+- AssemblyAI shipped a newer flagship `universal-3.5-pro` (API id `universal-3-pro`) at $0.21 base / $0.23 with diarization; the POC still pins `universal-2` ($0.15 / $0.17, unchanged) but should consider upgrading
 - `universal-3-pro` restricted to 6 languages but offers highest accuracy in those
 - US and EU endpoints available for data residency compliance

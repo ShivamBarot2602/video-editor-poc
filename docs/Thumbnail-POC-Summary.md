@@ -44,11 +44,11 @@ css: |
 # Thumbnail Selection POC
 
 <p class="subtitle">Pick a video's best frames automatically, then polish them with Gemini and OpenAI to see which looks better.</p>
-<p class="meta">Proof of concept · June 2026 · prices and capabilities checked against each provider's own docs.</p>
+<p class="meta">Proof of concept · July 2026 · prices and capabilities checked against each provider's own docs.</p>
 
 ## 1. Overview &amp; Objective
 
-Upload a video and the module finds the three frames that would make the best thumbnail. For each one it also produces two polished versions, one from Gemini and one from OpenAI, so you can put them next to the raw frame and pick whatever works.
+Upload a video and the module finds the three frames that would make the best thumbnail. For each one it also produces two polished versions, one from Gemini and one from OpenAI, so you can put them next to the raw frame, preview any variant full-size, and download whatever works.
 
 We wanted to answer three things before taking this anywhere near production:
 
@@ -62,31 +62,39 @@ The pipeline is a funnel, cheapest work first. Local computer vision drops the w
 
 ## 2. POC Workflow
 
-The whole run streams to the UI over SSE, so each stage shows up as it finishes. You choose the reranker before a run, Gemini (default) or OpenAI, and if it errors the pipeline quietly falls back to the other. The moment the rerank settles on its top three, the rows appear with their polish cells still loading, and each cell fills in on its own as that image model returns. Frame sampling and the CV scores are cached on disk, so a second run jumps straight to the paid stages. Polish hits both image models at once. Every call is plain REST — we skipped the vendor SDKs because they trailed the API fields we needed.
+The whole run streams to the UI over SSE, so each stage shows up as it finishes. You choose the reranker before a run, Gemini (default) or OpenAI, and if it errors the pipeline quietly falls back to the other. If no reranker key is set (or every reranker fails), the pipeline keeps the CV-score order instead of aborting. The moment the rerank settles on its top three, the rows appear with their polish cells still loading, and each cell fills in on its own as that image model returns. The pipeline runs in an ephemeral temp dir and reads/writes S3 — the sampled frames and their CV scores are cached in S3, so a second run jumps straight to the paid stages. A short transcript snippet (when the video was transcribed) is fed into both the rerank and polish prompts for topical context. Polish hits both image models at once. Every call is plain REST — we skipped the vendor SDKs because they trailed the API fields we needed.
 
 ```
  video upload (existing pipeline)
         │
         ▼
  ┌──────────────────────────── free / local ───────────────────────────┐
- │ 1. ffprobe      size + duration + rotation                            │
- │ 2. ffmpeg       sample frames @ 1 fps  (scale 640px, yuvj420p)        │
- │ 3. sharp        per-frame stats: brightness, contrast, avg-hash       │
- │ 4. CV score     0.7·contrast + 0.3·mid-grey                           │
- │ 5. dedup        Hamming distance on hash → keep ~12 unique frames     │
+ │ 1. ffprobe   size + duration + rotation                               │
+ │ 2. ffmpeg    scene-cut-aware sampling: decode keyframes only          │
+ │              (-skip_frame nokey), pick scene changes ≥0.3 with a       │
+ │              1s min-gap + a 6s coverage floor, 640px yuvj420p JPEG;    │
+ │              adaptive-fps fallback only for huge-GOP sources           │
+ │ 3. sharp     per-frame stats: brightness, contrast, avg-hash          │
+ │ 4. CV score  0.7·contrast + 0.3·mid-grey                              │
+ │ 5. dedup     Hamming distance on hash → keep ~12 unique frames        │
+ │              (frames + frame_stats.json cached in S3)                  │
  └───────────────────────────────────────────────────────────────────────┘
         │
         ▼
  6. Vision rerank (you pick): Gemini 2.5 Pro OR OpenAI gpt-4.1-mini
-        │   score each frame 1–10 + rationale; fallback on failure
+        │   score each frame 1–10 + rationale; fallback on failure;
+        │   CV-order fallback if no key / all rerankers fail
         │   → top 3 picks stream to UI now   (~$0.01 / ~$0.002 per run)
         ▼
  7. Polish each pick, both providers in parallel (Promise.allSettled):
         ├── Gemini 2.5 Flash Image  → fills variant A cell live
         └── OpenAI gpt-image-1.5    → fills variant B cell live
         ▼
- 8. UI grid: 3 picks × { original · Gemini · OpenAI } → user selects one
+ 8. UI grid: 3 picks × { original · Gemini · OpenAI }
+        → preview any variant full-size, download the one you want
 ```
+
+Constants: `MAX_EXTRACT` 60 · `POST_DEDUP_KEEP` 12 · `TOP_PICK_COUNT` 3 · dedup Hamming threshold 8 · transcript hint ≤220 chars (priority `assemblyai` → `deepgram` → `openai`).
 
 <div class="page-break"></div>
 
@@ -120,7 +128,7 @@ What it comes down to: Gemini is the cheap option and keeps the subject consiste
 
 ## 4. Pricing
 
-> Per-call rates checked June 2026 against each provider's pricing page. USD, pay-as-you-go tier.
+> Per-call rates checked July 2026 against each provider's pricing page. USD, pay-as-you-go tier.
 
 | Provider · Model | Stage | Rate |
 |---|---|---|

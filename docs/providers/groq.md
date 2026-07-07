@@ -18,7 +18,7 @@
 
 ## Pricing
 
-> Source: [groq.com/pricing](https://groq.com/pricing) — verified May 2026
+> Source: [groq.com/pricing](https://groq.com/pricing) — verified July 2026
 
 | Model | Per Minute | Per Hour |
 |---|---|---|

@@ -18,7 +18,7 @@
 
 ## Pricing
 
-> Source: [elevenlabs.io/pricing/api](https://elevenlabs.io/pricing/api) — verified May 2026
+> Source: [elevenlabs.io/pricing/api](https://elevenlabs.io/pricing/api) — verified July 2026
 
 ElevenLabs now publishes Speech-to-Text rates (billed per audio minute). Scribe v2 batch pricing was cut ~40% in March 2026.
 

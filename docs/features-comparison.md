@@ -1,7 +1,7 @@
 # STT Provider Features Comparison
 
 > Feature matrix for all 13 providers integrated in this demo.  
-> Data verified May 2026 from official documentation.
+> Data verified July 2026 from official documentation.
 
 Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 
@@ -121,8 +121,8 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Mistral** | 🟢 $0.18/hr | 🟡 13 | 🟢 ✅ | 🟢 High | 🟢 1 GB / 3hr | 🟢 Sync |
 | **ElevenLabs** | 🟢 $0.22/hr | 🟢 90+ | 🟢 ✅ | 🟢 High | 🟢 3 GB | 🟢 Sync |
 | **Rev AI** | 🟢 $0.20/hr | 🟡 57 | 🟢 ✅ | 🟢 High | 🟢 17 hr / 5 TB | 🟡 Async |
-| **Speechmatics** | 🟡 $0.24/hr | 🟢 55+ | 🟢 ✅ | 🟢 High | 🟡 2 hr | 🟡 Async |
-| **pyannoteAI** | 🟢 €0.168/hr | 🟡 Multi | 🟢 ✅ Best | 🟢 High | 🟡 Unknown | 🟡 Async |
+| **Speechmatics** | 🔴 $1.04/hr `enhanced` | 🟢 55+ | 🟢 ✅ | 🟢 High | 🟡 2 hr | 🟡 Async |
+| **pyannoteAI** | 🟢 €0.112/hr | 🟡 Multi | 🟢 ✅ Best | 🟢 High | 🟡 Unknown | 🟡 Async |
 | **Sonix** | 🔴 $10/hr | 🟡 50+ | 🟢 ✅ 30 speakers | 🟡 Good | 🟡 100 MB | 🟡 Async |
 | **Sarvam AI** | 🟡 ~$0.54/hr | 🔴 22 (Indic) | 🟢 ✅ Batch | 🟡 ~19% WER | 🟡 1 hr Batch | 🔴 Complex |
 

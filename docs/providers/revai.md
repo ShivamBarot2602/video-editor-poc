@@ -22,7 +22,7 @@
 
 ## Pricing
 
-> Source: [rev.ai/pricing](https://www.rev.ai/pricing) — verified May 2026
+> Source: [rev.ai/pricing](https://www.rev.ai/pricing) — verified July 2026
 
 | Model | Per Minute | Per Hour | Min Charge |
 |---|---|---|---|
