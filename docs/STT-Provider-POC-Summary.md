@@ -37,11 +37,11 @@ css: |
 # Speech-to-Text Provider Evaluation
 
 <p class="subtitle">Which STT provider to use for the subtitle &amp; clip-extraction pipeline — what it costs, what it supports, and how each is wired into the POC.</p>
-<p class="meta">Proof of concept · 13 providers benchmarked · Prices &amp; features verified July 2026 against each provider's own pricing/docs pages.</p>
+<p class="meta">Proof of concept · 12 providers benchmarked · Prices &amp; features verified July 2026 against each provider's own pricing/docs pages.</p>
 
 ## 1. Overview &amp; Objective
 
-The goal was to find the best speech-to-text provider for subtitles and clip extraction — weighing **accuracy, speaker diarization, language coverage, and cost**. Rather than commit to one vendor, we integrated **13 providers** behind a single normalised result shape, so the subtitle and clip logic is provider-agnostic and any provider can be swapped in per video.
+The goal was to find the best speech-to-text provider for subtitles and clip extraction — weighing **accuracy, speaker diarization, language coverage, and cost**. Rather than commit to one vendor, we integrated **12 providers** behind a single normalised result shape, so the subtitle and clip logic is provider-agnostic and any provider can be swapped in per video.
 
 Audio is extracted once via ffmpeg (16 kHz mono WAV), sent to the chosen provider, and every response is normalised to a common `{ metadata, segments[], full_transcript }` shape before subtitle/clip logic runs.
 
@@ -52,13 +52,12 @@ Best pick depends on the job. Prices are per hour of audio **with speaker diariz
 | Use case | Pick | Price | Why |
 |---|---|---|---|
 | **★ Default — best overall value** | **AssemblyAI** | $0.17/hr · 99+ langs | Highest accuracy + best-in-class diarization at a low price; multilingual + code-mixed; generous limits, no chunking. |
-| Cheapest with diarization | xAI Grok | $0.10/hr · sync | Diarization in one fast call (no polling). Trade-off: 25 languages, newer. |
 | Cheapest overall | Groq | $0.04/hr · fastest | Unbeatable price/speed — but no diarization. Single-speaker only. |
 | Indian / code-mixed | Sarvam AI | ~$0.54/hr · 22 Indic | Purpose-built for Hinglish / Tanglish and Indian languages. |
 | Long-form (> 1 hr) | Rev AI | $0.20/hr · up to 17 hr | Most permissive limits (17 hr / 5 TB) — no chunking. |
 | Best for free evaluation | pyannoteAI | €0.112/hr · free tier | Lowest per-hour rate here; diarization-first with voiceprints. |
 
-> **Bottom line:** Ship on **AssemblyAI** as the default (best balance of accuracy, features, and cost at $0.17/hr). Use **xAI Grok** ($0.10/hr) where cost matters most and 25 languages suffice, **Groq** ($0.04/hr) for single-speaker content, and **Sarvam AI** for Indian-language audiences.
+> **Bottom line:** Ship on **AssemblyAI** as the default (best balance of accuracy, features, and cost at $0.17/hr). Use **pyannoteAI** (€0.112/hr) when cost matters most and you need diarization, **Groq** ($0.04/hr) for single-speaker content, and **Sarvam AI** for Indian-language audiences.
 
 > **Watch out:** Sonix is $10/hr and Speechmatics' `enhanced` jumped to $1.04/hr in 2026; Deepgram caps requests at 10 min and OpenAI at 25 MB — both need chunking for full-length video.
 
@@ -71,7 +70,6 @@ USD per hour, pay-as-you-go / entry tier. Sorted cheapest-first by the with-diar
 | Provider | Model | Base / hr | With diarization | Languages | File / duration limit | Free tier |
 |---|---|---|---|---|---|---|
 | Groq | `whisper-large-v3-turbo` | $0.04 | N/A (no diarize) | 99+ | 100 MB | Free tier |
-| xAI Grok | `grok-stt` | $0.10 | $0.10 | 25 | 500 MB | Not documented |
 | pyannoteAI | `precision-2` | €0.112 | €0.112 | Multi | Not stated | Free tier |
 | **AssemblyAI ★** | `universal-2` | **$0.15** | **$0.17** | 99+ | ~5 GB / ~10 hr | Trial credits |
 | Mistral | `voxtral-mini-latest` | $0.18 | $0.18 | 13 | 1 GB / 3 hr | Limited |
@@ -110,7 +108,6 @@ USD per hour, pay-as-you-go / entry tier. Sorted cheapest-first by the with-diar
 | pyannoteAI | ✅ best | ✅ | ⚠️ | Multi | ✅ |
 | Sonix | ✅ 30 spk | ✅ | ❌ | 53+ | ✅ |
 | Sarvam AI | ✅ | ✅ | ✅ Indic | 22 Indic | ✅ |
-| xAI Grok | ✅ | ✅ | ⚠️ | 25 | ✅ |
 
 - Only **Groq** lacks diarization; **ElevenLabs** is the only provider with character-level timestamps.
 
@@ -118,7 +115,7 @@ USD per hour, pay-as-you-go / entry tier. Sorted cheapest-first by the with-diar
 
 ## 5. Technical Implementation (current POC)
 
-Audio is extracted once via ffmpeg (16 kHz mono WAV), then sent to the chosen provider; every response is normalised to a common shape so subtitle/clip logic is provider-agnostic. **6 providers respond synchronously, 6 use async submit-then-poll, and AssemblyAI's SDK handles upload + polling.** 9 of 13 APIs support webhooks, but the POC polls everywhere for uniformity (so the webhook column reads "not used in POC").
+Audio is extracted once via ffmpeg (16 kHz mono WAV), then sent to the chosen provider; every response is normalised to a common shape so subtitle/clip logic is provider-agnostic. **5 providers respond synchronously, 6 use async submit-then-poll, and AssemblyAI's SDK handles upload + polling.** 9 of 12 APIs support webhooks, but the POC polls everywhere for uniformity (so the webhook column reads "not used in POC").
 
 | Provider | Request style | Polling (interval / timeout) | Webhooks (API support) | Audio pre-processing |
 |---|---|---|---|---|
@@ -128,7 +125,6 @@ Audio is extracted once via ffmpeg (16 kHz mono WAV), then sent to the chosen pr
 | Groq | Sync REST | — | No (sync, inline) | WAV → MP3 128 kbps (100 MB) |
 | Mistral | Sync REST | — | No (sync, inline) | WAV |
 | ElevenLabs | Sync REST | — | Yes — not used (async mode) | WAV |
-| xAI Grok | Sync REST | — | No (sync, inline) | WAV (500 MB cap check) |
 | Gladia | Async batch | upload → submit → poll · 3 s / 20 min | Yes — not used in POC | WAV |
 | Rev AI | Async batch | submit → poll → fetch · 5 s / 1 hr | Yes — not used in POC | WAV |
 | Speechmatics | Async batch | submit → poll → fetch · 3 s / 10 min | Yes — not used in POC | WAV |
@@ -141,6 +137,6 @@ Audio is extracted once via ffmpeg (16 kHz mono WAV), then sent to the chosen pr
 
 ## 6. References
 
-- Provider pricing/docs pages verified individually July 2026 (AssemblyAI, Deepgram, Gladia, OpenAI, Groq, Mistral, ElevenLabs, Rev AI, Speechmatics, pyannoteAI, Sonix, Sarvam AI, xAI).
+- Provider pricing/docs pages verified individually July 2026 (AssemblyAI, Deepgram, Gladia, OpenAI, Groq, Mistral, ElevenLabs, Rev AI, Speechmatics, pyannoteAI, Sonix, Sarvam AI).
 - Internal deep-dives — `STT_RESEARCH.md` · `docs/pricing-comparison.md` · `docs/features-comparison.md` · `docs/providers/*.md`
 - Live interactive report — the `/docs/subtitles` route in the SP Video Editor app.

@@ -1,6 +1,6 @@
 # STT Provider Features Comparison
 
-> Feature matrix for all 13 providers integrated in this demo.  
+> Feature matrix for all 12 providers integrated in this demo.  
 > Data verified July 2026 from official documentation.
 
 Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
@@ -16,7 +16,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Gladia** | `solaria-1` | ✅ Included | ✅ (opt-in) | ✅ | ❌ | ✅ |
 | **OpenAI** | `gpt-4o-transcribe-diarize` | ✅ Included | ✅ (`whisper-1` only) | ✅ | ⚠️ Segment-level | ✅ |
 | **Groq** | `whisper-large-v3-turbo` | ❌ | ✅ | ✅ | ✅ logprob | ✅ |
-| **xAI Grok** | `grok-stt` | ✅ Included | ✅ | ✅ | ❌ | ✅ |
 | **Mistral** | `voxtral-mini-latest` | ✅ Included | ✅ | ✅ | ⚠️ Segment-level | ✅ |
 | **ElevenLabs** | `scribe_v2` | ✅ Included | ✅ word + char | ✅ | ✅ logprob per word | ✅ |
 | **Rev AI** | `reverb-asr` | ✅ Included | ✅ | ✅ | ✅ per word | ⚠️ |
@@ -36,7 +35,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Gladia** | 100+ | ✅ per-utterance | ✅ Bengali, Punjabi, Tamil, Urdu | code_switching param |
 | **OpenAI** | 55 reliable / 98 attempted | ⚠️ Limited | ✅ Hindi, Urdu, Tamil, Telugu… | — |
 | **Groq** | 99+ | ⚠️ Whisper capability | ✅ | ISO-639-1 hint improves accuracy |
-| **xAI Grok** | 25 | ⚠️ Not specified | ⚠️ | BCP-47 language hint supported |
 | **Mistral** | 13 | ⚠️ Not specified | ✅ Hindi only | Context biasing (100 terms) |
 | **ElevenLabs** | 90+ | ⚠️ Not specified | ⚠️ | Regional endpoints (US/EU/IN) |
 | **Rev AI** | 57 | ⚠️ Not specified | ⚠️ | — |
@@ -56,7 +54,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Gladia** | Upload → Submit | Polling (result_url) | ✅ Yes | Variable |
 | **OpenAI** | Synchronous | Immediate | ❌ No | Moderate |
 | **Groq** | Synchronous | Immediate | ❌ No | Very fast (LPU) |
-| **xAI Grok** | Synchronous | Immediate | ❌ No | Moderate |
 | **Mistral** | Synchronous | Immediate | ❌ No | Moderate |
 | **ElevenLabs** | Synchronous | Immediate | ❌ No | Moderate |
 | **Rev AI** | Async submit | Polling | ✅ Yes | ~2–15 min |
@@ -76,7 +73,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Gladia** | ❌ | ✅ | ❌ | ✅ Beta | ✅ Beta |
 | **OpenAI** | ✅ (up to 4) | ❌ | ❌ | ✅ Prompt | ❌ |
 | **Groq** | ❌ | ❌ | ❌ | ✅ Prompt | ❌ |
-| **xAI Grok** | ❌ | ❌ | ❌ | ✅ Keyterms | ❌ |
 | **Mistral** | ❌ | ❌ | ❌ | ✅ Context bias | ❌ |
 | **ElevenLabs** | ❌ | ✅ +30% | ❌ | ✅ 1,000 terms | ❌ |
 | **Rev AI** | ❌ | ⚠️ | ❌ | ✅ | ❌ |
@@ -95,7 +91,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Multilingual content** | AssemblyAI (U-2) or Gladia | 99–100+ languages |
 | **Indian language content** | Sarvam AI | Purpose-built, code-mixing optimized |
 | **Fastest response time** | Groq | LPU hardware, cheapest, synchronous |
-| **Cheapest with diarization (sync)** | xAI Grok | $0.10/hr, diarization included, no polling |
 | **Lowest cost with diarization** | AssemblyAI U-2 ($0.17/hr) | Best balance of cost + features |
 | **Long-form video (>1 hr)** | Rev AI | 17-hour limit, 5 TB via URL |
 | **Multi-speaker precision** | pyannoteAI | Diarization-first, voiceprints |
@@ -117,7 +112,6 @@ Legend: ✅ Supported · ⚠️ Partial/Unclear · ❌ Not supported
 | **Gladia** | 🟡 $0.61/hr ($0.20 Growth) | 🟢 100+ | 🟢 ✅ | 🟢 High | 🟢 135 min | 🟡 Async |
 | **OpenAI** | 🟡 $0.36/hr | 🟢 55 | 🟢 ✅ | 🟢 High | 🔴 25 MB | 🟢 Sync |
 | **Groq** | 🟢 $0.04/hr | 🟢 99+ | 🔴 ❌ | 🟡 Good | 🟡 100 MB | 🟢 Sync |
-| **xAI Grok** | 🟢 $0.10/hr | 🟡 25 | 🟢 ✅ | 🟡 Good | 🟢 500 MB | 🟢 Sync |
 | **Mistral** | 🟢 $0.18/hr | 🟡 13 | 🟢 ✅ | 🟢 High | 🟢 1 GB / 3hr | 🟢 Sync |
 | **ElevenLabs** | 🟢 $0.22/hr | 🟢 90+ | 🟢 ✅ | 🟢 High | 🟢 3 GB | 🟢 Sync |
 | **Rev AI** | 🟢 $0.20/hr | 🟡 57 | 🟢 ✅ | 🟢 High | 🟢 17 hr / 5 TB | 🟡 Async |

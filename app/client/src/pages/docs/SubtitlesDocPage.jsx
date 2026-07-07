@@ -5,8 +5,6 @@ import { DocShell, SectionTitle, Flow, Mark } from './_shared'
 const RECOMMENDATIONS = [
   { tag: '★ Default — best overall value', pick: 'AssemblyAI', price: '$0.17/hr · 99+ languages', pick_: true,
     body: 'Highest accuracy + best-in-class diarization at a low price. Handles multilingual and code-mixed content; generous file/duration limits, no chunking needed.' },
-  { tag: 'Cheapest with diarization', pick: 'xAI Grok', price: '$0.10/hr · synchronous',
-    body: 'Diarization included in a single fast call (no polling). Trade-off: only 25 languages and newer / less battle-tested.' },
   { tag: 'Cheapest overall', pick: 'Groq', price: '$0.04/hr · fastest',
     body: 'Unbeatable price and speed — but no speaker diarization. Use only for single-speaker content.' },
   { tag: 'Indian / code-mixed content', pick: 'Sarvam AI', price: '~$0.54/hr · 22 Indic langs',
@@ -21,7 +19,6 @@ const RECOMMENDATIONS = [
 // POC actually pins; newer flagships noted below the table. Verified July 2026.
 const PRICING = [
   { p: 'Groq', m: 'whisper-large-v3-turbo', base: '$0.04', diar: 'N/A (no diarize)', lang: '99+', limit: '100 MB', free: 'Free tier' },
-  { p: 'xAI Grok', m: 'grok-stt', base: '$0.10', diar: '$0.10', lang: '25', limit: '500 MB', free: 'Not documented', freeWarn: true },
   { p: 'pyannoteAI', m: 'precision-2', base: '€0.112', diar: '€0.112', lang: 'Multi', limit: 'Not stated', free: 'Free tier' },
   { p: 'AssemblyAI', m: 'universal-2', base: '$0.15', diar: '$0.17', lang: '99+', limit: '~5 GB / ~10 hr', free: 'Trial credits', hl: true },
   { p: 'Mistral', m: 'voxtral-mini-latest', base: '$0.18', diar: '$0.18', lang: '13', limit: '1 GB / 3 hr', free: 'Limited' },
@@ -48,7 +45,6 @@ const FEATURES = [
   { p: 'pyannoteAI', diar: { m: 'ok', t: 'best' }, word: { m: 'ok' }, mix: { m: 'warn' }, lang: 'Multi', auto: { m: 'ok' } },
   { p: 'Sonix', diar: { m: 'ok', t: '30 spk' }, word: { m: 'ok' }, mix: { m: 'bad' }, lang: '53+', auto: { m: 'ok' } },
   { p: 'Sarvam AI', diar: { m: 'ok' }, word: { m: 'ok' }, mix: { m: 'ok', t: 'Indic' }, lang: '22 Indic', auto: { m: 'ok' } },
-  { p: 'xAI Grok', diar: { m: 'ok' }, word: { m: 'ok' }, mix: { m: 'warn' }, lang: '25', auto: { m: 'ok' } },
 ]
 
 const TECH = [
@@ -58,7 +54,6 @@ const TECH = [
   { p: 'Groq', style: 'Sync REST', poll: '—', hook: 'bad', hookT: 'sync, inline', prep: 'WAV → MP3 128 kbps (100 MB)' },
   { p: 'Mistral', style: 'Sync REST', poll: '—', hook: 'bad', hookT: 'sync, inline', prep: 'WAV' },
   { p: 'ElevenLabs', style: 'Sync REST', poll: '—', hook: 'ok', hookT: 'not used (async mode)', prep: 'WAV' },
-  { p: 'xAI Grok', style: 'Sync REST', poll: '—', hook: 'bad', hookT: 'sync, inline', prep: 'WAV (500 MB cap check)' },
   { p: 'Gladia', style: 'Async batch', poll: 'upload → submit → poll · 3 s / 20 min', hook: 'ok', hookT: 'not used in POC', prep: 'WAV' },
   { p: 'Rev AI', style: 'Async batch', poll: 'submit → poll → fetch · 5 s / 1 hr', hook: 'ok', hookT: 'not used in POC', prep: 'WAV' },
   { p: 'Speechmatics', style: 'Async batch', poll: 'submit → poll → fetch · 3 s / 10 min', hook: 'ok', hookT: 'not used in POC', prep: 'WAV' },
@@ -70,7 +65,7 @@ const TECH = [
 const FLOW = [
   { n: 1, title: 'Upload video', tone: 'user', detail: 'Multer saves videos/<uuid>/original.<ext> + meta.json.' },
   { n: 2, title: 'Extract audio (once)', tone: 'local', meta: 'ffmpeg · $0', detail: '16 kHz mono WAV; some providers also get a 128 kbps MP3 to fit file-size caps. Cached on disk.' },
-  { n: 3, title: 'Transcribe (pick a provider)', tone: 'paid', meta: '$0.04–$10 / hr', detail: '6 providers respond synchronously, 6 submit-then-poll, AssemblyAI’s SDK manages upload + polling. Every response is normalised to one common shape.' },
+  { n: 3, title: 'Transcribe (pick a provider)', tone: 'paid', meta: '$0.04–$10 / hr', detail: '5 providers respond synchronously, 6 submit-then-poll, AssemblyAI’s SDK manages upload + polling. Every response is normalised to one common shape.' },
   { n: 4, title: 'Edit speakers & segments', tone: 'user', detail: 'Rename speaker aliases and fix text in the editor; saved back into the transcription JSON.' },
   { n: 5, title: 'Burn subtitles', tone: 'local', meta: 'ffmpeg · SSE', detail: 'Build a styled .ass file from the transcript, burn it into the video via the ffmpeg ass filter; progress streams over SSE.' },
 ]
@@ -81,15 +76,15 @@ export default function SubtitlesDocPage() {
       active="subtitles"
       eyebrow="POC Documentation · Subtitles"
       title="Speech-to-Text Provider Evaluation"
-      lede="We integrated and tested 13 STT providers behind one normalised output, then built the subtitle pipeline on top — transcribe, diarize, edit, and burn captions into the video. This is the decision summary: which provider to use, what it costs, and what each supports."
-      meta={<>13 providers benchmarked · Prices &amp; features verified <strong>July 2026</strong> · Pipeline: upload → transcribe → diarize → subtitle / clip</>}
+      lede="We integrated and tested 12 STT providers behind one normalised output, then built the subtitle pipeline on top — transcribe, diarize, edit, and burn captions into the video. This is the decision summary: which provider to use, what it costs, and what each supports."
+      meta={<>12 providers benchmarked · Prices &amp; features verified <strong>July 2026</strong> · Pipeline: upload → transcribe → diarize → subtitle / clip</>}
     >
       {/* 1. OVERVIEW */}
       <SectionTitle n="1">Overview &amp; objective</SectionTitle>
       <p className="rpt-prose">
         The goal was to find the best speech-to-text provider for subtitles and clip extraction — weighing
         <strong> accuracy, speaker diarization, language coverage, and cost</strong>. Rather than commit to one vendor,
-        we wired <strong>13 providers</strong> behind a single normalised result shape, so the subtitle and clip logic
+        we wired <strong>12 providers</strong> behind a single normalised result shape, so the subtitle and clip logic
         is provider-agnostic and any provider can be swapped in per video. This page summarises the recommendation,
         pricing, supported features, and how each provider is wired into the POC.
       </p>
@@ -114,8 +109,8 @@ export default function SubtitlesDocPage() {
       </div>
       <p className="rpt-callout">
         <strong>Bottom line:</strong> Ship on <strong>AssemblyAI</strong> as the default (best balance of
-        accuracy, features, and cost at $0.17/hr). Use <strong>xAI Grok</strong> ($0.10/hr) where cost matters
-        most and 25 languages suffice, <strong>Groq</strong> ($0.04/hr) for single-speaker content, and
+        accuracy, features, and cost at $0.17/hr). Use <strong>pyannoteAI</strong> (€0.112/hr) when cost matters
+        most and you need diarization, <strong>Groq</strong> ($0.04/hr) for single-speaker content, and
         <strong> Sarvam AI</strong> for Indian-language audiences.
       </p>
       <p className="rpt-callout is-avoid">
@@ -199,8 +194,8 @@ export default function SubtitlesDocPage() {
       <p className="rpt-prose">
         Audio is extracted once via ffmpeg (16 kHz mono WAV), then sent to the chosen provider; every response
         is normalised to a common shape so subtitle/clip logic is provider-agnostic.
-        <strong> 6 providers respond synchronously, 6 use async submit-then-poll, and AssemblyAI&apos;s SDK
-        handles upload + polling.</strong> 9 of 13 APIs support webhooks, but the POC polls everywhere for
+        <strong> 5 providers respond synchronously, 6 use async submit-then-poll, and AssemblyAI&apos;s SDK
+        handles upload + polling.</strong> 9 of 12 APIs support webhooks, but the POC polls everywhere for
         uniformity (so the webhook column reads &ldquo;not used in POC&rdquo;).
       </p>
       <div className="rpt-scroll">

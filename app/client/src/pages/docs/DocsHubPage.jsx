@@ -14,7 +14,7 @@ export default function DocsHubPage() {
             for accuracy, cost, and fit. Pick one to read how it works, what it costs, and what we recommend.
           </p>
           <p className="rpt-meta">
-            3 POCs · Prices &amp; capabilities verified against each provider&apos;s own docs · Updated June 2026
+            3 POCs · Prices &amp; capabilities verified against each provider&apos;s own docs · Updated July 2026
           </p>
         </div>
       </div>
