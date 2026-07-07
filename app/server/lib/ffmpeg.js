@@ -58,9 +58,15 @@ function compressAudio(inputPath, outputPath) {
 /**
  * Burn an .ass subtitle file into a video.
  * Streams progress (0–100) via the onProgress callback.
- * Leaves the audio stream untouched (-c:a copy).
+ *
+ * @param {'mp4'|'webm'} [format='mp4'] output container.
+ *   - mp4:  H.264 (default encoder) + copy the original audio stream.
+ *   - webm: VP9 + Opus. H.264/AAC can't be muxed into WebM, so both streams
+ *           must be re-encoded. row-mt + capped threads/cpu-used keep VP9 within
+ *           small-container memory (the x264 params are x264-only, so they're
+ *           dropped here — passing them to libvpx-vp9 would error).
  */
-function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
+function burnSubtitles(inputPath, assPath, outputPath, onProgress, format = 'mp4') {
   return new Promise((resolve, reject) => {
     // Delete existing burned file so ffmpeg doesn't prompt for overwrite
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath)
@@ -72,10 +78,28 @@ function burnSubtitles(inputPath, assPath, outputPath, onProgress) {
     const fontsDir = path.join(__dirname, '../../shared/fonts')
     const escapedFontsDir = fontsDir.replace(/\\/g, '/').replace(/:/g, '\\:')
 
-    ffmpeg(inputPath)
+    const cmd = ffmpeg(inputPath)
       .videoFilters(`ass='${escapedAss}':fontsdir='${escapedFontsDir}'`)
-      .audioCodec('copy')
-      .outputOptions(X264_MEMORY_OPTS)
+
+    if (format === 'webm') {
+      cmd
+        .videoCodec('libvpx-vp9')
+        .audioCodec('libopus')
+        .outputOptions([
+          '-threads', X264_THREADS,
+          '-row-mt', '1',
+          '-cpu-used', '5',
+          '-deadline', 'good',
+          '-crf', '34',
+          '-b:v', '0',
+        ])
+    } else {
+      cmd
+        .audioCodec('copy')
+        .outputOptions(X264_MEMORY_OPTS)
+    }
+
+    cmd
       .output(outputPath)
       .on('progress', ({ percent }) => {
         if (typeof onProgress === 'function' && percent != null) {

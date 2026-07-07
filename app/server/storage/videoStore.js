@@ -154,12 +154,18 @@ async function publicUrlOriginal(id) {
   return C.publicUrl(vkey(id, name))
 }
 
-// burned.<ext>
-const burnedKey = (id, ext) => vkey(id, P.burnedName(ext))
+// burned_<ts>.<ext> (unique per burn; previous burns are kept, never deleted)
+const burnedKey = (id, ext, ts) => vkey(id, P.burnedName(ext, ts))
 
+// Latest burned object for a video. Every burn writes a new burned_<ts>.<ext>;
+// the timestamp is YYYYMMDD-HHMMSS so lexicographic order == chronological, and
+// the last key is the newest. Prefix `burned` also matches any legacy `burned.<ext>`
+// (which sorts before the timestamped names, so a real timestamped burn wins).
 async function findBurnedName(id) {
-  const keys = await s3.listKeys(vkey(id, PREFIXES.BURNED + '.'))
-  return keys.length ? path.posix.basename(keys[0]) : null
+  const keys = await s3.listKeys(vkey(id, PREFIXES.BURNED))
+  if (!keys.length) return null
+  const latest = [...keys].sort()[keys.length - 1]
+  return path.posix.basename(latest)
 }
 
 async function hasBurned(id) {
@@ -167,8 +173,10 @@ async function hasBurned(id) {
 }
 
 // onProgress (optional) receives 0–100 as upload parts complete.
-async function uploadBurned(id, ext, localPath, onProgress) {
-  const key = burnedKey(id, ext)
+// `ts` (YYYYMMDD-HHMMSS) makes the stored key unique so prior burns are retained;
+// the download filename is the clean `burned.<ext>` regardless.
+async function uploadBurned(id, ext, ts, localPath, onProgress) {
+  const key = burnedKey(id, ext, ts)
   // Burned video is a download link in the UI. Objects are public (no per-request
   // response-content-disposition override on unsigned GETs), so bake the
   // attachment disposition into the object metadata at upload time.
