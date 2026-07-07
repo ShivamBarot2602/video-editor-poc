@@ -4,7 +4,6 @@ const store = require('../storage/videoStore')
 const { withTempDir } = require('../lib/tempWork')
 const { buildAss } = require('../lib/assBuilder')
 const { burnSubtitles } = require('../lib/ffmpeg')
-const { normalizeVideoExtension } = require('../lib/videoExtensions')
 
 async function videoExists(id) {
   return store.videoExists(id)
@@ -18,6 +17,14 @@ async function originalExists(id) {
 // Returns null when neither exists (controller → 400). REJECTS on parse error.
 async function resolveTranscription(id, provider) {
   return store.readBurnTranscription(id, provider)
+}
+
+// YYYYMMDD-HHMMSS in server local time — lexicographic order matches chronological,
+// so the newest burned_<ts>.<ext> sorts last (see store.findBurnedName).
+function burnTimestamp() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
 /**
@@ -39,20 +46,28 @@ async function run({ id, style, transcription }, { onPhase, onProgress }) {
     onPhase(name)
   }
 
+  // Output container is the user's choice, NOT the source's extension — burning
+  // an mp4 source to WebM (or vice-versa) must produce the requested container.
+  const outputFormat = style?.outputFormat === 'webm' ? 'webm' : 'mp4'
+  const ext = `.${outputFormat}`
+
+  // Timestamp (YYYYMMDD-HHMMSS) prefixes each burn so previous burns are kept,
+  // never overwritten; findBurnedName resolves the latest by sorting these.
+  const ts = burnTimestamp()
+
   return withTempDir(`burn-${id}`, async (dir) => {
     phase('preparing') // pulling the original from S3
     const orig = await store.downloadOriginal(id, dir, onProgress)
-    const ext = normalizeVideoExtension(path.extname(orig))
     const assPath = path.join(dir, 'subtitles.ass')
     fs.writeFileSync(assPath, assContent, 'utf8')
     const burnedPath = path.join(dir, `burned${ext}`)
 
     phase('burning')
-    await burnSubtitles(orig, assPath, burnedPath, onProgress)
+    await burnSubtitles(orig, assPath, burnedPath, onProgress, outputFormat)
 
-    phase('uploading') // pushing burned file back to S3
-    await store.uploadBurned(id, ext, burnedPath, onProgress)
-    console.log(`[${id}] burn: done`)
+    phase('uploading') // pushing burned file back to S3 as a new, unique object
+    await store.uploadBurned(id, ext, ts, burnedPath, onProgress)
+    console.log(`[${id}] burn: done → burned_${ts}${ext}`)
     return `/api/video/${id}/burned`
   })
 }

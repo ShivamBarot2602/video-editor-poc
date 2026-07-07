@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
+import TimerToast from '../components/TimerToast'
 import StyleEditor from '../components/StyleEditor'
 import { DEFAULT_STYLE, EXPORT_FORMATS, migrateStyleFonts } from '../config/subtitleStyle'
 import { getVideoOrNull } from '../api/videos'
@@ -166,7 +167,7 @@ export default function EditorPage() {
     if (!videoId) return
     setIsTranscribing(true)
     setTranscription(null)
-    const toastId = toast.loading('Transcribing…')
+    const toastId = toast.loading(<TimerToast label="Transcribing…" />)
     try {
       const res = await transcribe(videoId, { provider: selectedProvider })
       const data = await res.json()
@@ -234,7 +235,7 @@ export default function EditorPage() {
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return
     setBurnState({ status: 'burning', phase: 'preparing', progress: 0, burnedUrl: null })
-    const toastId = toast.loading('Burning subtitles…')
+    const toastId = toast.loading(<TimerToast label="Burning subtitles…" />)
 
     // Derive bold flag from fontWeight for ASS compat
     const burnStyle = { ...style, bold: style.fontWeight >= 600 }

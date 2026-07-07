@@ -17,7 +17,7 @@
 
 ## Pricing
 
-> Source: [docs.x.ai/developers/models](https://docs.x.ai/developers/models) — verified May 2026
+> Source: [docs.x.ai/developers/models](https://docs.x.ai/developers/models) — verified July 2026
 
 | Mode | Per Minute | Per Hour |
 |---|---|---|

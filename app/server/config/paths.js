@@ -61,7 +61,9 @@ const transcriptionName = (provider) => `${PREFIXES.TRANSCRIPTION}${provider}.js
 const rawName = (provider) => `${PREFIXES.RAW}${provider}.json`
 const clipsName = (provider) => `${PREFIXES.CLIPS}${provider}.json`
 const clipDebugName = (provider) => `${PREFIXES.CLIP_DEBUG}${provider}.log`
-const burnedName = (ext) => `${PREFIXES.BURNED}${ext}`
+// With `ts` → a unique, timestamped key (burned_<ts>.<ext>) so each burn is kept.
+// Without → the clean display name (burned.<ext>) used for the download filename.
+const burnedName = (ext, ts) => ts ? `${PREFIXES.BURNED}_${ts}${ext}` : `${PREFIXES.BURNED}${ext}`
 const clipOutputName = (clipId) => `${clipId}.mp4`
 const clipThumbName = (clipId, n) => `${clipId}-${n}.jpg`
 const polishedName = (idx, providerId, ext) => `${idx}_${providerId}.${ext}`

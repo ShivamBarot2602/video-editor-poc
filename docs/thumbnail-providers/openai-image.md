@@ -18,7 +18,7 @@
 
 ## Pricing
 
-> Source: [developers.openai.com/api/docs/models/gpt-image-1.5](https://developers.openai.com/api/docs/models/gpt-image-1.5) — verified June 2026
+> Source: [developers.openai.com/api/docs/models/gpt-image-1.5](https://developers.openai.com/api/docs/models/gpt-image-1.5) — verified July 2026
 
 Per-image price is flat by (quality, size); image-input/output **tokens** are billed on top.
 
@@ -114,7 +114,7 @@ n                = 1
 - `input_fidelity: 'high'` roughly doubles latency vs `low` **and** adds image-input token cost on `gpt-image-1.5`.
 - `quality: 'high'` is the code default (~4× `medium`: $0.20 vs $0.05/img landscape). Drop to `medium` to cut the OpenAI leg.
 - Output dims match `size` exactly. For 16:9 source (≈1.778) sent at `1536x1024` (1.5), result letterboxes or crops — client-side resize needed for pixel-exact dims.
-- **Alternatives / migration (prices verified June 2026):**
+- **Alternatives / migration (prices verified July 2026):**
   - **`gpt-image-2`** — current default flagship (Apr 21 2026); $0.005–$0.211/img. Treats every input at high fidelity automatically, so `input_fidelity` is dropped/ignored.
   - `gpt-image-1-mini` ≈ $0.005–$0.052/image (cheapest).
   - `gpt-image-1` (legacy) deprecates **Oct 23 2026** — avoid for new work.

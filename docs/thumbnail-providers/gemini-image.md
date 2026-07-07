@@ -16,7 +16,7 @@
 
 ## Pricing
 
-> Source: [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) — verified June 2026
+> Source: [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing) — verified July 2026
 
 | | Price |
 |---|---|

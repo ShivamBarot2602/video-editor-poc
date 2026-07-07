@@ -2,7 +2,6 @@ const axios = require('axios')
 const { buildClipSystemPrompt, buildClipUserPrompt } = require('../../lib/clipPrompt')
 const { writeClipDebug } = require('../../lib/clipDebug')
 
-// const MODEL = 'gpt-4.1-mini'
 const MODEL = 'gpt-5.4-mini'
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
@@ -42,7 +41,7 @@ const RESPONSE_FORMAT = {
 }
 
 /**
- * Suggest engaging clips from a transcript using OpenAI gpt-4.1-mini.
+ * Suggest engaging clips from a transcript using OpenAI gpt-5.4-mini.
  * Direct REST call via axios — Chat Completions with strict Structured Outputs.
  *
  * @param {object} opts - prompt inputs (segments, bucket, count, videoDuration, language, filename)

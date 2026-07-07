@@ -5,8 +5,10 @@ import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
   ArrowLeft, Loader2, RefreshCw, Play, Info, Download, Eye, X,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
 import VideoPlayer from '../components/VideoPlayer'
 import UploadZone from '../components/UploadZone'
+import TimerToast from '../components/TimerToast'
 import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
 import { listVideos } from '../api/videos'
 import { getThumbnails } from '../api/thumbnails'
@@ -184,6 +186,7 @@ function ThumbnailsEditor({ videoId }) {
       evtSourceRef.current = null
     }
 
+    const tid = toast.loading(<TimerToast label="Generating thumbnails…" />)
     const es = openThumbnailStream(videoId, reranker, {
       onMessage: (event) => {
         if (event.type === 'phase') {
@@ -215,11 +218,13 @@ function ThumbnailsEditor({ videoId }) {
           es.close()
           evtSourceRef.current = null
           setRunning(false)
+          toast.success('Thumbnails ready!', { id: tid })
         } else if (event.type === 'error') {
           setError(event.message)
           es.close()
           evtSourceRef.current = null
           setRunning(false)
+          toast.error(event.message || 'Thumbnail generation failed', { id: tid })
         }
       },
       onError: () => {
@@ -232,6 +237,7 @@ function ThumbnailsEditor({ videoId }) {
         try { es.close() } catch (_) {}
         evtSourceRef.current = null
         setRunning(false)
+        toast.error('Connection lost during generation', { id: tid })
       },
     })
     evtSourceRef.current = es

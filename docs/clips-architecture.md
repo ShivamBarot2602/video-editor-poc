@@ -1,16 +1,16 @@
 # Video Clips POC — Architecture
 
-> Pipeline that turns a transcribed video into 3–5 suggested short clips. An LLM reads the transcript and proposes ranked clip ranges; each is previewed in a window-clamped player and cut with ffmpeg only on download. Built on a swappable provider registry so a video-understanding model can drop in later.
+> Pipeline that turns a video into 3–5 suggested short clips via **two methods**: an LLM reads the transcript (**subtitles method**), or Gemini watches the raw video's audio + frames (**video-understanding method**). Both propose ranked clip ranges; each is previewed in a window-clamped player and cut with ffmpeg only on download. Built on a swappable provider registry; all state is S3-backed.
 
 ---
 
-## End-to-end flow
+## End-to-end flow — Method A (subtitles)
 
 ```
 Video already transcribed by the editor's STT step
-       │   videos/<uuid>/transcription_<provider>.json
+       │   store: transcription_<provider>.json
        ▼
-User opens /clips/:videoId, picks suggest provider + bucket + count
+User opens /clips/:videoId, picks the subtitles method + provider + bucket + count
        │
        │   (no transcript for this video → page shows a guard with a
        │    link to /editor/:id; suggestion is blocked)
@@ -26,7 +26,7 @@ POST /api/clips/:id/suggest  { suggestProvider, transcriptProvider, bucket, coun
 │  3.  build prompt   SYSTEM (static rules + edge cases + output shape)  │
 │       │             USER  (count, bucket secs, duration, transcript)   │
 │  4.  LLM call       gpt-5.4-mini (strict JSON) OR gemini-2.5-pro       │
-│       │             (JSON-by-prompt + defensive parse)                 │
+│       │             (v1beta, JSON-by-prompt + defensive parse)         │
 │  5.  normalizeClips clamp [0,dur] · snap to segment cuts · drop        │
 │       │             overlaps · rank by score · truncate to N · id      │
 │  6.  write          clips_<provider>.json  +  clip_debug_<provider>.log│
@@ -42,45 +42,93 @@ No cut, no transcode. Only one clip plays at a time.
        ├─ Save  →  POST /api/clips/:id/saved   (bookmark; survives re-runs)
        │
        └─ Download → GET /api/clips/:id/export/stream?...   (SSE)
-                       ffmpeg frame-accurate cut → clips/<clipId>.mp4
+                       ffmpeg frame-accurate cut → cut .mp4 (store)
                        → browser download (instant on re-download)
+```
+
+---
+
+## End-to-end flow — Method B (video understanding)
+
+```
+Raw video (no transcript required)
+       │
+       ▼
+User opens /clips/:videoId, picks the video method + bucket + count + model
+       │
+       ▼
+GET /api/clips/:id/suggest/stream?method=video&count=&bucket=&model=   (SSE, long-running)
+       │   (a second concurrent video run for the same id is rejected — in-flight lock)
+       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  suggestFromVideo (services/clips.js) → providers/clipSuggest/geminiVideo│
+│                                                                        │
+│  1.  ffprobe        duration + width/height; feasibleCount =           │
+│       │             min(requested, floor(duration / bucket.min))       │
+│  2.  media res      'default' (~1h); drops to 'low' when duration >    │
+│       │             DEFAULT_RES_MAX_S (3600s), with a warning          │
+│  3.  Files API      reuse a still-ACTIVE cached upload (gemini_file.json│
+│       │             within ~46h) else upload + poll until ACTIVE       │
+│       │             → SSE: uploading(percent) → processing             │
+│  4.  generateContent v1beta · temp 0.2 · responseSchema pins the count │
+│       │             (minItems==maxItems) + bounds every start/end/     │
+│       │             thumbnail to [0,duration]      → SSE: analyzing    │
+│  5.  normalizeClips same clamp/snap/de-overlap/rank/truncate; keeps    │
+│       │             caption + thumbnails; logs length violations       │
+│  6.  extract        ffmpeg-seek each clip's 3 thumbnail times → 640px  │
+│       │             JPEG → store  → SSE: extracting                    │
+│  7.  write          clips_geminivideo.json + clip_debug_geminivideo.log│
+│  └─►  SSE: done { data }                                               │
+└──────────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+Same preview + Save + on-demand ffmpeg cut path as Method A.
+Each clip also carries `caption` and `thumbnails[]` (served via
+GET /api/clips/:id/thumb/:clipId/:n → 302 to the store).
 ```
 
 ---
 
 ## Why preview-first / lazy cut
 
-The only expensive video op is the ffmpeg cut, and most suggestions never get downloaded. So nothing is transcoded to show a suggestion — the preview player streams the original file (the server's `/api/video/:id` honours HTTP Range, so seeking to a clip only fetches the bytes it needs) and simply refuses to leave the `[start,end]` window. The cut runs once, on demand, when the user clicks Download.
+The only local video op is the ffmpeg cut, and most suggestions never get downloaded. So nothing is transcoded to show a suggestion — the preview player streams the original file (the server's `/api/video/:id` honours HTTP Range, so seeking to a clip only fetches the bytes it needs) and simply refuses to leave the `[start,end]` window. The cut runs once, on demand, when the user clicks Download.
 
 | Stage | Cost per action | Where |
 |---|---|---|
-| Suggestion (LLM) | ~$0.004 – $0.02 / run | OpenAI or Gemini REST |
+| Subtitles suggestion (LLM) | ~$0.004 – $0.02 / run | OpenAI or Gemini REST |
+| Video suggestion (Gemini video) | ~$0.03 – $0.10 / 5 min | Gemini Files API + generateContent |
 | Preview (stream + window) | $0 | Browser, Range requests |
 | Cut (ffmpeg `libx264`/`aac`) | $0 (local CPU) | On download only |
+| Thumbnail extract (ffmpeg, video method) | $0 (local CPU) | After a video run |
 
-The transcript itself is a prerequisite produced upstream by the editor's transcription step; the Clips module reads it and never creates it.
+For the subtitles method the transcript is a prerequisite produced upstream by the editor's transcription step; the Clips module reads it and never creates it. The video method needs no transcript.
 
 ---
 
-## On-disk layout per video
+## Storage layout per video (S3-backed)
+
+All state lives in the **S3-backed store** (`storage/videoStore`), not a local `videos/<uuid>/` tree. The logical filenames per video are:
 
 ```
-videos/<uuid>/
+<video store scope>
 ├── original.mp4                     (source upload)
 ├── meta.json                        (filename, size, uploadedAt)
-├── transcription_<provider>.json    (from the editor's STT step — INPUT)
-├── clips_openai.json                (suggestions for the OpenAI run)
-├── clips_gemini.json                (suggestions for the Gemini run)
+├── transcription_<provider>.json    (from the editor's STT step — subtitles INPUT)
+├── clips_openai.json                (subtitles run — OpenAI)
+├── clips_gemini.json                (subtitles run — Gemini)
+├── clips_geminivideo.json           (video-understanding run — Gemini watches the video)
 ├── saved_clips.json                 (bookmarked library — survives re-runs)
 ├── clip_debug_openai.log            (last OpenAI run: prompts + raw response)
 ├── clip_debug_gemini.log            (last Gemini run: prompts + raw response)
-└── clips/
-    ├── openai-clip-01.mp4           (cut on download; volatile per run)
-    ├── gemini-clip-02.mp4
-    └── saved-openai-12500-41000.mp4 (cut of a saved clip; stable id)
+├── clip_debug_geminivideo.log       (last video run: prompts + raw response)
+├── gemini_file.json                 (Files-API upload cache — name/uri/uploadedAt, ~46h reuse)
+├── <clip thumbnail JPEGs>           (video method: 3 per clip, served via /thumb/:clipId/:n)
+├── openai-clip-01.mp4               (cut on download; volatile per run)
+├── geminivideo-clip-02.mp4
+└── saved-openai-12500-41000.mp4     (cut of a saved clip; stable id)
 ```
 
-**`clips_<provider>.json` shape**
+**`clips_<provider>.json` shape** (subtitles method — OpenAI shown)
 
 ```json
 {
@@ -96,7 +144,7 @@ videos/<uuid>/
     "video_height": 1920,
     "language": "en",
     "transcript_truncated": false,
-    "timestamp": "2026-06-09T09:17:32.029Z",
+    "timestamp": "2026-07-06T09:17:32.029Z",
     "warnings": ["Model returned 1 usable clips (requested 3)."]
   },
   "clips": [
@@ -119,6 +167,48 @@ videos/<uuid>/
 ```
 
 `exported`/`clipUrl` flip to `true` / `/api/video/<id>/clip/<clipId>` after the clip is cut.
+
+**`clips_geminivideo.json` shape** (video-understanding method) — same as above but with extra metadata `method: "video"`, `feasibleCount`, `mediaResolution` (`"default"` | `"low"`), and no `transcriptProvider`/`transcript_truncated`. Each clip additionally carries a `caption` (ready-to-post social caption) and `thumbnails` (up to 3 entries, each `{ t, url }` pointing at `/api/clips/<id>/thumb/<clipId>/<n>`):
+
+```json
+{
+  "metadata": {
+    "method": "video",
+    "suggestProvider": "geminivideo",
+    "model": "gemini-2.5-flash",
+    "bucket": "auto",
+    "bucketSeconds": { "min": 8, "max": 90 },
+    "requestedCount": 5,
+    "feasibleCount": 4,
+    "video_duration_s": 642.30,
+    "video_width": 1080,
+    "video_height": 1920,
+    "mediaResolution": "default",
+    "language": null,
+    "timestamp": "2026-07-06T09:17:32.029Z",
+    "warnings": ["Video is ~10 min — at 8s+ per clip with no overlaps, at most 4 clip(s) fit (you asked for 5)."]
+  },
+  "clips": [
+    {
+      "id": "geminivideo-clip-01",
+      "suggestProvider": "geminivideo",
+      "start": 12, "end": 54, "duration": 42.0,
+      "title": "The $500 hammer twist",
+      "hook": "Get it right, swing the hammer",
+      "rationale": "Rules land in the first line and the first swing pays off fast.",
+      "caption": "Trivia, but every wrong answer costs you 🔨 #gameshow",
+      "score": 9,
+      "thumbnails": [
+        { "t": 16, "url": "/api/clips/<id>/thumb/geminivideo-clip-01/0" },
+        { "t": 33, "url": "/api/clips/<id>/thumb/geminivideo-clip-01/1" },
+        { "t": 50, "url": "/api/clips/<id>/thumb/geminivideo-clip-01/2" }
+      ],
+      "exported": false,
+      "clipUrl": null
+    }
+  ]
+}
+```
 
 **`saved_clips.json` shape** — same per-clip fields plus `sourceClipId`, `transcriptProvider`, `bucket`, `savedAt`, and a stable id `saved-<provider>-<startMs>-<endMs>` (so saving the same range twice dedupes, and a saved cut never collides with a volatile suggestion cut).
 
@@ -200,9 +290,9 @@ Every suggestion run overwrites `clip_debug_<provider>.log` with the exact **SYS
 
 | Decision | Why |
 |---|---|
-| Swappable `clipSuggest` registry (openai · gemini) | Lets the user A/B providers per run and lets a future video-understanding model drop in unchanged |
-| Plain JSON suggest (no SSE) | A single LLM round-trip has no intermediate progress worth streaming; a client spinner covers the 5–30s wait |
-| SSE only for export | The ffmpeg cut has real, streamable progress — reuses the burn route's SSE pattern |
+| Swappable `clipSuggest` registry (openai · gemini · geminivideo) | Lets the user A/B providers per run; the video-understanding method (`geminivideo`) dropped in as one more provider without reshaping the API or UI |
+| Plain JSON for transcript suggest; SSE for video suggest | The transcript round-trip has no intermediate progress worth streaming (a spinner covers the 5–30s wait); the video run (upload → analyze → extract) has real streamable phases, so it uses SSE |
+| SSE for the video suggest + every cut | Both the video run and the ffmpeg cut have real, streamable progress — reuses the burn route's SSE pattern |
 | Preview streams original + window (no cut) | Most suggestions are discarded; transcoding to preview would be wasted work |
 | Re-encode cut, not `-c copy` | `-c copy` snaps to keyframes (off by seconds); re-encode is frame-accurate to the chosen range |
 | System / user prompt split | Stronger rule-following + cacheable static system prefix |
@@ -217,10 +307,10 @@ Every suggestion run overwrites `clip_debug_<provider>.log` with the exact **SYS
 
 | Area | Current | Future |
 |---|---|---|
-| Signal | Transcript only (words) | Video-understanding model (Gemini) that scores visuals + audio, added as another `clipSuggest` provider |
-| Missing transcript | Page blocks with a guard linking to the editor | Auto-transcribe with a default provider (e.g. AssemblyAI) inline, with step progress |
+| Signal | Two methods: transcript (words) **and** video understanding (Gemini watches visuals + audio) | Combine both signals in one pass; scene-level shot detection to sharpen boundaries |
+| Missing transcript | Transcript method blocks with a guard linking to the editor (the video method needs no transcript) | Auto-transcribe with a default provider (e.g. AssemblyAI) inline for the transcript method |
 | Aspect / format | Cut keeps the source aspect | Optional 9:16 reframe / crop for vertical feeds |
 | Subtitles on clips | None | Burn the matching transcript window into the cut |
 | Suggestion caching | Re-run overwrites `clips_<provider>.json` | Keep a short history / let the user pin a run |
-| Progress for suggest | Client spinner (no %) | Token-stream the model for a live partial-clips view |
+| Progress for suggest | Transcript = client spinner; video = live SSE phase progress | Token-stream the model for a live partial-clips view |
 | Auth | Open endpoints | Per-IP rate-limit + auth gate before prod |
