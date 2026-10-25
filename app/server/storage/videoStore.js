@@ -534,6 +534,118 @@ async function uploadLocalDir(localDir, keyFor) {
   }
 }
 
+// ─── smartcrop (spec 00 §4) ─────────────────────────────────────────────────────
+//
+// THE ONLY PLACE smartcrop S3 keys and s3:// URIs are built. SmartCrop uses its
+// own three buckets (IN / JOBS / OUT, no S3_KEY_PREFIX) and every key lives
+// under `{projectId}/`. Services never concatenate a key themselves: they call
+// these builders and the bucket-bound s3 helpers exposed as `in` / `jobs` / `out`.
+
+const scConfig = require('../config/smartcrop')
+const { PROJECT_ID_RE, RENDER_ID_RE } = require('../config/smartcropConstants')
+
+// Defence in depth: every key is rooted at a validated id, so a bad id can never
+// widen a prefix (deleteByPrefix on "" would wipe a bucket).
+function scP(p) {
+  if (!PROJECT_ID_RE.test(p)) throw new Error(`smartcrop: invalid project id for key: ${p}`)
+  return p
+}
+function scR(r) {
+  if (!RENDER_ID_RE.test(r)) throw new Error(`smartcrop: invalid render id for key: ${r}`)
+  return r
+}
+function scH(h) {
+  if (!/^[0-9a-f]{32}$/.test(h)) throw new Error(`smartcrop: invalid preview hash for key: ${h}`)
+  return h
+}
+
+const scKeys = {
+  projectPrefix: (p) => `${scP(p)}/`,
+  // IN
+  source: (p, ext) => `${scP(p)}/source.${ext}`,
+  // JOBS — stages 1–3
+  media: (p) => `${scP(p)}/media.json`,
+  audioMfcc: (p) => `${scP(p)}/audio_mfcc.npy`,
+  analysis: (p) => `${scP(p)}/analysis.npz`,
+  decision: (p) => `${scP(p)}/decision.json`,
+  // JOBS — stage 4 initial plan
+  plansDir: (p) => `${scP(p)}/plans`,
+  plansManifest: (p) => `${scP(p)}/plans/plans.json`,
+  // JOBS — editor media (pipeline change P4)
+  proxy: (p) => `${scP(p)}/proxy.mp4`,
+  waveform: (p) => `${scP(p)}/waveform.json`,
+  thumbsJpg: (p) => `${scP(p)}/thumbs.jpg`,
+  thumbsJson: (p) => `${scP(p)}/thumbs.json`,
+  // JOBS — previews
+  previewDir: (p, h) => `${scP(p)}/previews/${scH(h)}`,
+  previewEdit: (p, h) => `${scP(p)}/previews/${scH(h)}/edit.json`,
+  previewManifest: (p, h) => `${scP(p)}/previews/${scH(h)}/plans.json`,
+  // JOBS — renders
+  renderEdit: (p, r) => `${scP(p)}/renders/${scR(r)}/edit.json`,
+  renderPlansDir: (p, r) => `${scP(p)}/renders/${scR(r)}/plans`,
+  renderPlansManifest: (p, r) => `${scP(p)}/renders/${scR(r)}/plans/plans.json`,
+  // OUT
+  initialOutDir: (p) => `${scP(p)}/initial`,
+  renderOutDir: (p, r) => `${scP(p)}/renders/${scR(r)}`,
+  renderOutPrefix: (p, r) => `${scP(p)}/renders/${scR(r)}/`,
+}
+
+const s3Uri = (bucket, key) => `s3://${bucket}/${key}`
+
+// s3:// URIs handed to the pipeline (Step Functions input / Plan Lambda args).
+const scUris = {
+  source: (p, ext) => s3Uri(scConfig.buckets.in, scKeys.source(p, ext)),
+  jobPrefix: (p) => s3Uri(scConfig.buckets.jobs, scP(p)),
+  analysis: (p) => s3Uri(scConfig.buckets.jobs, scKeys.analysis(p)),
+  decision: (p) => s3Uri(scConfig.buckets.jobs, scKeys.decision(p)),
+  previewEdit: (p, h) => s3Uri(scConfig.buckets.jobs, scKeys.previewEdit(p, h)),
+  previewDir: (p, h) => s3Uri(scConfig.buckets.jobs, scKeys.previewDir(p, h)),
+  renderEdit: (p, r) => s3Uri(scConfig.buckets.jobs, scKeys.renderEdit(p, r)),
+  renderPlansDir: (p, r) => s3Uri(scConfig.buckets.jobs, scKeys.renderPlansDir(p, r)),
+  initialOut: (p) => s3Uri(scConfig.buckets.out, scKeys.initialOutDir(p)),
+  renderOut: (p, r) => s3Uri(scConfig.buckets.out, scKeys.renderOutDir(p, r)),
+}
+
+/**
+ * Resolve an s3:// URI the pipeline wrote into a manifest (e.g. a plan `path`)
+ * back to a JOBS key — only if it points into the JOBS bucket under this
+ * project. Anything else returns null (never sign arbitrary URIs).
+ */
+function scJobsKeyFromUri(p, uri) {
+  const m = /^s3:\/\/([^/]+)\/(.+)$/.exec(String(uri || ''))
+  if (!m || m[1] !== scConfig.buckets.jobs) return null
+  const key = m[2]
+  if (!key.startsWith(scKeys.projectPrefix(p)) || key.includes('..')) return null
+  return key
+}
+
+// Bucket-bound helper APIs (lazy so a disabled smartcrop never needs bucket names).
+const smartcrop = {
+  keys: scKeys,
+  uris: scUris,
+  jobsKeyFromUri: scJobsKeyFromUri,
+  get in() { return s3.forBucket(scConfig.buckets.in) },
+  get jobs() { return s3.forBucket(scConfig.buckets.jobs) },
+  get out() { return s3.forBucket(scConfig.buckets.out) },
+
+  // Parsed JSON from JOBS, or null when missing. Throws on unparseable JSON.
+  async readJobsJson(key) {
+    const text = await s3.forBucket(scConfig.buckets.jobs).getText(key)
+    return text == null ? null : JSON.parse(text)
+  },
+  async writeJobsJson(key, obj) {
+    await s3.forBucket(scConfig.buckets.jobs).putObject(key, JSON.stringify(obj), 'application/json')
+  },
+
+  // Delete everything a project owns in all three buckets.
+  async deleteProjectFiles(p) {
+    const prefix = scKeys.projectPrefix(p)
+    for (const b of [scConfig.buckets.in, scConfig.buckets.jobs, scConfig.buckets.out]) {
+      await s3.forBucket(b).deleteByPrefix(prefix)
+    }
+  },
+}
+
 module.exports = {
   // boot / session
   init, newId, videoExists, listSessionIds, listSessionObjects, listAllSessionObjects,
@@ -561,4 +673,6 @@ module.exports = {
   clipOutputExists, uploadClipOutput, publicUrlClipOutput, deleteClipOutput,
   clipThumbExists, uploadClipThumb, publicUrlClipThumb,
   writeClipDebug, cleanStaleSuggestionFiles,
+  // smartcrop (own buckets; see section above)
+  smartcrop,
 }

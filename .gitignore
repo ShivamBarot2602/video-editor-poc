@@ -49,3 +49,6 @@ Thumbs.db
 
 # video files
 videos/
+
+package-lock.json
+yarn.lock

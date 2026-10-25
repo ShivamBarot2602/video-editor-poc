@@ -1,6 +1,7 @@
 const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
 const path = require('path')
+const { spawn } = require('child_process')
 
 // x264 memory/CPU caps for re-encode paths (burn, clip cut). Without these,
 // x264 sizes itself for the HOST machine: threads = all physical cores (on a
@@ -202,4 +203,49 @@ function extractFrameAt(inputPath, t, outputPath, { width = 640 } = {}) {
   })
 }
 
-module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail, cutClip, extractFrameAt }
+/**
+ * Run `ffprobe -show_format -show_streams` on a local path or URL (a presigned
+ * S3 GET works — ffprobe range-reads, so a trailing moov atom is fine) and
+ * resolve the parsed JSON. fluent-ffmpeg's ffprobe has no timeout, so this
+ * spawns directly and SIGKILLs a hung probe after `timeoutMs`.
+ *
+ * Rejects with err.code = 'PROBE_TIMEOUT' | 'PROBE_FAILED'.
+ */
+function probe(input, { timeoutMs = 30000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const bin = process.env.FFPROBE_PATH || 'ffprobe'
+    const child = spawn(bin, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', input])
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const fail = (code, message) => {
+      if (settled) return
+      settled = true
+      const err = new Error(message)
+      err.code = code
+      reject(err)
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      fail('PROBE_TIMEOUT', `ffprobe timed out after ${timeoutMs}ms`)
+    }, timeoutMs)
+
+    child.stdout.on('data', (d) => { stdout += d })
+    child.stderr.on('data', (d) => { stderr += d })
+    child.on('error', (err) => { clearTimeout(timer); fail('PROBE_FAILED', `ffprobe could not start: ${err.message}`) })
+    child.on('close', (exitCode) => {
+      clearTimeout(timer)
+      if (settled) return
+      if (exitCode !== 0) return fail('PROBE_FAILED', `ffprobe exited ${exitCode}: ${stderr.trim().slice(0, 500)}`)
+      try {
+        settled = true
+        resolve(JSON.parse(stdout))
+      } catch {
+        settled = false
+        fail('PROBE_FAILED', 'ffprobe returned invalid JSON')
+      }
+    })
+  })
+}
+
+module.exports = { extractAudio, compressAudio, burnSubtitles, getFileSizeMB, extractThumbnail, cutClip, extractFrameAt, probe }

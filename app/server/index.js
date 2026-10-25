@@ -7,6 +7,7 @@ const Sentry = require('@sentry/node')
 const store = require('./storage/videoStore')
 const tempWork = require('./lib/tempWork')
 const storageConfig = require('./config/storage')
+const smartcropConfig = require('./config/smartcrop')
 
 // Initialize Sentry (if DSN is configured)
 if (process.env.SENTRY_DSN) {
@@ -52,6 +53,12 @@ if (!storageConfig.configured) {
   process.exit(1)
 }
 
+// SmartCrop is opt-in (SMARTCROP_ENABLED=true); once on, it must be fully configured.
+if (smartcropConfig.enabled && smartcropConfig.errors.length) {
+  console.error('FATAL: SmartCrop is enabled but not configured:\n  - ' + smartcropConfig.errors.join('\n  - '))
+  process.exit(1)
+}
+
 // S3 is the durable store; create the local ephemeral scratch dir for ffmpeg work.
 store.init()
 tempWork.init()
@@ -59,8 +66,6 @@ tempWork.init()
 // Credentialed CORS so the SPA can send the session cookie cross-origin in prod.
 // `origin: true` reflects the request origin (POC has no fixed client domain).
 app.use(cors({ origin: true, credentials: true }))
-app.use(express.json())
-app.use(cookieParser())
 
 // Request logging, both edges:
 //  --> logged the moment a request arrives (immediate) — visible even while a
@@ -70,6 +75,15 @@ app.use(morgan('--> :method :url', { immediate: true }))
 // :total-time (not :response-time) — the latter stops at headers-sent, which
 // under-reports streaming responses (burn SSE) by minutes.
 app.use(morgan('<-- :method :url :status :res[content-length] - :total-time ms'))
+
+// SmartCrop owns its JSON body limit (1 MiB), 404 and error envelope, so it is
+// mounted before the app-wide parser and catch-alls below. Still behind login.
+if (smartcropConfig.enabled) {
+  app.use('/api/smartcrop', cookieParser(), requireAuth, require('./routes/smartcrop'))
+}
+
+app.use(express.json())
+app.use(cookieParser())
 
 // Public routes — auth (login/logout/me) and health checks stay open.
 app.use('/api/auth', authRouter)
@@ -108,4 +122,8 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
   console.log(`Storage: s3://${storageConfig.S3_BUCKET}/${storageConfig.S3_KEY_PREFIX} (region ${storageConfig.AWS_REGION})`)
   console.log(`Scratch dir: ${storageConfig.TMP_WORK_DIR}`)
+  if (smartcropConfig.enabled) {
+    const f = [...smartcropConfig.features].join(',') || 'none'
+    console.log(`SmartCrop: enabled at /api/smartcrop (pipeline features: ${f})`)
+  }
 })
