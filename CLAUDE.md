@@ -19,9 +19,12 @@ yarn --cwd app/client dev   # vite
 
 # Build client for production
 yarn --cwd app/client build
+
+# Server tests (SmartCrop; Node 22, AWS mocked — no network)
+yarn --cwd app/server test
 ```
 
-There are no test scripts. No linting config exists.
+Only the SmartCrop API has tests (`app/server/test/smartcrop/`). No linting config exists.
 
 ## Architecture
 
@@ -102,3 +105,14 @@ The client preview renders the identical `.ass` through libass (JASSUB), so any 
 ## Environment
 
 Copy `app/server/.env.example` to `app/server/.env`. Only the API keys for providers you intend to use are required. `VIDEOS_DIR` defaults to `./videos` relative to the server working directory.
+
+## SmartCrop API
+- Spec: .claude/spec/00-overview.md (shared rules, read first) and 01–04 (one file per endpoint group).
+- Opt-in: mounted at `/api/smartcrop` only when `SMARTCROP_ENABLED=true` (then missing env stops boot). It sits behind `requireAuth` and is mounted **before** the app-wide `express.json()`/404/error handler — it owns its 1 MiB body parser, `ROUTE_NOT_FOUND` and error envelope (`lib/apiError.js`).
+- Layout: `routes/smartcrop.js` → `controllers/smartcrop/*` (validate → service → respond) → `services/smartcrop/*`. `projectLoader.loadAndSync` is the shared "404 → expire upload → sync processing → sync active render" step; `statusSync` polls Step Functions (no callbacks) with a 3 s throttle + in-process dedupe; `projectRepo` is the only DynamoDB access (conditional on expected status).
+- AWS thin clients: `lib/dynamo.js`, `lib/sfn.js`, `lib/lambda.js`, and `lib/s3.js` `forBucket(name)` for the IN/JOBS/OUT buckets. They tag failures with `awsService`, which the error middleware maps to 502 `UPSTREAM_ERROR`.
+- Tests: `test/smartcrop/helpers/` holds in-memory DynamoDB + S3 fakes behind `aws-sdk-client-mock` (they evaluate the real condition/update expressions), and fixtures trimmed from real pipeline output. Real-AWS check: `scripts/smartcrop-e2e.js`; tables: `scripts/smartcrop-create-tables.js`.
+- The spec is the source of truth for routes, payloads, validation, responses, error codes and corner cases.
+  If code and spec disagree, ask before changing either.
+- Custom validators only (no zod/joi). All smartcrop S3 keys are built only in server/storage/videoStore.js.
+- Tests: every error code and every corner case in a spec file needs a test (AWS mocked with aws-sdk-client-mock).

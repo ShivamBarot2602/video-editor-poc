@@ -10,6 +10,9 @@ import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
 import ThumbnailsPage from './pages/ThumbnailsPage'
 import ClipsPage from './pages/ClipsPage'
+import SmartcropUpload from './pages/SmartcropUpload'
+import SmartcropEditor from './pages/SmartcropEditor'
+import SmartcropProjects from './pages/SmartcropProjects'
 import DocsHubPage from './pages/docs/DocsHubPage'
 import SubtitlesDocPage from './pages/docs/SubtitlesDocPage'
 import ThumbnailsDocPage from './pages/docs/ThumbnailsDocPage'
@@ -19,8 +22,10 @@ function Header() {
   const location = useLocation()
   const { logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  // Full-screen pages with their own top bar.
   const isEditor = location.pathname.startsWith('/editor/')
-  if (isEditor) return null
+  const isSmartcrop = location.pathname.startsWith('/smartcrop')
+  if (isEditor || isSmartcrop) return null
 
   const isPlayground = location.pathname === '/playground'
   const isDocs = location.pathname.startsWith('/docs') || location.pathname === '/report'
@@ -37,6 +42,7 @@ function Header() {
         <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
         <Link to="/thumbnails" className={`topbar-tab ${isThumbnails ? 'active' : ''}`}>Thumbnails</Link>
         <Link to="/clips" className={`topbar-tab ${isClips ? 'active' : ''}`}>Clips</Link>
+        <Link to="/smartcrop/projects" className="topbar-tab">SmartCrop</Link>
         <Link to="/docs" className={`topbar-tab ${isDocs ? 'active' : ''}`}>Docs</Link>
         <button
           onClick={toggleTheme}
@@ -106,6 +112,9 @@ export default function App() {
               <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
               <Route path="/clips" element={<ClipsPage />} />
               <Route path="/clips/:videoId" element={<ClipsPage />} />
+              <Route path="/smartcrop" element={<SmartcropUpload />} />
+              <Route path="/smartcrop/projects" element={<SmartcropProjects />} />
+              <Route path="/smartcrop/:projectId" element={<SmartcropEditor />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </div>

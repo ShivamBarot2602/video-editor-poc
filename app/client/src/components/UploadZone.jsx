@@ -6,7 +6,10 @@ import { uploadVideo } from '../api/videos'
 const MAX_SIZE_MB = 500
 const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm'
 
-export default function UploadZone({ onUpload, compact }) {
+// `onFile` (optional): hand the chosen file to the caller instead of running
+// the built-in upload — for flows with their own upload + progress UI
+// (SmartCrop). `accept`, `hint` and `maxWidth` then describe that flow.
+export default function UploadZone({ onUpload, onFile, compact, accept = ACCEPT, hint, maxWidth = 320 }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -14,6 +17,7 @@ export default function UploadZone({ onUpload, compact }) {
 
   const upload = useCallback(async (file) => {
     if (!file) return
+    if (onFile) return onFile(file)
     const sizeMB = file.size / (1024 * 1024)
     if (sizeMB > MAX_SIZE_MB) {
       toast.error(`File too large (${sizeMB.toFixed(0)} MB). Limit is ${MAX_SIZE_MB} MB.`)
@@ -30,7 +34,7 @@ export default function UploadZone({ onUpload, compact }) {
       setUploading(false)
       setProgress(0)
     }
-  }, [onUpload])
+  }, [onUpload, onFile])
 
   const onDrop = useCallback((e) => {
     e.preventDefault()
@@ -40,7 +44,7 @@ export default function UploadZone({ onUpload, compact }) {
   }, [upload])
 
   return (
-    <div style={{ width: '100%', maxWidth: compact ? '100%' : 320 }}>
+    <div style={{ width: '100%', maxWidth: compact ? '100%' : maxWidth }}>
       <div
         onClick={() => !uploading && inputRef.current?.click()}
         onDragOver={e => { e.preventDefault(); setDragging(true) }}
@@ -78,7 +82,7 @@ export default function UploadZone({ onUpload, compact }) {
             </p>
             {!compact && (
               <p style={{ color: 'var(--text-faint)', fontSize: 11 }}>
-                MP4, MOV, MKV, WebM · up to {MAX_SIZE_MB} MB
+                {hint ?? `MP4, MOV, MKV, WebM · up to ${MAX_SIZE_MB} MB`}
               </p>
             )}
             {compact && (
@@ -100,9 +104,10 @@ export default function UploadZone({ onUpload, compact }) {
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPT}
+        accept={accept}
         style={{ display: 'none' }}
-        onChange={e => upload(e.target.files[0])}
+        // Reset so choosing the same file again (e.g. after an error) fires onChange.
+        onChange={e => { upload(e.target.files[0]); e.target.value = '' }}
       />
     </div>
   )

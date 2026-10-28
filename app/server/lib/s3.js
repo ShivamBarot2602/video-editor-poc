@@ -31,9 +31,17 @@ const { S3_BUCKET, AWS_REGION, credentials, PRESIGN_EXPIRES_S } = require('../co
 // Lazily construct the client so requiring this module is side-effect-free — the
 // S3Client throws if the region is missing, and we want the clean fail-fast in
 // index.js to fire first when storage is unconfigured.
+//
+// requestChecksumCalculation: 'WHEN_REQUIRED' — since SDK 3.729 the default
+// ('WHEN_SUPPORTED') bakes a CRC32 of the *empty* request body into presigned
+// PUT / UploadPart URLs (x-amz-checksum-crc32=AAAAAA==), so the browser's
+// upload of the real bytes fails S3's checksum check. Operations that require
+// a checksum (e.g. DeleteObjects) still get one.
 let _client = null
 function getClient() {
-  if (!_client) _client = new S3Client({ region: AWS_REGION, credentials })
+  if (!_client) {
+    _client = new S3Client({ region: AWS_REGION, credentials, requestChecksumCalculation: 'WHEN_REQUIRED' })
+  }
   return _client
 }
 
