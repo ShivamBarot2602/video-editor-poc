@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import ProjectBar from '../shell/ProjectBar'
 import { useJob } from '../shell/jobs'
@@ -7,14 +7,11 @@ import ScorePill from '../ui/ScorePill'
 import Segmented from '../ui/Segmented'
 import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
-  ArrowLeft, Loader2, RefreshCw, Play, Info, Download, Eye, X,
+  Loader2, RefreshCw, Play, Info, Download, Eye, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import VideoPlayer from '../components/VideoPlayer'
-import UploadZone from '../components/UploadZone'
-import TimerToast from '../components/TimerToast'
-import { fmtTimecodeTenths as fmtTime, fmtSize, fmtDate } from '../lib/format'
-import { listVideos } from '../api/videos'
+import { fmtTimecodeTenths as fmtTime } from '../lib/format'
 import { getThumbnails } from '../api/thumbnails'
 import { useLocalStorageState } from '../hooks/useLocalStorageState'
 import { openThumbnailStream } from '../api/thumbnails'
@@ -55,92 +52,9 @@ function resolveAspectRatio(video) {
   }
 }
 
-/* No-video entry (`/thumbnails`): upload or pick a recent session, then route
-   to `/thumbnails/:id`. Mirrors the Playground empty state. */
-function ThumbnailsPicker() {
-  const navigate = useNavigate()
-  const [videos, setVideos] = useState(null)
-  const [thumbErrors, setThumbErrors] = useState({})
-
-  useEffect(() => {
-    listVideos().then(setVideos).catch(() => setVideos([]))
-  }, [])
-
-  const go = (id) => navigate(`/thumbnails/${id}`)
-
-  return (
-    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}>
-      {/* Left: upload + recent sessions */}
-      <div style={{
-        width: 300, flexShrink: 0, background: 'var(--surface-dark)',
-        borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column',
-        padding: 20, gap: 14, overflow: 'hidden',
-      }}>
-        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-          Upload Video
-        </div>
-        <div style={{ flexShrink: 0 }}>
-          <UploadZone onUpload={(id) => go(id)} compact />
-        </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-sub)', paddingTop: 14 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>
-            Or pick a recent session
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {videos === null ? (
-              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Loading…</span>
-            ) : videos.length === 0 ? (
-              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>No sessions yet.</span>
-            ) : videos.map((v, i) => (
-              <button
-                key={v.id}
-                onClick={() => go(v.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
-                  borderBottom: i < videos.length - 1 ? '1px solid var(--border-sub)' : 'none',
-                  cursor: 'pointer', textAlign: 'left', background: 'transparent', border: 'none', width: '100%',
-                  transition: 'opacity 150ms',
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-              >
-                <div style={{ width: 46, height: 28, flexShrink: 0, background: 'var(--video-bg)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
-                  {!thumbErrors[v.id] ? (
-                    <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
-                  ) : (
-                    <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#333' }}><Play size={10} /></span>
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.filename}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>{fmtSize(v.size)} · {fmtDate(v.uploadedAt)}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right: hint */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ border: '1.5px dashed var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--surface)', padding: '48px 64px', maxWidth: 440 }}>
-          <div style={{ width: 40, height: 40, border: '1.5px dashed var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={20} style={{ color: 'var(--text-dim)' }} />
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Generate thumbnails</div>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6 }}>
-            Upload a video or pick a recent session to<br />generate ranked thumbnail candidates.
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
+// `/v/:videoId/thumbnails`. Keyed by video so switching videos resets all state.
 export default function ThumbnailsPage() {
   const { videoId } = useParams()
-  // No video in the URL (global `/thumbnails` entry) → show the picker.
-  if (!videoId) return <ThumbnailsPicker />
   return <ThumbnailsEditor key={videoId} videoId={videoId} />
 }
 
@@ -190,7 +104,6 @@ function ThumbnailsEditor({ videoId }) {
       evtSourceRef.current = null
     }
 
-    const tid = toast.loading(<TimerToast label="Generating thumbnails…" />)
     const es = openThumbnailStream(videoId, reranker, {
       onMessage: (event) => {
         if (event.type === 'phase') {
@@ -222,13 +135,13 @@ function ThumbnailsEditor({ videoId }) {
           es.close()
           evtSourceRef.current = null
           setRunning(false)
-          toast.success('Thumbnails ready!', { id: tid })
+          toast.success('Thumbnails ready')
         } else if (event.type === 'error') {
           setError(event.message)
           es.close()
           evtSourceRef.current = null
           setRunning(false)
-          toast.error(event.message || 'Thumbnail generation failed', { id: tid })
+          toast.error(event.message || 'Thumbnail generation failed')
         }
       },
       onError: () => {
@@ -241,7 +154,7 @@ function ThumbnailsEditor({ videoId }) {
         try { es.close() } catch (_) {}
         evtSourceRef.current = null
         setRunning(false)
-        toast.error('Connection lost during generation', { id: tid })
+        toast.error('Connection lost during generation')
       },
     })
     evtSourceRef.current = es

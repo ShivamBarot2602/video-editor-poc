@@ -3,8 +3,8 @@ import { Clapperboard, LayoutGrid, Crop, FlaskConical, BookOpen, Sun, Moon, LogO
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../theme/ThemeContext'
 
-// Project pages (/editor, /clips/:id, /thumbnails/:id) live inside the Library.
-const LIBRARY_PATHS = /^\/($|editor\/|clips\/|thumbnails\/)/
+// Project pages (/v/:id/…) live inside the Library.
+const LIBRARY_PATHS = /^\/($|v\/)/
 
 export default function Rail() {
   const { pathname } = useLocation()

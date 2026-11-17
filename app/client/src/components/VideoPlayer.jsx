@@ -48,7 +48,7 @@ export default function VideoPlayer({ videoId, transcription, style, onStyleChan
         style={{
           position: 'relative',
           background: 'var(--video-bg)',
-          borderRadius: 10,
+          borderRadius: 'var(--radius-frame)',
           overflow: 'hidden',
           ...(fillHeight ? { flex: 1, minHeight: 0 } : null),
         }}

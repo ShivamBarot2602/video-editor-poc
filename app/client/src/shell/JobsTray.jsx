@@ -7,6 +7,14 @@ export default function JobsTray({ videoId }) {
   const jobs = useJobs(videoId)
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
+  const [now, setNow] = useState(Date.now())
+
+  // Elapsed times tick once a second while anything is running.
+  useEffect(() => {
+    if (jobs.length === 0) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [jobs.length])
 
   useEffect(() => {
     if (!open) return
@@ -44,23 +52,34 @@ export default function JobsTray({ videoId }) {
 
       {open && (
         <div className="jobs-pop" role="dialog" aria-label="Running jobs">
-          {jobs.map(j => (
-            <div key={j.key} className="jobs-row">
-              <div className="jobs-row-top">
-                <span className="jobs-row-label">{j.label}</span>
-                {typeof j.progress === 'number' && (
-                  <span className="jobs-row-pct">{Math.round(j.progress)}%</span>
-                )}
+          {jobs.map(j => {
+            // Elapsed as m:ss (h:mm:ss past an hour), from startedAt so it stays right through tab throttling.
+            const sec = Math.max(0, Math.floor((now - j.startedAt) / 1000))
+            const h = Math.floor(sec / 3600)
+            const m = Math.floor((sec % 3600) / 60)
+            const ss = String(sec % 60).padStart(2, '0')
+            const elapsed = h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`
+            return (
+              <div key={j.key} className="jobs-row">
+                <div className="jobs-row-top">
+                  <span className="jobs-row-label">{j.label}</span>
+                  {typeof j.progress === 'number' && (
+                    <span className="jobs-row-pct">{Math.round(j.progress)}%</span>
+                  )}
+                </div>
+                <div className="progress-bar">
+                  <div
+                    className={typeof j.progress === 'number' ? 'progress-bar-fill' : 'progress-bar-fill progress-bar-busy'}
+                    style={{ width: typeof j.progress === 'number' ? `${j.progress}%` : '100%' }}
+                  />
+                </div>
+                <span className="jobs-row-detail">
+                  <span>{j.detail}</span>
+                  <span className="tc">{elapsed}</span>
+                </span>
               </div>
-              <div className="progress-bar">
-                <div
-                  className={typeof j.progress === 'number' ? 'progress-bar-fill' : 'progress-bar-fill progress-bar-busy'}
-                  style={{ width: typeof j.progress === 'number' ? `${j.progress}%` : '100%' }}
-                />
-              </div>
-              {j.detail && <span className="jobs-row-detail">{j.detail}</span>}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

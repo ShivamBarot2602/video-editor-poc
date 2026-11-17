@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Flame, Download, RefreshCw, Check, Loader2 } from 'lucide-react'
-import { FONT_FAMILIES } from '../config/subtitleStyle'
+import { FONT_FAMILIES, STYLE_PRESETS } from '../config/subtitleStyle'
 import Field from '../ui/Field'
 import Slider from '../ui/Slider'
 import Segmented from '../ui/Segmented'
@@ -114,6 +114,46 @@ export default function StyleEditor({ style, onChange, onReset, canBurn, burnSta
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Presets: one-click looks; the tabs below fine-tune them. */}
+      <div className="presets" role="radiogroup" aria-label="Caption style">
+        {STYLE_PRESETS.map(p => {
+          const on = Object.entries(p.style).every(([k, v]) => style[k] === v)
+          const [first, second] = p.sample.split(' ')
+          const ps = p.style
+          const outline = ps.backgroundBox === 'off' && ps.outlineThickness > 0
+            ? `0 0 ${Math.min(3, ps.outlineThickness)}px ${ps.outlineColor}, 0 0 1px ${ps.outlineColor}`
+            : 'none'
+          return (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              className="preset"
+              onClick={() => onChange(prev => ({ ...prev, ...p.style }))}
+            >
+              <span className="preset-tile">
+                <span
+                  className="preset-sample"
+                  style={{
+                    fontFamily: `'Preset ${ps.fontFamily}', var(--font)`,
+                    fontWeight: ps.fontWeight,
+                    color: ps.primaryColor,
+                    textShadow: outline,
+                    background: ps.backgroundBox === 'solid' ? `rgba(0,0,0,${ps.backgroundOpacity / 100})` : 'none',
+                    padding: ps.backgroundBox === 'solid' ? '2px 5px' : 0,
+                    fontSize: ps.fontFamily === 'Anton' ? 15 : 12,
+                  }}
+                >
+                  {first}{second && <> <span style={{ color: ps.karaokeColor }}>{second}</span></>}
+                </span>
+              </span>
+              <span className="preset-name">{p.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Tab bar */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border-sub)', flexShrink: 0 }}>
         {TABS.map(t => (

@@ -48,7 +48,7 @@ export default function LibraryPage() {
     try {
       const data = await uploadVideo(file, { onProgress: p => setUpload({ name: file.name, progress: p }) })
       toast.success(`Uploaded ${file.name}`)
-      navigate(`/editor/${data.videoId}`)
+      navigate(`/v/${data.videoId}/captions`)
     } catch (err) {
       toast.error(`Upload failed: ${err.message}`)
       setUpload(null)
@@ -184,7 +184,7 @@ export default function LibraryPage() {
             {shown.map(v => {
               const outputs = outputsOf(v)
               return (
-                <Link key={v.id} to={`/editor/${v.id}`} className="vcard">
+                <Link key={v.id} to={`/v/${v.id}/captions`} className="vcard">
                   <div className="vcard-thumb">
                     {!thumbErrors[v.id] ? (
                       <img

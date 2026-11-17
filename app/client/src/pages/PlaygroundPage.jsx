@@ -462,7 +462,7 @@ export default function PlaygroundPage() {
   }
 
   const handleUse = (providerId) => {
-    if (selectedVideo) navigate(`/editor/${selectedVideo.id}?provider=${providerId}`)
+    if (selectedVideo) navigate(`/v/${selectedVideo.id}/captions?provider=${providerId}`)
   }
 
   /* ── Path A: No video selected → show empty / upload state ── */

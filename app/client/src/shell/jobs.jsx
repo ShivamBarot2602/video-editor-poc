@@ -26,7 +26,8 @@ export function useJob(key, job) {
   const serialized = job ? JSON.stringify(job) : null
   useEffect(() => {
     if (!serialized) return
-    setJobs(prev => ({ ...prev, [key]: JSON.parse(serialized) }))
+    // startedAt survives progress updates so the tray can show elapsed time.
+    setJobs(prev => ({ ...prev, [key]: { ...JSON.parse(serialized), startedAt: prev[key]?.startedAt ?? Date.now() } }))
     return () => setJobs(prev => {
       const next = { ...prev }
       delete next[key]

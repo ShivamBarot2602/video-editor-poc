@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
-import { Scissors, ArrowLeft, Loader2, Sparkles, AlertTriangle, FileText, Bookmark, Film, VideoOff } from 'lucide-react'
+import { ArrowLeft, Loader2, Sparkles, AlertTriangle, FileText, Bookmark, Film, VideoOff } from 'lucide-react'
 import toast from 'react-hot-toast'
-import UploadZone from '../components/UploadZone'
 import ClipCard from '../components/ClipCard'
 import ClipControlsBar from '../components/ClipControlsBar'
 import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
 import SourceVideoPlayer from '../components/SourceVideoPlayer'
-import TimerToast from '../components/TimerToast'
 import ProjectBar from '../shell/ProjectBar'
 import { useJob } from '../shell/jobs'
-import { fmtSize } from '../lib/format'
 import { triggerDownload } from '../lib/dom'
-import { listVideos } from '../api/videos'
+import { getVideoOrNull } from '../api/videos'
 import { getClips, getSavedClips, suggestClips, saveClip, removeSavedClip, openSuggestStream, openExportStream } from '../api/clips'
 
 const IDLE = { status: 'idle', progress: 0 }
@@ -37,89 +34,13 @@ function computeSavedId(clip) {
   return `saved-${clip.suggestProvider || 'clip'}-${Math.round(clip.start * 1000)}-${Math.round(clip.end * 1000)}`
 }
 
-/* `/clips` entry with no video — upload or pick a recent session. */
-function ClipsPicker() {
-  const navigate = useNavigate()
-  const [videos, setVideos] = useState(null)
-  const [thumbErrors, setThumbErrors] = useState({})
-  const go = (id) => navigate(`/clips/${id}`)
-
-  useEffect(() => {
-    listVideos().then(setVideos).catch(() => setVideos([]))
-  }, [])
-
-  return (
-    <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}>
-      <div style={{
-        width: 300, flexShrink: 0, background: 'var(--surface-dark)',
-        borderRight: '1px solid var(--border-sub)', display: 'flex', flexDirection: 'column',
-        padding: 20, gap: 14, overflow: 'hidden',
-      }}>
-        <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Upload Video
-        </div>
-        <UploadZone onUpload={(id) => go(id)} compact />
-        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-sub)', paddingTop: 14 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Or pick a recent session
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-            {videos === null ? (
-              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>Loading…</span>
-            ) : videos.length === 0 ? (
-              <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>No sessions yet.</span>
-            ) : videos.map((v, i) => (
-              <button
-                key={v.id}
-                onClick={() => go(v.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
-                  borderBottom: i < videos.length - 1 ? '1px solid var(--border-sub)' : 'none',
-                  cursor: 'pointer', textAlign: 'left', background: 'transparent', border: 'none', width: '100%',
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.65'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-              >
-                <div style={{ width: 46, height: 28, flexShrink: 0, background: 'var(--video-bg)', borderRadius: 3, overflow: 'hidden' }}>
-                  {!thumbErrors[v.id] && (
-                    <img src={v.thumbnail} alt={v.filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setThumbErrors(p => ({ ...p, [v.id]: true }))} />
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.filename}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 1 }}>
-                    {fmtSize(v.size)} · {v.providers?.length ? `${v.providers.length} transcript${v.providers.length > 1 ? 's' : ''}` : 'no transcript'}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div style={{ border: '1.5px dashed var(--border)', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, background: 'var(--surface)', padding: '48px 64px', maxWidth: 440 }}>
-          <div style={{ width: 40, height: 40, border: '1.5px dashed var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Scissors size={20} style={{ color: 'var(--text-dim)' }} />
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Find engaging clips</div>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6 }}>
-            Upload a video or pick a recent session.<br />A transcript is required to suggest clips.
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
+// `/v/:videoId/clips`. Keyed by video so switching videos resets all state.
 export default function ClipsPage() {
   const { videoId } = useParams()
-  if (!videoId) return <ClipsPicker />
   return <ClipsEditor key={videoId} videoId={videoId} />
 }
 
 function ClipsEditor({ videoId }) {
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [video, setVideo] = useState(null)
@@ -164,16 +85,15 @@ function ClipsEditor({ videoId }) {
   // ── discover the video + its transcript providers ──────────────────────────
   useEffect(() => {
     let cancel = false
-    listVideos().then(list => {
+    getVideoOrNull(videoId).then(v => {
       if (cancel) return
-      const v = (list || []).find(x => x.id === videoId)
       if (!v) { setNotFound(true); setTranscriptProviders([]); return }
       setVideo(v)
       setTranscriptProviders(v.providers || [])
       setSelectedTranscriptProvider(prev => (prev && v.providers?.includes(prev)) ? prev : (v.providers?.[0] || ''))
     }).catch(() => { if (!cancel) setTranscriptProviders([]) })
     return () => { cancel = true }
-  }, [videoId, navigate])
+  }, [videoId])
 
   // ── load previously-saved suggestions for the active method/provider ───────
   const loadProvider = method === 'video' ? 'geminivideo' : suggestProvider
@@ -224,17 +144,16 @@ function ClipsEditor({ videoId }) {
     if (!selectedTranscriptProvider) { toast.error('Pick a transcript source first'); return }
     setSuggesting(true)
     setError(null)
-    const tid = toast.loading(<TimerToast label="Suggesting clips…" />)
     try {
       const data = await suggestClips(videoId, { suggestProvider, transcriptProvider: selectedTranscriptProvider, bucket, count }, 'Failed to suggest clips')
       setMetadata(data.metadata)
       setClips(data.clips || [])
       setExportStates(p => ({ ...p, ...seedExportStates(data.clips) }))
-      toast.success(`Found ${data.clips?.length || 0} clips`, { id: tid })
+      toast.success(`Found ${data.clips?.length || 0} clips`)
       ;(data.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
     } catch (e) {
       setError(e.message)
-      toast.error(e.message, { id: tid })
+      toast.error(e.message)
     } finally {
       setSuggesting(false)
     }
@@ -248,7 +167,6 @@ function ClipsEditor({ videoId }) {
     setSuggesting(true)
     setError(null)
     setAnalyzePhase({ phase: 'start', percent: 0 })
-    const tid = toast.loading(<TimerToast label="Analyzing video…" />)
 
     let es
     const finish = () => {
@@ -268,19 +186,19 @@ function ClipsEditor({ videoId }) {
           setMetadata(ev.data?.metadata)
           setClips(ev.data?.clips || [])
           setExportStates(p => ({ ...p, ...seedExportStates(ev.data?.clips) }))
-          toast.success(`Found ${ev.data?.clips?.length || 0} clips`, { id: tid })
+          toast.success(`Found ${ev.data?.clips?.length || 0} clips`)
           ;(ev.data?.metadata?.warnings || []).forEach(w => toast(w, { icon: '⚠️' }))
           finish()
         } else if (ev.type === 'error') {
           setError(ev.message)
-          toast.error(ev.message || 'Analysis failed', { id: tid })
+          toast.error(ev.message || 'Analysis failed')
           finish()
         }
       },
       onError: () => {
         if (analyzeEsRef.current !== es) return // already finished/cancelled
         setError('Connection lost during analysis')
-        toast.error('Connection lost during analysis', { id: tid })
+        toast.error('Connection lost during analysis')
         finish()
       },
     })
@@ -394,7 +312,7 @@ function ClipsEditor({ videoId }) {
             This video id doesn’t exist or was removed.
           </div>
           <Link to="/" className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
-            <ArrowLeft size={14} /> Back home
+            <ArrowLeft size={14} /> Back to Library
           </Link>
         </Centered>
       ) : discovering ? (
@@ -500,8 +418,8 @@ function ClipsEditor({ videoId }) {
                   Transcribe this video first, or switch to{' '}
                   <strong style={{ color: 'var(--text-muted)' }}>Video understanding</strong> above (no transcript needed).
                 </div>
-                <Link to={`/editor/${videoId}`} className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
-                  Go to editor
+                <Link to={`/v/${videoId}/captions`} className="btn btn-primary" style={{ marginTop: 6, gap: 6 }}>
+                  Transcribe in Captions
                 </Link>
               </Centered>
             ) : suggesting ? (

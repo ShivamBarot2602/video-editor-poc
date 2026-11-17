@@ -73,3 +73,43 @@ export const EXPORT_FORMATS = [
   { id: 'srt',  label: 'SRT',  description: 'SubRip subtitles',                                   kind: 'subtitle' },
   { id: 'ass',  label: 'ASS',  description: 'Advanced SubStation Alpha — with current editor style', kind: 'ass' },
 ]
+
+// One-click looks shown above the style controls. Each preset sets only the
+// "look" fields; position, timing offset and output settings are left alone.
+// The preset whose fields all match the current style is shown as selected.
+// `sample` is the tile text; with two words the second shows the highlight color.
+export const STYLE_PRESETS = [
+  {
+    id: 'clean', label: 'Clean', sample: 'Clean',
+    style: {
+      fontFamily: 'Source Sans 3', fontSize: 52, fontWeight: 600, italic: false,
+      primaryColor: '#FFFFFF', karaokeColor: '#FFFFFF', outlineColor: '#000000', outlineThickness: 2,
+      backgroundBox: 'off', karaokeStyle: 'word-highlight', animationIn: 'fade', maxLines: 2, wordsPerLine: 0,
+    },
+  },
+  {
+    id: 'pop', label: 'Bold pop', sample: 'Bold pop',
+    style: {
+      fontFamily: 'Roboto', fontSize: 64, fontWeight: 700, italic: false,
+      primaryColor: '#FFFFFF', karaokeColor: '#FFD43B', outlineColor: '#000000', outlineThickness: 4,
+      backgroundBox: 'off', karaokeStyle: 'word-highlight', animationIn: 'none', maxLines: 2, wordsPerLine: 0,
+    },
+  },
+  {
+    id: 'boxed', label: 'Boxed', sample: 'Boxed',
+    style: {
+      fontFamily: 'Liberation Sans', fontSize: 46, fontWeight: 600, italic: false,
+      primaryColor: '#FFFFFF', karaokeColor: '#FFD43B', outlineColor: '#000000', outlineThickness: 0,
+      backgroundBox: 'solid', backgroundOpacity: 75, boxPadding: 18,
+      karaokeStyle: 'word-highlight', animationIn: 'none', maxLines: 2, wordsPerLine: 0,
+    },
+  },
+  {
+    id: 'loud', label: 'Loud', sample: 'LOUD',
+    style: {
+      fontFamily: 'Anton', fontSize: 88, fontWeight: 400, italic: false,
+      primaryColor: '#FFFFFF', karaokeColor: '#FFD43B', outlineColor: '#000000', outlineThickness: 5,
+      backgroundBox: 'off', karaokeStyle: 'color-sweep', animationIn: 'none', maxLines: 1, wordsPerLine: 3,
+    },
+  },
+]

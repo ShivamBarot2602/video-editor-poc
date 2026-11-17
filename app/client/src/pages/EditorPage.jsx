@@ -1,12 +1,13 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { FlaskConical, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
-import TimerToast from '../components/TimerToast'
 import StyleEditor from '../components/StyleEditor'
+import { speakerColor } from '../components/SpeakerBadge'
+import Timeline from '../ui/Timeline'
 import ProjectBar from '../shell/ProjectBar'
 import { useJob } from '../shell/jobs'
 import { PROVIDERS } from '../config/providers'
@@ -24,13 +25,9 @@ export default function EditorPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
+  // v2: transcript | stage + timeline | style (v1 stacked transcript under the video).
   const { defaultLayout: editorDefaultLayout, onLayoutChanged: onEditorLayoutChanged } = useDefaultLayout({
-    id: 'sp-video-editor:editor-layout:v1',
-    storage: localStorage,
-  })
-
-  const { defaultLayout: editorMainDefaultLayout, onLayoutChanged: onEditorMainLayoutChanged } = useDefaultLayout({
-    id: 'sp-video-editor:editor-main-vertical-layout:v1',
+    id: 'sp-video-editor:editor-layout:v2',
     storage: localStorage,
   })
 
@@ -170,16 +167,15 @@ export default function EditorPage() {
     if (!videoId) return
     setIsTranscribing(true)
     setTranscription(null)
-    const toastId = toast.loading(<TimerToast label="Transcribing…" />)
     try {
       const res = await transcribe(videoId, { provider: selectedProvider })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Transcription failed')
       setTranscription(data)
       setAvailableProviders(prev => prev.includes(selectedProvider) ? prev : [...prev, selectedProvider])
-      toast.success('Transcription complete!', { id: toastId })
+      toast.success('Transcript ready')
     } catch (err) {
-      toast.error(err.message, { id: toastId })
+      toast.error(err.message)
     } finally {
       setIsTranscribing(false)
     }
@@ -238,7 +234,6 @@ export default function EditorPage() {
   const handleBurn = useCallback(async () => {
     if (!videoId || !transcription) return
     setBurnState({ status: 'burning', phase: 'preparing', progress: 0, burnedUrl: null })
-    const toastId = toast.loading(<TimerToast label="Burning subtitles…" />)
 
     // Derive bold flag from fontWeight for ASS compat
     const burnStyle = { ...style, bold: style.fontWeight >= 600 }
@@ -252,12 +247,12 @@ export default function EditorPage() {
         else if (event.type === 'progress') setBurnState(s => ({ ...s, progress: event.percent }))
         else if (event.type === 'done') {
           setBurnState({ status: 'done', progress: 100, burnedUrl: event.burnedUrl })
-          toast.success('Subtitles burned!', { id: toastId })
+          toast.success('Captioned video ready')
         } else if (event.type === 'error') throw new Error(event.message)
       })
     } catch (err) {
       setBurnState(s => ({ ...s, status: 'idle' }))
-      toast.error(err.message, { id: toastId })
+      toast.error(err.message)
     }
   }, [videoId, transcription, style, selectedProvider])
 
@@ -271,6 +266,32 @@ export default function EditorPage() {
       : burnState.phase === 'uploading' ? 'Saving the captioned video' : 'Rendering captions onto the video',
     progress: burnState.progress || undefined,
   } : null)
+
+  // Timeline lanes: who is speaking (runs of one speaker merged) and the text.
+  // Transcripts without diarization get the text lane only.
+  const timelineLanes = useMemo(() => {
+    const segs = transcription?.segments || []
+    const turns = []
+    for (const seg of segs) {
+      const last = turns.at(-1)
+      if (last && last.speaker === seg.speaker && seg.start - last.end < 1.5) last.end = seg.end
+      else turns.push({ speaker: seg.speaker, start: seg.start, end: seg.end })
+    }
+    const lanes = [{
+      id: 'text', label: 'Text',
+      blocks: segs.map((seg, i) => ({ key: i, start: seg.start, end: seg.end, text: seg.text, color: speakerColor(seg.speaker) })),
+    }]
+    if (segs.some(seg => seg.speaker)) {
+      lanes.unshift({
+        id: 'speakers', label: 'Speakers',
+        blocks: turns.map((t, i) => ({
+          key: i, start: t.start, end: t.end, color: speakerColor(t.speaker),
+          text: speakerAliases?.[t.speaker]?.trim() || t.speaker,
+        })),
+      })
+    }
+    return lanes
+  }, [transcription, speakerAliases])
 
   if (loading) {
     return (
@@ -299,64 +320,53 @@ export default function EditorPage() {
         </button>
       </ProjectBar>
 
-      {/* Editor body — resizable panels */}
+      {/* Editor body: transcript | stage + timeline | style. Resizable. */}
       <Group
         orientation="horizontal"
         defaultLayout={editorDefaultLayout}
         onLayoutChanged={onEditorLayoutChanged}
-        style={{ flex: 1, overflow: 'hidden', borderRadius: 'var(--radius)', margin: '0 8px 8px' }}
+        style={{ flex: 1, overflow: 'hidden', borderTop: '1px solid var(--border)' }}
       >
-
-        {/* Left: video + transcription (vertically resizable) */}
-        <Panel id="main" defaultSize="83%" minSize="50%" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <div style={{ padding: 16, flex: 1, minHeight: 0 }}>
-            <Group
-              orientation="vertical"
-              defaultLayout={editorMainDefaultLayout}
-              onLayoutChanged={onEditorMainLayoutChanged}
-              style={{ height: '100%', overflow: 'hidden' }}
-            >
-              <Panel id="video" defaultSize="68%" minSize="25%" style={{ overflow: 'hidden', minHeight: 0 }}>
-                <VideoPlayer
-                  videoId={videoId}
-                  transcription={transcription}
-                  style={style}
-                  onStyleChange={setStyle}
-                  videoRef={videoRef}
-                  onTimeChange={setCurrentTime}
-                  fillHeight
-                />
-              </Panel>
-
-              <Separator className="panel-resize-handle vertical" />
-
-              <Panel id="transcription" defaultSize="32%" minSize="20%" style={{ overflow: 'hidden', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <TranscriptionPanel
-                  transcription={transcription}
-                  isTranscribing={isTranscribing}
-                  isLoadingTranscription={isLoadingTranscription}
-                  selectedProvider={selectedProvider}
-                  onProviderChange={setSelectedProvider}
-                  onTranscribe={handleTranscribe}
-                  exportFormats={EXPORT_FORMATS}
-                  onExport={handleExport}
-                  availableProviders={availableProviders}
-                  currentTime={currentTime}
-                  speakerAliases={speakerAliases}
-                  onSpeakerAliasesChange={handleSpeakerAliasesChange}
-                  onSegmentEdit={handleSegmentEdit}
-                  listMaxHeight={null}
-                />
-              </Panel>
-            </Group>
-          </div>
+        <Panel id="transcript" defaultSize="26%" minSize="18%" maxSize="45%"
+          style={{ background: 'var(--surface)', overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <TranscriptionPanel
+            transcription={transcription}
+            isTranscribing={isTranscribing}
+            isLoadingTranscription={isLoadingTranscription}
+            selectedProvider={selectedProvider}
+            onProviderChange={setSelectedProvider}
+            onTranscribe={handleTranscribe}
+            exportFormats={EXPORT_FORMATS}
+            onExport={handleExport}
+            availableProviders={availableProviders}
+            currentTime={currentTime}
+            speakerAliases={speakerAliases}
+            onSpeakerAliasesChange={handleSpeakerAliasesChange}
+            onSegmentEdit={handleSegmentEdit}
+            listMaxHeight={null}
+          />
         </Panel>
 
-        {/* Drag handle */}
         <Separator className="panel-resize-handle" />
 
-        {/* Right: tabbed sidebar */}
-        <Panel id="sidebar" defaultSize="17%" minSize="14%" maxSize="50%"
+        <Panel id="stage" defaultSize="54%" minSize="35%" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div className="stage">
+            <VideoPlayer
+              videoId={videoId}
+              transcription={transcription}
+              style={style}
+              onStyleChange={setStyle}
+              videoRef={videoRef}
+              onTimeChange={setCurrentTime}
+              fillHeight
+            />
+          </div>
+          <Timeline videoRef={videoRef} lanes={timelineLanes} />
+        </Panel>
+
+        <Separator className="panel-resize-handle" />
+
+        <Panel id="style" defaultSize="20%" minSize="16%" maxSize="35%"
           style={{ background: 'var(--surface)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <StyleEditor
             style={style}
@@ -367,7 +377,6 @@ export default function EditorPage() {
             onBurn={handleBurn}
           />
         </Panel>
-
       </Group>
     </div>
   )

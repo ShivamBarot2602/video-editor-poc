@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { useAuth } from './auth/AuthContext'
 import Rail from './shell/Rail'
@@ -60,11 +60,17 @@ export default function App() {
                 <Route path="/docs/thumbnails" element={<ThumbnailsDocPage />} />
                 <Route path="/docs/clips" element={<ClipsDocPage />} />
                 <Route path="/report" element={<Navigate to="/docs/subtitles" replace />} />
-                <Route path="/editor/:videoId" element={<EditorPage />} />
-                <Route path="/thumbnails" element={<ThumbnailsPage />} />
-                <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
-                <Route path="/clips" element={<ClipsPage />} />
-                <Route path="/clips/:videoId" element={<ClipsPage />} />
+                <Route path="/v/:videoId" element={<ToolRedirect tool="captions" />} />
+                <Route path="/v/:videoId/captions" element={<EditorPage />} />
+                <Route path="/v/:videoId/clips" element={<ClipsPage />} />
+                <Route path="/v/:videoId/thumbnails" element={<ThumbnailsPage />} />
+                {/* Old addresses (bookmarks, shared links). The tools have no
+                    video picker any more; a video is chosen in the Library. */}
+                <Route path="/editor/:videoId" element={<ToolRedirect tool="captions" />} />
+                <Route path="/clips/:videoId" element={<ToolRedirect tool="clips" />} />
+                <Route path="/thumbnails/:videoId" element={<ToolRedirect tool="thumbnails" />} />
+                <Route path="/clips" element={<Navigate to="/" replace />} />
+                <Route path="/thumbnails" element={<Navigate to="/" replace />} />
                 <Route path="/smartcrop" element={<SmartcropUpload />} />
                 <Route path="/smartcrop/projects" element={<SmartcropProjects />} />
                 <Route path="/smartcrop/:projectId" element={<SmartcropEditor />} />
@@ -76,6 +82,14 @@ export default function App() {
       </JobsProvider>
     </Sentry.ErrorBoundary>
   )
+}
+
+// /editor/:id, /clips/:id, /thumbnails/:id and /v/:id → /v/:id/<tool>, keeping
+// the query string (?provider=, clip settings).
+function ToolRedirect({ tool }) {
+  const { videoId } = useParams()
+  const { search } = useLocation()
+  return <Navigate to={`/v/${videoId}/${tool}${search}`} replace />
 }
 
 function ErrorFallback({ error, resetError }) {

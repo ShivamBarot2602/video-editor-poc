@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
+// SPEAKER_00 / SPEAKER_A → var(--spk1), SPEAKER_01 / SPEAKER_B → var(--spk2) …
+// cycling through the four speaker colors, so the transcript and the timeline
+// color a speaker the same. Providers number or letter their speakers.
+export function speakerColor(speaker) {
+  const s = String(speaker ?? '')
+  const digits = s.match(/\d+/)
+  const n = digits ? parseInt(digits[0], 10) : s.toUpperCase().charCodeAt(s.length - 1) - 65
+  return `var(--spk${((Number.isFinite(n) ? n : 0) % 4 + 4) % 4 + 1})`
+}
+
 export default function SpeakerBadge({ speaker, label, onSave }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -16,23 +26,22 @@ export default function SpeakerBadge({ speaker, label, onSave }) {
   const speakerStr = String(speaker)
   if (!speakerStr) return null
 
-  const hue = (speakerStr.charCodeAt(speakerStr.length - 1) * 37 + 180) % 360
+  const color = speakerColor(speakerStr)
   const displayLabel = label ?? speakerStr
 
   const pillStyle = {
     display: 'inline-flex',
     alignItems: 'center',
-    padding: '2px 6px',
+    padding: '3px 7px',
     borderRadius: 99,
-    fontSize: 9,
+    fontSize: 11,
     lineHeight: 1,
-    fontWeight: 700,
-    letterSpacing: '0.05em',
+    fontWeight: 600,
     flexShrink: 0,
     alignSelf: 'center',
     whiteSpace: 'nowrap',
-    background: `hsla(${hue},50%,40%,0.25)`,
-    color: `hsl(${hue},60%,65%)`,
+    background: `color-mix(in srgb, ${color} 16%, transparent)`,
+    color,
     userSelect: 'none',
   }
 
@@ -66,10 +75,9 @@ export default function SpeakerBadge({ speaker, label, onSave }) {
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            color: `hsl(${hue},60%,65%)`,
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.05em',
+            color,
+            fontSize: 11,
+            fontWeight: 600,
             fontFamily: 'inherit',
             padding: 0,
             width: `${Math.max(draft.length + 1, 4)}ch`,

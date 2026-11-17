@@ -918,7 +918,7 @@ html[data-theme="dark"] .seg-opt[aria-checked="true"] { background: var(--border
 .jobs-row-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
 .jobs-row-label { color: var(--text-bright); font-weight: 500; }
 .jobs-row-pct { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 12px; }
-.jobs-row-detail { font-size: 12px; color: var(--text-dim); }
+.jobs-row-detail { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text-dim); }
 .progress-bar-busy { animation: pulse 1.2s ease-in-out infinite; }
 
 .shimmer {
@@ -1004,3 +1004,56 @@ html[data-theme="dark"] .seg-opt[aria-checked="true"] { background: var(--border
   background: linear-gradient(100deg, var(--surface-2) 30%, var(--border-sub) 50%, var(--surface-2) 70%);
   background-size: 200% 100%; box-shadow: none;
 }
+
+/* ── Caption style presets (StyleEditor) ─────────────────────────────────────
+   Tiles sample each look in its real typeface. The same TTFs the preview and
+   burn use, under "Preset …" names so they never shadow UI fonts. */
+@font-face { font-family: 'Preset Anton'; src: url('@shared/fonts/Anton-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Preset Roboto'; src: url('@shared/fonts/Roboto.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Preset Source Sans 3'; src: url('@shared/fonts/SourceSans3.ttf') format('truetype'); font-weight: 200 900; font-display: swap; }
+@font-face { font-family: 'Preset Liberation Sans'; src: url('@shared/fonts/LiberationSans-Regular.ttf') format('truetype'); font-display: swap; }
+
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 12px 12px 10px; border-bottom: 1px solid var(--border-sub); flex-shrink: 0; }
+.preset { display: grid; gap: 5px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: var(--text-dim); text-align: center; }
+.preset-tile {
+  aspect-ratio: 1.25; border-radius: var(--radius-sm); display: grid; place-items: end center; padding: 0 3px 8px;
+  background: linear-gradient(180deg, #3a434b 0%, #1f262c 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: box-shadow 120ms ease;
+}
+.preset-sample { line-height: 1.1; white-space: nowrap; border-radius: 2px; letter-spacing: .01em; }
+.preset-name { font-size: 11.5px; line-height: 1.2; }
+.preset:hover .preset-tile { box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.preset[aria-checked="true"] .preset-tile { box-shadow: 0 0 0 2px var(--accent); }
+.preset[aria-checked="true"] .preset-name { color: var(--text-bright); font-weight: 500; }
+.preset:focus-visible { outline: none; }
+.preset:focus-visible .preset-tile { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+
+/* ── Timeline (ui/Timeline) ──────────────────────────────────────────────────
+   Fixed lane names on the left, scrolling time on the right. */
+.tl { display: grid; grid-template-columns: 92px 1fr; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; user-select: none; }
+.tl-heads { border-right: 1px solid var(--border-sub); display: grid; grid-auto-rows: 32px; grid-template-rows: 28px; }
+.tl-head { display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border-sub); }
+.tl-head:last-child { border-bottom: 0; }
+.tl-head-ruler { gap: 2px; padding: 0 4px; }
+.tl-zoom { width: 24px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 4px; background: none; color: var(--text-dim); cursor: pointer; }
+.tl-zoom:hover:not(:disabled) { background: var(--surface-2); color: var(--text-bright); }
+.tl-zoom:disabled { opacity: .35; cursor: default; }
+.tl-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tl-scroll { overflow-x: auto; overflow-y: hidden; min-width: 0; scrollbar-width: thin; }
+.tl-content { position: relative; display: grid; grid-auto-rows: 32px; grid-template-rows: 28px; min-height: 100%; cursor: text; touch-action: none; }
+.tl-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tl-ruler, .tl-lane { position: relative; border-bottom: 1px solid var(--border-sub); }
+.tl-tick { position: absolute; top: 0; bottom: 0; padding: 7px 0 0 5px; border-left: 1px solid var(--border-sub); font-size: 10.5px; line-height: 1; color: var(--text-faint); pointer-events: none; }
+.tl-blk {
+  position: absolute; top: 5px; bottom: 5px; padding: 0 6px; border-radius: 3px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 20px; color: var(--text);
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--c) 70%, transparent);
+  pointer-events: none;
+}
+.tl-blk.on { background: color-mix(in srgb, var(--c) 30%, transparent); color: var(--text-bright); }
+.tl-playhead { position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: var(--error); pointer-events: none; will-change: transform; }
+.tl-playhead::before { content: ""; position: absolute; top: 0; left: -4px; border: 5px solid transparent; border-top-color: var(--error); }
+
+/* Dark surround for footage in tool editors (Captions). */
+.stage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; background: var(--stage); }

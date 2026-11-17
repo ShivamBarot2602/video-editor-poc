@@ -8,15 +8,16 @@ import JobsTray from './JobsTray'
 // Top bar shared by every tool page of one video: breadcrumb back to the
 // Library, a tab per tool (with a done / running dot), the jobs tray, and the
 // page's own actions as children.
-// `video` ({ filename, providers, hasClips }) is passed by pages that already
-// loaded it; otherwise the bar fetches it.
+// `video` ({ filename, providers, hasClips }) is passed by pages that load it
+// themselves (null while they are loading); when the prop is left out the bar
+// fetches it.
 export default function ProjectBar({ videoId, video: given, children }) {
   const { pathname } = useLocation()
   const [fetched, setFetched] = useState(undefined) // undefined = loading, null = not found
   const jobs = useJobs(videoId)
 
   useEffect(() => {
-    if (given || !videoId) return
+    if (given !== undefined || !videoId) return
     let cancel = false
     getVideoOrNull(videoId).then(v => { if (!cancel) setFetched(v) }).catch(() => {})
     return () => { cancel = true }
@@ -26,9 +27,9 @@ export default function ProjectBar({ videoId, video: given, children }) {
   const runningTools = new Set(jobs.map(j => j.tool))
 
   const tools = [
-    { id: 'captions', label: 'Captions', icon: Captions, to: `/editor/${videoId}`, done: video?.providers?.length > 0 },
-    { id: 'clips', label: 'Clips', icon: Scissors, to: `/clips/${videoId}`, done: video?.hasClips },
-    { id: 'thumbnails', label: 'Thumbnails', icon: ImageIcon, to: `/thumbnails/${videoId}`, done: false },
+    { id: 'captions', label: 'Captions', icon: Captions, to: `/v/${videoId}/captions`, done: video?.providers?.length > 0 },
+    { id: 'clips', label: 'Clips', icon: Scissors, to: `/v/${videoId}/clips`, done: video?.hasClips },
+    { id: 'thumbnails', label: 'Thumbnails', icon: ImageIcon, to: `/v/${videoId}/thumbnails`, done: false },
   ]
 
   return (

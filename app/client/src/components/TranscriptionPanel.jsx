@@ -137,9 +137,7 @@ export default function TranscriptionPanel({
         padding: '8px 12px', borderBottom: '1px solid var(--border-sub)',
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', letterSpacing: '0.1em', flexShrink: 0 }}>
-          TRANSCRIPTION
-        </span>
+        <span className="panel-header-title" style={{ flexShrink: 0 }}>Transcript</span>
 
         {/* Provider selector */}
         <div ref={providerMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
