@@ -879,7 +879,7 @@ html[data-theme="dark"] .seg-opt[aria-checked="true"] { background: var(--border
 .pbar-crumb { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; font-size: 13px; color: var(--text-dim); }
 .pbar-crumb a { color: var(--text-dim); text-decoration: none; white-space: nowrap; }
 .pbar-crumb a:hover { color: var(--text-bright); }
-.pbar-title { color: var(--text-bright); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.pbar-title { margin: 0; font-size: inherit; line-height: inherit; color: var(--text-bright); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
 .pbar-tabs { display: flex; align-self: stretch; gap: 2px; }
 .pbar-tab {
   display: inline-flex; align-items: center; gap: 7px; padding: 0 12px;
@@ -1057,3 +1057,218 @@ html[data-theme="dark"] .seg-opt[aria-checked="true"] { background: var(--border
 
 /* Dark surround for footage in tool editors (Captions). */
 .stage { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px; background: var(--stage); }
+
+/* ── Icon button (shared) ─────────────────────────────────────────────────── */
+.icon-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--hover-overlay); color: var(--text-bright); }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── Reframe (SmartCrop) ──────────────────────────────────────────────────────
+   Same chrome as the other tools: project bar, dark stage for footage,
+   controls and timeline on the surface. Spec 05 layout, shared tokens. */
+.sc-root { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; background: var(--bg); color: var(--text); }
+.sc-intro { margin: -8px 0 4px; max-width: 560px; font-size: 13.5px; color: var(--text-dim); }
+
+/* Stage + transport sit on the dark surround. */
+.sc-stage-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--stage); color: var(--on-stage); }
+.sc-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 16px 24px 8px; }
+
+.sc-icon-btn {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer;
+}
+.sc-icon-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.sc-icon-btn:disabled { opacity: .3; cursor: not-allowed; }
+.sc-icon-btn:focus-visible, .sc-play-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sc-transport { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 4px 24px 12px; flex-shrink: 0; }
+.sc-time { min-width: 72px; font: 500 12.5px var(--mono); text-align: center; color: var(--on-stage); font-variant-numeric: tabular-nums; }
+.sc-play-btn {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; margin: 0 4px;
+  border: 0; border-radius: 50%; background: var(--on-stage); color: var(--stage); cursor: pointer;
+}
+.sc-play-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Aspect + layout pickers. */
+.sc-controls {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 28px;
+  padding: 10px 24px; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border);
+}
+.sc-picker { display: flex; align-items: center; gap: 10px; }
+.sc-picker-label { font-size: 12px; color: var(--text-dim); }
+.sc-seg-opt { display: inline-flex; align-items: center; gap: 6px; }
+.sc-seg-opt:disabled { opacity: .4; }
+.sc-aspect-glyph { display: inline-block; border: 1.5px solid currentColor; border-radius: 2px; }
+.sc-note { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--text-dim); text-align: center; }
+
+/* Timeline (05 §5): same ruler, playhead and lane look as ui/Timeline. */
+.sc-timeline { height: 168px; flex-shrink: 0; border-top: 1px solid var(--border-sub); background: var(--surface); }
+.sc-timeline-inner { display: flex; flex-direction: column; height: 100%; }
+.sc-timeline-toolbar { display: flex; justify-content: flex-end; gap: 2px; padding: 4px 10px 0; flex-shrink: 0; color: var(--text-dim); }
+.sc-timeline-toolbar .sc-icon-btn { width: 28px; height: 28px; border-radius: 4px; }
+.sc-timeline-toolbar .sc-icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text-bright); }
+.sc-timeline-scroll { flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.sc-timeline-content { position: relative; height: 100%; cursor: text; user-select: none; touch-action: none; }
+.sc-timeline-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sc-ruler { position: absolute; inset: 0; pointer-events: none; }
+.sc-tick {
+  position: absolute; top: 0; bottom: 0; padding: 6px 0 0 5px; border-left: 1px solid var(--border-sub);
+  font: 10.5px/1 var(--mono); color: var(--text-faint); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.sc-clip {
+  position: absolute; top: 32px; height: 64px; /* = ClipTrack TILE_HEIGHT_PX */
+  box-sizing: content-box; margin: -2px 0 0 -2px; overflow: hidden;
+  border: 2px solid var(--accent); border-radius: var(--radius-frame); background: var(--surface-2);
+}
+.sc-tile {
+  position: absolute; top: 0; height: 100%; background-repeat: no-repeat; background-size: cover;
+  background-position: center; border-right: 1px solid rgba(0, 0, 0, .3);
+}
+.sc-tile[data-loading] { background-color: var(--border-sub); animation: pulse 1.8s ease-in-out infinite; }
+.sc-playhead { position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: var(--error); pointer-events: none; will-change: transform; }
+.sc-playhead::before { content: ""; position: absolute; top: 0; left: -4px; border: 5px solid transparent; border-top-color: var(--error); }
+.sc-timeline-placeholder { margin: 36px 24px 0; height: 68px; border-radius: var(--radius-frame); background: var(--surface-2); animation: pulse 1.8s ease-in-out infinite; }
+
+/* Preview canvas: sized by JS to fit the stage, keeping the output aspect. */
+.sc-preview { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.sc-preview:fullscreen { background: #000; }
+.sc-preview-frame { position: relative; }
+.sc-preview-canvas { display: block; border-radius: var(--radius-frame); background: #000; cursor: pointer; box-shadow: 0 0 0 1px rgba(255, 255, 255, .06); }
+.sc-preview:fullscreen .sc-preview-canvas { border-radius: 0; }
+.sc-preview-pending { position: absolute; top: 10px; right: 10px; display: flex; padding: 6px; border-radius: 50%; background: rgba(0, 0, 0, .6); color: var(--on-stage); }
+.sc-preview-message { position: absolute; max-width: 320px; margin: 0; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--error-dim); color: var(--error); font-size: 13px; text-align: center; }
+
+/* Processing / failed box in the output aspect. */
+.sc-video-box {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  max-width: 100%; max-height: 100%; padding: 24px; border-radius: var(--radius-frame);
+  background: rgba(255, 255, 255, .04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: var(--on-stage); text-align: center;
+}
+.sc-video-box[data-orientation="tall"] { height: 100%; }
+.sc-video-box[data-orientation="wide"] { width: min(100%, 860px); }
+.sc-video-box .spin { color: rgba(233, 234, 238, .7); }
+.sc-stage-text { margin: 0; font-size: 15px; font-weight: 600; }
+.sc-stage-sub { margin: 0; font: 12.5px var(--mono); color: rgba(233, 234, 238, .6); }
+.sc-steps { display: flex; gap: 5px; margin-top: 4px; }
+.sc-step { width: 22px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .14); }
+.sc-step[data-state="done"] { background: rgba(255, 255, 255, .55); }
+.sc-step[data-state="active"] { background: var(--tally); animation: tally 1.4s ease-in-out infinite; }
+.sc-failed-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--error-dim); color: var(--error); }
+.sc-failed-title { margin: 0; font-size: 16px; font-weight: 600; }
+.sc-failed-message { margin: 0; max-width: 360px; font-size: 13.5px; line-height: 1.5; opacity: .75; }
+.sc-failed-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }
+.sc-inline-error { margin: 0; font-size: 13px; color: var(--error); }
+
+/* Upload screen. */
+.sc-upload { flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 48px 24px 64px; }
+.sc-upload-heading { text-align: center; }
+.sc-upload-heading h2 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-bright); }
+.sc-upload-heading p { margin: 0; font-size: 13.5px; color: var(--text-dim); }
+.sc-upload-options { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sc-upload-slot { width: 100%; max-width: 520px; }
+.sc-progress-card { display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+.sc-progress-head { display: flex; align-items: center; gap: 12px; }
+.sc-progress-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; color: var(--text-bright); }
+.sc-progress-track { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.sc-progress-fill { height: 100%; background: var(--accent); transition: width 200ms linear; }
+.sc-progress-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.sc-upload-error { margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--error-dim); color: var(--error); font-size: 13px; text-align: center; }
+
+/* Project cards reuse .vcard; the thumb shows the output aspect. */
+.sc-card-thumb { position: relative; display: flex; align-items: center; justify-content: center; padding: 14px; background: var(--stage); }
+.sc-card-frame {
+  display: flex; align-items: center; justify-content: center; height: 100%; max-width: 100%;
+  border: 1.5px solid rgba(255, 255, 255, .35); border-radius: 4px; color: rgba(233, 234, 238, .7);
+}
+.sc-card-aspect { position: absolute; right: 8px; bottom: 6px; font: 11px var(--mono); color: rgba(233, 234, 238, .7); }
+.sc-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.sc-card-render { font-size: 12px; color: var(--text-dim); }
+.sc-load-more { align-self: center; }
+
+/* Render result modal (outside .sc-root). */
+.sc-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(10, 11, 13, .7); }
+.sc-modal {
+  display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: min(960px, 100%); max-height: 100%;
+  padding: 16px 20px 20px; border-radius: var(--radius); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md);
+}
+.sc-modal-head { display: flex; align-items: center; gap: 12px; width: 100%; }
+.sc-modal-title { flex: 1; margin: 0; font-size: 16px; font-weight: 600; color: var(--text-bright); }
+.sc-result-video { display: block; max-width: 100%; max-height: 62vh; border-radius: var(--radius-frame); background: #000; }
+.sc-result-facts { margin: 0; font-size: 12.5px; color: var(--text-dim); }
+.sc-chip-btn { border: 0; font-family: inherit; cursor: pointer; }
+
+@media (max-width: 640px) {
+  .sc-stage, .sc-controls { padding-left: 12px; padding-right: 12px; }
+  .sc-picker { flex-wrap: wrap; justify-content: center; }
+}
+
+/* ── Project overview (/v/:id) ───────────────────────────────────────────────
+   Video on the left, an outputs shelf on the right. */
+.ov-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ov-body {
+  flex: 1; min-height: 0; overflow-y: auto; display: grid; align-items: start;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: 32px;
+  padding: 28px 32px 48px; max-width: 1320px; width: 100%; margin: 0 auto; box-sizing: border-box;
+}
+.ov-media { display: flex; flex-direction: column; gap: 6px; min-width: 0; position: sticky; top: 0; }
+.ov-stage { background: var(--stage); border-radius: var(--radius-frame); overflow: hidden; aspect-ratio: 16 / 9; display: grid; place-items: center; margin-bottom: 8px; }
+.ov-stage video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+.ov-title { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-facts { margin: 0; font-size: 12.5px; color: var(--text-dim); }
+
+.ov-shelf { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ov-shelf-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.ov-out { background: var(--surface); border-radius: var(--radius); box-shadow: 0 0 0 1px var(--border); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ov-out-head { display: flex; align-items: center; gap: 9px; }
+.ov-out-head h3 { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-bright); }
+.ov-out-icon { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.ov-count { font: 500 11.5px var(--mono); color: var(--text-dim); }
+.ov-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ov-row { display: flex; align-items: center; gap: 8px; min-height: 36px; border-top: 1px solid var(--border-sub); }
+.ov-row:first-child { border-top: 0; }
+.ov-row-name { flex: 1; min-width: 0; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-row-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.ov-row-more, .ov-row-more a { display: inline-flex; align-items: center; gap: 4px; padding-top: 6px; font-size: 12.5px; font-weight: 500; color: var(--accent); text-decoration: none; }
+.ov-row-more a:hover, a.ov-row-more:hover { text-decoration: underline; }
+.ov-empty { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--text-dim); line-height: 1.45; }
+.ov-empty span { flex: 1; }
+.ov-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.ov-thumb { display: block; aspect-ratio: 16 / 9; border-radius: var(--radius-frame); overflow: hidden; background: var(--stage); box-shadow: 0 0 0 1px var(--border-sub); }
+.ov-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-thumb:hover, .ov-thumb:focus-visible { box-shadow: 0 0 0 2px var(--accent); outline: none; }
+
+@media (max-width: 900px) {
+  .ov-body { grid-template-columns: 1fr; padding: 20px 16px 40px; }
+  .ov-media { position: static; }
+}
+
+/* ── Lab ─────────────────────────────────────────────────────────────────── */
+.lab-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.lab-video { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text-dim); }
+.vcard-btn { padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.sc-intro a { color: var(--accent); }
+
+/* ── Sign in ─────────────────────────────────────────────────────────────── */
+.auth { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: var(--bg); }
+.auth-card {
+  width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px;
+  padding: clamp(24px, 5vw, 32px); background: var(--surface); border-radius: var(--radius);
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-md);
+}
+.auth-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--accent); color: var(--text-on-accent); }
+.auth-title { margin: 4px 0 0; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; color: var(--text-bright); }
+.auth-sub { margin: -8px 0 6px; font-size: 13px; color: var(--text-dim); }
+.auth-card input { width: 100%; min-height: 38px; font-size: 14px; }
+.auth-pw { position: relative; }
+.auth-pw input { padding-right: 40px; }
+.auth-pw-toggle { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); }
+.auth-error { min-height: 18px; margin: -4px 0 0; font-size: 13px; color: var(--error); }
+.auth-submit { min-height: 40px; font-size: 14px; }
+
+/* Not found sits in the shell, vertically centred. */
+.nf { min-height: 70vh; justify-content: center; }

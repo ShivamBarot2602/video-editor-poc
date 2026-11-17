@@ -11,7 +11,7 @@ export default function UploadProgress({ fileName, phase, sentBytes, totalBytes,
       <div className="sc-progress-head">
         <span className="sc-progress-name" title={fileName}>{fileName}</span>
         {!completing && (
-          <button type="button" className="sc-ghost-btn" onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
         )}
       </div>
       <div

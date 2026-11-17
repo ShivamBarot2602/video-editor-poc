@@ -313,7 +313,7 @@ export default function EditorPage() {
         <button
           type="button"
           className="btn btn-quiet btn-sm"
-          onClick={() => navigate(`/playground?video=${videoId}`)}
+          onClick={() => navigate(`/lab?video=${videoId}`)}
           title="Compare transcription providers side by side in the Lab"
         >
           <FlaskConical size={14} /> Compare providers

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Captions, Scissors, Image as ImageIcon } from 'lucide-react'
+import { LayoutDashboard, Captions, Scissors, Image as ImageIcon } from 'lucide-react'
 import { getVideoOrNull } from '../api/videos'
 import { useJobs } from './jobs'
 import JobsTray from './JobsTray'
@@ -27,6 +27,7 @@ export default function ProjectBar({ videoId, video: given, children }) {
   const runningTools = new Set(jobs.map(j => j.tool))
 
   const tools = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, to: `/v/${videoId}`, exact: true },
     { id: 'captions', label: 'Captions', icon: Captions, to: `/v/${videoId}/captions`, done: video?.providers?.length > 0 },
     { id: 'clips', label: 'Clips', icon: Scissors, to: `/v/${videoId}/clips`, done: video?.hasClips },
     { id: 'thumbnails', label: 'Thumbnails', icon: ImageIcon, to: `/v/${videoId}/thumbnails`, done: false },
@@ -41,8 +42,8 @@ export default function ProjectBar({ videoId, video: given, children }) {
       </nav>
 
       <nav className="pbar-tabs" aria-label="Tools">
-        {tools.map(({ id, label, icon: Icon, to, done }) => {
-          const active = pathname.startsWith(to)
+        {tools.map(({ id, label, icon: Icon, to, done, exact }) => {
+          const active = exact ? pathname === to : pathname.startsWith(to)
           const state = runningTools.has(id) ? 'run' : done ? 'ok' : null
           return (
             <Link key={id} to={to} className={active ? 'pbar-tab active' : 'pbar-tab'} aria-current={active ? 'page' : undefined}>

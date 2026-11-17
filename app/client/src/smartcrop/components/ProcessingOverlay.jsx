@@ -25,7 +25,7 @@ export default function ProcessingOverlay({ aspect, processing, receivedAt }) {
 
   return (
     <VideoBox aspect={aspect}>
-      <LoaderCircle size={30} className="sc-spinner" />
+      <LoaderCircle size={30} className="spin" />
       <p className="sc-stage-text" role="status" aria-live="polite">{stageText(stage)}</p>
       <p className="sc-stage-sub">{formatMs(elapsedSince(processing, receivedAt, now))} elapsed</p>
       <StageSteps stage={stage} />

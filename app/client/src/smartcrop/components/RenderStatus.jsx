@@ -1,4 +1,3 @@
-import { CircleCheck, LoaderCircle, TriangleAlert } from 'lucide-react'
 import { StatusChip } from './EditorFrame.jsx'
 import { useNow } from '../hooks/useNow.js'
 import { elapsedSince } from '../core/projectStatus.js'
@@ -17,11 +16,11 @@ export default function RenderStatus({ phase, render, receivedAt, error, onCance
     const elapsed = render ? ` ${formatMs(elapsedSince(render, receivedAt, now))}` : ''
     return (
       <>
-        <StatusChip icon={<LoaderCircle size={13} className="sc-spinner" />}>
+        <StatusChip tone="run">
           {phase === 'starting' ? 'Starting render…' : `Rendering${stage ? ` · ${stage}` : '…'}${elapsed}`}
         </StatusChip>
         {phase === 'rendering' && (
-          <button type="button" className="sc-ghost-btn sc-btn-sm" onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onCancel}>Cancel</button>
         )}
       </>
     )
@@ -29,15 +28,15 @@ export default function RenderStatus({ phase, render, receivedAt, error, onCance
 
   if (phase === 'succeeded') {
     return (
-      <button type="button" className="sc-chip sc-chip-btn" onClick={onView}>
-        <CircleCheck size={13} /> Video ready
+      <button type="button" className="chip chip-ok sc-chip-btn" onClick={onView}>
+        Video ready
       </button>
     )
   }
 
   if (phase === 'failed') {
     return (
-      <StatusChip tone="error" icon={<TriangleAlert size={13} />}>
+      <StatusChip tone="error">
         <span title={error?.message}>Render failed</span>
       </StatusChip>
     )

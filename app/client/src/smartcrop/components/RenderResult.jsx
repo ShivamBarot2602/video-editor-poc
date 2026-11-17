@@ -28,7 +28,7 @@ export default function RenderResult({ render, onClose }) {
       <div className="sc-modal" role="dialog" aria-modal="true" aria-labelledby="sc-result-title">
         <div className="sc-modal-head">
           <h2 id="sc-result-title" className="sc-modal-title">Your video is ready</h2>
-          <button ref={closeRef} type="button" className="sc-icon-btn" aria-label="Close" onClick={onClose}>
+          <button ref={closeRef} type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
@@ -45,10 +45,10 @@ export default function RenderResult({ render, onClose }) {
 
         <div className="sc-failed-actions">
           {/* Signed with Content-Disposition: attachment, so it downloads even cross-origin. */}
-          <a className="sc-pill-btn" href={output.downloadUrl} download={output.fileName}>
+          <a className="btn btn-primary" href={output.downloadUrl} download={output.fileName}>
             <Download size={16} /> Download
           </a>
-          <button type="button" className="sc-ghost-btn" onClick={onClose}>Back to editing</button>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Back to editing</button>
         </div>
       </div>
     </div>

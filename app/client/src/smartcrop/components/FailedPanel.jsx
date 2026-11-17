@@ -13,12 +13,12 @@ export default function FailedPanel({ aspect, title, message, retryable, onRetry
       {retryError && <p className="sc-inline-error" role="alert">{retryError}</p>}
       <div className="sc-failed-actions">
         {retryable && (
-          <button type="button" className="sc-pill-btn" onClick={onRetry} disabled={retrying}>
+          <button type="button" className="btn btn-primary" onClick={onRetry} disabled={retrying}>
             <RotateCcw size={14} />
             {retrying ? 'Retrying…' : 'Try again'}
           </button>
         )}
-        <Link to="/smartcrop" className="sc-ghost-btn">Upload another video</Link>
+        <Link to="/smartcrop" className="btn btn-secondary">Upload another video</Link>
       </div>
     </VideoBox>
   )

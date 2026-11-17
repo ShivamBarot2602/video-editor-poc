@@ -184,7 +184,7 @@ export default function LibraryPage() {
             {shown.map(v => {
               const outputs = outputsOf(v)
               return (
-                <Link key={v.id} to={`/v/${v.id}/captions`} className="vcard">
+                <Link key={v.id} to={`/v/${v.id}`} className="vcard">
                   <div className="vcard-thumb">
                     {!thumbErrors[v.id] ? (
                       <img

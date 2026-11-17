@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import UploadZone from '../components/UploadZone'
 import AspectPicker from '../smartcrop/components/AspectPicker.jsx'
 import LayoutPicker from '../smartcrop/components/LayoutPicker.jsx'
@@ -8,7 +7,6 @@ import UploadProgress from '../smartcrop/components/UploadProgress.jsx'
 import { useUpload } from '../smartcrop/hooks/useUpload.js'
 import { FALLBACK_LAYOUT, isLayoutSupported } from '../smartcrop/core/editList.js'
 import { ACCEPT } from '../smartcrop/core/upload.js'
-import '../smartcrop/smartcrop.css'
 
 // Upload screen, /smartcrop (spec 05 §2–3): pick the starting aspect + layout,
 // drop a file, watch it upload, then land on /smartcrop/:projectId.
@@ -35,14 +33,12 @@ export default function SmartcropUpload() {
 
   return (
     <div className="sc-root">
-      <header className="sc-topbar">
-        <Link to="/" className="sc-icon-btn" aria-label="Back to home">
-          <ArrowLeft size={22} />
-        </Link>
-        <h1 className="sc-topbar-title">SmartCrop</h1>
-        <div className="sc-topbar-actions">
-          <Link to="/smartcrop/projects" className="sc-ghost-btn">Projects</Link>
-        </div>
+      <header className="pbar">
+        <nav className="pbar-crumb" aria-label="Breadcrumb">
+          <Link to="/smartcrop/projects">Reframe</Link>
+          <span aria-hidden="true">/</span>
+          <h1 className="pbar-title">New reframe</h1>
+        </nav>
       </header>
 
       <div className="sc-upload">

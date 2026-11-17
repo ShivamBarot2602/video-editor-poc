@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { LoaderCircle, TriangleAlert } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import EditorFrame, { StatusChip, TimelinePlaceholder } from '../smartcrop/components/EditorFrame.jsx'
 import AspectPicker from '../smartcrop/components/AspectPicker.jsx'
 import LayoutPicker from '../smartcrop/components/LayoutPicker.jsx'
@@ -10,7 +10,6 @@ import EditorScreen from '../smartcrop/components/EditorScreen.jsx'
 import VideoBox from '../smartcrop/components/VideoBox.jsx'
 import { useProjectStatus } from '../smartcrop/hooks/useProjectStatus.js'
 import { SCREENS, failureInfo, screenFor } from '../smartcrop/core/projectStatus.js'
-import '../smartcrop/smartcrop.css'
 
 // /smartcrop/:projectId — picks the screen from the project status (05 §2),
 // so a reload at any step lands in the right place.
@@ -26,7 +25,7 @@ function LockedPickers({ initial }) {
 }
 
 // Loading / not found / unreachable: the frame with a message in the stage.
-function MessageFrame({ title = 'SmartCrop', children }) {
+function MessageFrame({ title = 'Loading…', children }) {
   return <EditorFrame title={title} stage={<VideoBox>{children}</VideoBox>} timeline={<TimelinePlaceholder />} />
 }
 
@@ -34,8 +33,8 @@ function ProcessingScreen({ project, receivedAt }) {
   return (
     <EditorFrame
       title={project.title}
-      status={<StatusChip icon={<LoaderCircle size={13} className="sc-spinner" />}>Processing</StatusChip>}
-      actions={<button type="button" className="sc-pill-btn" disabled>Save</button>}
+      status={<StatusChip tone="run">Processing</StatusChip>}
+      actions={<button type="button" className="btn btn-primary" disabled>Save</button>}
       stage={<ProcessingOverlay aspect={project.initial?.aspect} processing={project.processing} receivedAt={receivedAt} />}
       controls={<LockedPickers initial={project.initial} />}
       timeline={<TimelinePlaceholder />}
@@ -63,7 +62,7 @@ function FailedScreen({ project, onRetry }) {
   return (
     <EditorFrame
       title={project.title}
-      status={<StatusChip tone="error" icon={<TriangleAlert size={13} />}>Failed</StatusChip>}
+      status={<StatusChip tone="error">Failed</StatusChip>}
       stage={(
         <FailedPanel
           aspect={project.initial?.aspect}
@@ -87,7 +86,7 @@ export default function SmartcropEditor() {
   if (notFound) {
     return (
       <EditorFrame
-        title="SmartCrop"
+        title="Not found"
         stage={<FailedPanel title="Project not found" message="This project doesn't exist or was deleted." />}
         timeline={<TimelinePlaceholder />}
       />
@@ -98,7 +97,7 @@ export default function SmartcropEditor() {
     // Polling keeps retrying, so an unreachable server recovers on its own.
     return (
       <MessageFrame>
-        <LoaderCircle size={30} className="sc-spinner" />
+        <LoaderCircle size={30} className="spin" />
         <p className="sc-stage-sub">{loading ? 'Loading…' : `${error?.message} Retrying…`}</p>
       </MessageFrame>
     )

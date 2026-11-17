@@ -68,7 +68,7 @@ export default function PreviewCanvas({ player, plan, aspect, pending, container
         />
         {pending && (
           <span className="sc-preview-pending" role="status" aria-label="Updating preview">
-            <LoaderCircle size={16} className="sc-spinner" />
+            <LoaderCircle size={16} className="spin" />
           </span>
         )}
       </div>

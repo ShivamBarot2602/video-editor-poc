@@ -11,15 +11,16 @@ function AspectGlyph({ aspect }) {
 
 export default function AspectPicker({ value, onChange, aspects = ASPECTS, disabled = false }) {
   return (
-    <div className="sc-picker" role="group" aria-label="Aspect ratio">
+    <div className="sc-picker">
       <span className="sc-picker-label">Aspect</span>
-      <div className="sc-segmented">
+      <div className="seg" role="radiogroup" aria-label="Aspect ratio" aria-disabled={disabled || undefined}>
         {aspects.map((aspect) => (
           <button
             key={aspect}
             type="button"
-            className="sc-segment"
-            aria-pressed={aspect === value}
+            className="seg-opt sc-seg-opt"
+            role="radio"
+            aria-checked={aspect === value}
             disabled={disabled}
             onClick={() => onChange?.(aspect)}
           >

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CloudCheck, LoaderCircle } from 'lucide-react'
+import { LoaderCircle } from 'lucide-react'
 import EditorFrame, { StatusChip, TimelinePlaceholder } from './EditorFrame.jsx'
 import PreviewCanvas from './PreviewCanvas.jsx'
 import TransportBar from './TransportBar.jsx'
@@ -42,8 +42,8 @@ function useFullscreen(ref) {
 
 function SaveStatus({ saving }) {
   return saving
-    ? <StatusChip icon={<LoaderCircle size={13} className="sc-spinner" />}>Saving…</StatusChip>
-    : <StatusChip icon={<CloudCheck size={13} />}>Saved</StatusChip>
+    ? <StatusChip tone="run">Saving…</StatusChip>
+    : <StatusChip>Saved</StatusChip>
 }
 
 // Save (05 §3): flush autosave first so the render is exactly the saved
@@ -121,7 +121,7 @@ function Workspace({ project, editor }) {
           </>
         )}
         actions={(
-          <button type="button" className="sc-pill-btn" onClick={result.save} disabled={result.saveDisabled}>
+          <button type="button" className="btn btn-primary" onClick={result.save} disabled={result.saveDisabled}>
             Save
           </button>
         )}
@@ -164,7 +164,7 @@ export default function EditorScreen({ project }) {
     return (
       <EditorFrame
         title={project.title}
-        stage={<VideoBox aspect={project.initial?.aspect}><LoaderCircle size={30} className="sc-spinner" /></VideoBox>}
+        stage={<VideoBox aspect={project.initial?.aspect}><LoaderCircle size={30} className="spin" /></VideoBox>}
         timeline={<TimelinePlaceholder />}
       />
     )

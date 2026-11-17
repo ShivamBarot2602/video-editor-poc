@@ -6,6 +6,7 @@ import { JobsProvider } from './shell/jobs'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import LibraryPage from './pages/LibraryPage'
+import OverviewPage from './pages/OverviewPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
 import ThumbnailsPage from './pages/ThumbnailsPage'
@@ -54,13 +55,17 @@ export default function App() {
             <main className="shell-main">
               <Routes>
                 <Route path="/" element={<LibraryPage />} />
-                <Route path="/playground" element={<PlaygroundPage />} />
+                <Route path="/lab" element={<PlaygroundPage />} />
                 <Route path="/docs" element={<DocsHubPage />} />
                 <Route path="/docs/subtitles" element={<SubtitlesDocPage />} />
                 <Route path="/docs/thumbnails" element={<ThumbnailsDocPage />} />
                 <Route path="/docs/clips" element={<ClipsDocPage />} />
+                {/* Old addresses */}
+                <Route path="/playground" element={<PathRedirect to="/lab" />} />
+                <Route path="/lab/docs" element={<Navigate to="/docs" replace />} />
+                <Route path="/lab/docs/:slug" element={<PathRedirect to="/docs" slug />} />
                 <Route path="/report" element={<Navigate to="/docs/subtitles" replace />} />
-                <Route path="/v/:videoId" element={<ToolRedirect tool="captions" />} />
+                <Route path="/v/:videoId" element={<OverviewPage />} />
                 <Route path="/v/:videoId/captions" element={<EditorPage />} />
                 <Route path="/v/:videoId/clips" element={<ClipsPage />} />
                 <Route path="/v/:videoId/thumbnails" element={<ThumbnailsPage />} />
@@ -84,12 +89,19 @@ export default function App() {
   )
 }
 
-// /editor/:id, /clips/:id, /thumbnails/:id and /v/:id → /v/:id/<tool>, keeping
+// /editor/:id, /clips/:id and /thumbnails/:id → /v/:id/<tool>, keeping
 // the query string (?provider=, clip settings).
 function ToolRedirect({ tool }) {
   const { videoId } = useParams()
   const { search } = useLocation()
   return <Navigate to={`/v/${videoId}/${tool}${search}`} replace />
+}
+
+// Old address → new one, keeping the query string (and the :slug when asked).
+function PathRedirect({ to, slug }) {
+  const params = useParams()
+  const { search } = useLocation()
+  return <Navigate to={`${to}${slug ? `/${params.slug}` : ''}${search}`} replace />
 }
 
 function ErrorFallback({ error, resetError }) {

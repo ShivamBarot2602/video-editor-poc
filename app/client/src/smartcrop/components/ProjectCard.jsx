@@ -11,9 +11,9 @@ import { lastRenderText, statusBadge } from '../core/projectList.js'
 function AspectFrame({ aspect = '9:16', busy }) {
   const [w, h] = aspect.split(':').map(Number)
   return (
-    <div className="sc-card-thumb">
+    <div className="vcard-thumb sc-card-thumb">
       <span className="sc-card-frame" style={{ aspectRatio: `${w} / ${h}` }}>
-        {busy ? <LoaderCircle size={18} className="sc-spinner" /> : <Film size={18} />}
+        {busy ? <LoaderCircle size={18} className="spin" /> : <Film size={18} />}
       </span>
       <span className="sc-card-aspect">{aspect}</span>
     </div>
@@ -31,13 +31,13 @@ export default function ProjectCard({ project }) {
   ].filter(Boolean)
 
   return (
-    <Link to={`/smartcrop/${project.projectId}`} className="sc-card">
+    <Link to={`/smartcrop/${project.projectId}`} className="vcard">
       <AspectFrame aspect={project.initial?.aspect} busy={badge.tone === 'busy'} />
-      <div className="sc-card-body">
-        <span className="sc-card-title" title={project.title}>{project.title}</span>
-        <span className="sc-card-meta">{meta.join(' · ')}</span>
+      <div className="vcard-text">
+        <span className="vcard-title" title={project.title}>{project.title}</span>
+        <span className="vcard-meta">{meta.join(' · ')}</span>
         <span className="sc-card-footer">
-          <span className="sc-badge" data-tone={badge.tone}>{badge.label}</span>
+          <span className={{ ok: 'chip chip-ok', busy: 'chip chip-run', error: 'chip chip-err' }[badge.tone] || 'chip'}>{badge.label}</span>
           {render && <span className="sc-card-render">{render}</span>}
         </span>
       </div>

@@ -15,7 +15,7 @@ export default function Rail() {
   const items = [
     { to: '/', label: 'Library', icon: LayoutGrid, active: LIBRARY_PATHS.test(pathname) },
     { to: '/smartcrop/projects', label: 'Reframe', icon: Crop, active: pathname.startsWith('/smartcrop') },
-    { to: '/playground', label: 'Lab', icon: FlaskConical, active: pathname.startsWith('/playground') },
+    { to: '/lab', label: 'Lab', icon: FlaskConical, active: pathname.startsWith('/lab') },
     { to: '/docs', label: 'Docs', icon: BookOpen, active: pathname.startsWith('/docs') },
   ]
 
