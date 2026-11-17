@@ -41,7 +41,7 @@ export function fmtSizeOrNull(bytes) {
 }
 
 // ISO timestamp → relative "just now / Xm/h/d ago", else local date.
-// Identical across all call sites. (RecentVideos, PlaygroundPage, ThumbnailsPage)
+// Identical across all call sites. (LibraryPage, PlaygroundPage, ThumbnailsPage)
 export function fmtDate(iso) {
   const d = new Date(iso), now = new Date()
   const mins = Math.floor((now - d) / 60000)

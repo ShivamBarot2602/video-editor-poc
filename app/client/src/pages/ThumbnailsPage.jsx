@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Group, Panel, Separator } from 'react-resizable-panels'
+import ProjectBar from '../shell/ProjectBar'
+import { useJob } from '../shell/jobs'
+import ScorePill from '../ui/ScorePill'
+import Segmented from '../ui/Segmented'
 import {
   Sparkles, Wand2, Image as ImageIcon, Check, AlertTriangle,
   ArrowLeft, Loader2, RefreshCw, Play, Info, Download, Eye, X,
@@ -255,6 +259,13 @@ function ThumbnailsEditor({ videoId }) {
   // Holds { url, downloadUrl, label } for the full-size overlay, or null.
   const [preview, setPreview] = useState(null)
 
+  const phaseIndex = PHASES.findIndex(p => p.id === phase)
+  useJob(`thumbnails:${videoId}`, running ? {
+    videoId, tool: 'thumbnails', label: 'Generating thumbnails',
+    detail: phaseIndex >= 0 ? `${PHASES[phaseIndex].label} · step ${phaseIndex + 1} of ${PHASES.length - 1}` : 'Starting',
+    progress: phaseIndex >= 0 ? (phaseIndex / (PHASES.length - 1)) * 100 : undefined,
+  } : null)
+
   // ─── derived ─────────────────────────────────────────────────────────────
   // During a live run show the progressive `runCandidates`; otherwise the saved state.
   const liveRun = runCandidates != null
@@ -267,7 +278,7 @@ function ThumbnailsEditor({ videoId }) {
   // ─── render ──────────────────────────────────────────────────────────────
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg)' }}>
-      <PageBar videoId={videoId} hasCandidates={hasCandidates} />
+      <ProjectBar videoId={videoId} />
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <Group orientation="horizontal" style={{ height: '100%', display: 'flex' }}>
@@ -318,38 +329,6 @@ function ThumbnailsEditor({ videoId }) {
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Top bar                                                                  */
-function PageBar({ videoId, hasCandidates }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 16px',
-      borderBottom: '1px solid var(--border-sub)',
-      background: 'var(--surface-dark)',
-      flexShrink: 0,
-    }}>
-      <Link
-        to="/"
-        className="btn btn-ghost btn-sm"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-      >
-        <ArrowLeft size={14} /> Back
-      </Link>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Sparkles size={14} color="var(--accent)" />
-        Thumbnail Candidates
-      </div>
-      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'var(--hover-overlay)', borderRadius: 4 }}>
-        {videoId}
-      </code>
-      {hasCandidates && (
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
-          Pick one or generate again to refresh.
-        </span>
-      )}
-    </div>
-  )
-}
-
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Left pane: video preview + controls + progress                           */
 function LeftPane({
@@ -465,7 +444,6 @@ function LeftPane({
         )}
       </div>
 
-      <style>{`@keyframes thumb-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } } .spin { animation: thumb-spin 1s linear infinite }`}</style>
     </div>
   )
 }
@@ -478,43 +456,13 @@ function RerankerSelect({ value, onChange, disabled }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Reranker</span>
-        <div
-          role="radiogroup"
-          aria-label="Vision reranker"
-          style={{
-            display: 'inline-flex', gap: 2, padding: 2,
-            background: 'var(--hover-overlay)',
-            border: '1px solid var(--border-sub)',
-            borderRadius: 8,
-            opacity: disabled ? 0.5 : 1,
-          }}
-        >
-          {RERANKERS.map(r => {
-            const isActive = r.id === active.id
-            return (
-              <button
-                key={r.id}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                disabled={disabled}
-                onClick={() => onChange(r.id)}
-                title={r.model}
-                style={{
-                  padding: '3px 12px', fontSize: 12, lineHeight: 1.5,
-                  fontWeight: isActive ? 600 : 500,
-                  borderRadius: 6, border: 'none',
-                  cursor: disabled ? 'default' : 'pointer',
-                  background: isActive ? 'var(--accent)' : 'transparent',
-                  color: isActive ? '#fff' : 'var(--text-muted)',
-                  transition: 'background 0.12s ease, color 0.12s ease',
-                }}
-              >
-                {r.label}
-              </button>
-            )
-          })}
-        </div>
+        <Segmented
+          options={RERANKERS}
+          value={active.id}
+          onChange={onChange}
+          disabled={disabled}
+          ariaLabel="Vision reranker"
+        />
       </div>
       <div style={{ fontSize: 10, color: 'var(--text-faint)', textAlign: 'right' }}>
         {active.model} · auto-fallback
@@ -703,7 +651,7 @@ function PickRow({ rank, candidate, onPreview, onSeek, videoAspectRatio }) {
         }}>{rank}</span>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {candidate.vlmScore != null && (
-            <ScorePill score={candidate.vlmScore} />
+            <ScorePill score={candidate.vlmScore} label="Vision rerank score" />
           )}
           {Number.isFinite(candidate.t) && (
             <button
@@ -738,27 +686,6 @@ function PickRow({ rank, candidate, onPreview, onSeek, videoAspectRatio }) {
         @media (max-width: 820px) { .thumb-row-grid { grid-template-columns: 1fr; } }
       `}</style>
     </div>
-  )
-}
-
-function ScorePill({ score }) {
-  const num = Number(score)
-  const safe = Number.isFinite(num) ? num : 0
-  // Hue: low=red, mid=amber, high=green. Encode also via icon for color-blind safety.
-  const tone = safe >= 8 ? 'high' : safe >= 5 ? 'mid' : 'low'
-  const bg = tone === 'high' ? 'rgba(34,197,94,0.18)' : tone === 'mid' ? 'rgba(234,179,8,0.18)' : 'rgba(220,38,38,0.18)'
-  const fg = tone === 'high' ? 'var(--success)' : tone === 'mid' ? '#eab308' : 'var(--error)'
-  return (
-    <span
-      title={`Vision rerank score: ${safe.toFixed(1)} / 10`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        background: bg, color: fg, fontWeight: 700, fontSize: 10,
-        padding: '2px 7px', borderRadius: 999,
-      }}
-    >
-      <Sparkles size={9} /> {safe.toFixed(1)}
-    </span>
   )
 }
 

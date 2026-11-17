@@ -9,6 +9,8 @@ import ClipControlsBar from '../components/ClipControlsBar'
 import ClipAnalyzeProgress from '../components/ClipAnalyzeProgress'
 import SourceVideoPlayer from '../components/SourceVideoPlayer'
 import TimerToast from '../components/TimerToast'
+import ProjectBar from '../shell/ProjectBar'
+import { useJob } from '../shell/jobs'
 import { fmtSize } from '../lib/format'
 import { triggerDownload } from '../lib/dom'
 import { listVideos } from '../api/videos'
@@ -359,6 +361,20 @@ function ClipsEditor({ videoId }) {
     esMapRef.current.set(id, es)
   }
 
+  const exporting = Object.values(exportStates).filter(e => e.status === 'exporting')
+  useJob(`clips-find:${videoId}`, suggesting ? {
+    videoId, tool: 'clips', label: 'Finding clips',
+    detail: method === 'video'
+      ? ({ uploading: 'Sending the video for analysis', processing: 'Sending the video for analysis', analyzing: 'Watching the video', extracting: 'Grabbing clip thumbnails' }[analyzePhase?.phase] || 'Starting')
+      : 'Reading the transcript',
+    progress: analyzePhase?.phase === 'uploading' ? analyzePhase.percent : undefined,
+  } : null)
+  useJob(`clips-export:${videoId}`, exporting.length ? {
+    videoId, tool: 'clips',
+    label: exporting.length === 1 ? 'Exporting a clip' : `Exporting ${exporting.length} clips`,
+    progress: exporting.reduce((sum, e) => sum + (e.progress || 0), 0) / exporting.length,
+  } : null)
+
   const discovering = !notFound && transcriptProviders === null
   const noTranscript = !discovering && Array.isArray(transcriptProviders) && transcriptProviders.length === 0
   const isVideo = method === 'video'
@@ -368,7 +384,7 @@ function ClipsEditor({ videoId }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg)' }}>
-      <PageBar videoId={videoId} filename={video?.filename} count={hasClips ? clips.length : 0} />
+      <ProjectBar videoId={videoId} video={video} />
 
       {notFound ? (
         <Centered>
@@ -536,44 +552,13 @@ function ClipsEditor({ videoId }) {
 
       <style>{`
         .clips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; align-items: start; }
-        .spin { animation: spin 1s linear infinite; }
         .clip-shimmer {
           background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 37%, var(--surface-2) 63%);
           background-size: 400% 100%; animation: clip-shimmer 1.4s ease infinite;
         }
         @keyframes clip-shimmer { 0% { background-position: 100% 0 } 100% { background-position: 0 0 } }
-        @media (prefers-reduced-motion: reduce) { .clip-shimmer { animation: none } .spin { animation: none } }
+        @media (prefers-reduced-motion: reduce) { .clip-shimmer { animation: none } }
       `}</style>
-    </div>
-  )
-}
-
-function PageBar({ videoId, filename, count }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '10px 16px', borderBottom: '1px solid var(--border-sub)',
-      background: 'var(--surface-dark)', flexShrink: 0,
-    }}>
-      <Link to={`/editor/${videoId}`} className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-        <ArrowLeft size={14} /> Editor
-      </Link>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-bright)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Scissors size={14} color="var(--accent)" /> Video Clips
-      </div>
-      {filename && (
-        <span style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>
-          {filename}
-        </span>
-      )}
-      <code style={{ fontSize: 10, color: 'var(--text-faint)', padding: '2px 6px', background: 'var(--hover-overlay)', borderRadius: 4 }}>
-        {videoId}
-      </code>
-      {count > 0 && (
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}>
-          Preview, then export the ones you want.
-        </span>
-      )}
     </div>
   )
 }

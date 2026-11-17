@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Pencil, Check, Zap, FileText, ChevronDown } from 'lucide-react'
+import { Download, Pencil, Check, Zap, FileText, ChevronDown, Loader2 } from 'lucide-react'
 import { PROVIDERS } from '../config/providers'
 import SpeakerBadge from './SpeakerBadge'
 import { fmtClock as fmtTime } from '../lib/format'
@@ -25,14 +25,6 @@ function SegmentWords({ words, currentTime }) {
         )
       })}
     </span>
-  )
-}
-
-function Spinner() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
-<circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="2" strokeDasharray="20 14" />
-    </svg>
   )
 }
 
@@ -299,7 +291,7 @@ export default function TranscriptionPanel({
             </div>
           )}
           <button className="btn btn-primary btn-sm" onClick={onTranscribe} disabled={isTranscribing}>
-            {isTranscribing ? <><Spinner /> Transcribing…</> : transcription ? 'Re-transcribe' : 'Transcribe'}
+            {isTranscribing ? <><Loader2 size={14} className="spin" /> Transcribing…</> : transcription ? 'Re-transcribe' : 'Transcribe'}
           </button>
         </div>
       </div>
@@ -356,12 +348,12 @@ export default function TranscriptionPanel({
         )}
         {isLoadingTranscription && !isTranscribing && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 12px', color: 'var(--text-dim)', justifyContent: 'center', fontSize: 12 }}>
-            <Spinner /> Loading {selectedProvider} transcription…
+            <Loader2 size={14} className="spin" /> Loading {selectedProvider} transcription…
           </div>
         )}
         {isTranscribing && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 12px', color: 'var(--text-dim)', justifyContent: 'center', fontSize: 12 }}>
-            <Spinner /> Processing with {selectedProvider}…
+            <Loader2 size={14} className="spin" /> Processing with {selectedProvider}…
           </div>
         )}
         {transcription?.segments.map((seg, i) => {

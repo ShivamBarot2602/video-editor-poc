@@ -1,5 +1,7 @@
 import { Sparkles, Loader2, Film } from 'lucide-react'
 import { PROVIDERS } from '../config/providers'
+import Field from '../ui/Field'
+import Segmented from '../ui/Segmented'
 
 const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map(p => [p.id, p.label]))
 
@@ -29,81 +31,6 @@ export const VIDEO_MODELS = [
 ]
 
 const COUNTS = [3, 4, 5]
-
-function Field({ label, children }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-faint)' }}>
-        {label}
-      </span>
-      {children}
-    </div>
-  )
-}
-
-/* Segmented radiogroup — same pattern as ThumbnailsPage RerankerSelect. */
-function Segmented({ options, value, onChange, disabled, ariaLabel }) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label={ariaLabel}
-      style={{
-        display: 'inline-flex', gap: 2, padding: 2,
-        background: 'var(--hover-overlay)', border: '1px solid var(--border-sub)',
-        borderRadius: 8, opacity: disabled ? 0.5 : 1, width: 'fit-content',
-      }}
-    >
-      {options.map(o => {
-        const active = o.id === value
-        return (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onChange(o.id)}
-            title={o.model}
-            style={{
-              padding: '3px 12px', fontSize: 12, lineHeight: 1.5,
-              fontWeight: active ? 600 : 500, borderRadius: 6, border: 'none',
-              cursor: disabled ? 'default' : 'pointer',
-              background: active ? 'var(--accent)' : 'transparent',
-              color: active ? '#fff' : 'var(--text-muted)',
-              transition: 'background 0.12s ease, color 0.12s ease',
-            }}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/* Chip group built on the existing .toggle-btn class. */
-function Chips({ options, value, onChange, disabled, ariaLabel }) {
-  return (
-    <div role="radiogroup" aria-label={ariaLabel} style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-      {options.map(o => {
-        const active = o.id === value
-        return (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onChange(o.id)}
-            className={`toggle-btn ${active ? 'active' : ''}`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 /**
  * Controls bar for the clips page: transcript source, suggest LLM, duration
@@ -182,11 +109,11 @@ export default function ClipControlsBar({
       )}
 
       <Field label="Clip length">
-        <Chips options={BUCKETS} value={bucket} onChange={onBucket} disabled={busy} ariaLabel="Clip duration bucket" />
+        <Segmented options={BUCKETS} value={bucket} onChange={onBucket} disabled={busy} ariaLabel="Clip duration bucket" />
       </Field>
 
       <Field label="How many">
-        <Chips options={countOpts} value={count} onChange={onCount} disabled={busy} ariaLabel="Number of clips" />
+        <Segmented options={countOpts} value={count} onChange={onCount} disabled={busy} ariaLabel="Number of clips" />
       </Field>
 
       <button

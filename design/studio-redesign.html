@@ -1,0 +1,872 @@
+<title>SP Studio Redesign</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one left-aligned reading column (max 1180px); mockups break out into a framed, horizontally scrollable "monitor". */
+:root {
+  --bg: #F4F5F7; --surface: #FFFFFF; --sunk: #ECEEF1; --line: #DEE1E6; --line-2: #EBEDF0;
+  --ink: #15171C; --ink-2: #4A4F59; --ink-3: #737985;
+  --accent: #0F67EA; --accent-ink: #0B4FB8; --accent-wash: #E7F0FE;
+  --tally: #D98E04; --tally-wash: #FDF3DC; --ok: #1E9150; --ok-wash: #E3F4EA; --err: #D33A2C;
+  --stage: #1C1E23; --on-stage: #E9EAEE;
+  --spk1: #7C5CFF; --spk2: #0E9F8E; --spk3: #D9480F; --spk4: #C2185B;
+  --font: "Geist", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r-ctl: 6px; --r-panel: 10px; --r-frame: 4px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111216; --surface: #181A1F; --sunk: #0D0E11; --line: #2B2E36; --line-2: #22252B;
+  --ink: #ECEDF0; --ink-2: #B4B8C1; --ink-3: #878C97;
+  --accent: #3A84F5; --accent-ink: #8AB6FA; --accent-wash: #16294A;
+  --tally: #F0B429; --tally-wash: #3A2E10; --ok: #45C27C; --ok-wash: #14301F; --err: #F0645A;
+  --stage: #0B0C0E; --on-stage: #E9EAEE; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111216; --surface: #181A1F; --sunk: #0D0E11; --line: #2B2E36; --line-2: #22252B;
+  --ink: #ECEDF0; --ink-2: #B4B8C1; --ink-3: #878C97;
+  --accent: #3A84F5; --accent-ink: #8AB6FA; --accent-wash: #16294A;
+  --tally: #F0B429; --tally-wash: #3A2E10; --ok: #45C27C; --ok-wash: #14301F; --err: #F0645A;
+  --stage: #0B0C0E; --on-stage: #E9EAEE; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font); -webkit-font-smoothing: antialiased;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 96px; }
+.wrap { max-width: 1180px; margin: 0 auto; }
+h1, h2, h3 { text-wrap: balance; color: var(--ink); margin: 0; }
+h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 600; }
+h2 { font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 600; }
+h3 { font-size: 17px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; }
+p { margin: 0; color: var(--ink-2); max-width: 68ch; }
+.tc { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+section { padding-block: 72px 0; display: grid; gap: 28px; }
+.sec-head { display: grid; gap: 10px; max-width: 760px; }
+.sec-head .k { font-size: 13px; color: var(--accent-ink); font-weight: 500; }
+a { color: var(--accent-ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Hero ── */
+.hero { padding-block: 64px 8px; display: grid; gap: 22px; }
+.hero .lede { font-size: 19px; line-height: 1.55; color: var(--ink-2); max-width: 62ch; }
+.hero-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--ink-3); }
+.hero-meta b { color: var(--ink); font-weight: 500; }
+
+/* ── Audit ── */
+.audit { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
+.audit > div { background: var(--surface); padding: 20px 20px 22px; display: grid; gap: 6px; align-content: start; }
+.audit .n { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.audit .n small { font-size: 14px; color: var(--ink-3); font-weight: 500; letter-spacing: 0; }
+.audit p { font-size: 14px; line-height: 1.5; }
+
+/* ── IA ── */
+.ia { display: grid; grid-template-columns: 1fr 1.35fr; gap: 20px; }
+@media (max-width: 860px) { .ia { grid-template-columns: 1fr; } }
+.ia-col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 22px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.ia-col h3 { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.ia-col h3 span { font-size: 13px; color: var(--ink-3); font-weight: 400; }
+.navrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.navrow span { font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--r-ctl); color: var(--ink-2); }
+.navrow span.up { border-color: var(--tally); color: var(--ink); background: var(--tally-wash); }
+.tree { display: grid; gap: 10px; font-size: 14px; }
+.tree .node { display: grid; grid-template-columns: 132px 1fr; gap: 12px; align-items: start; }
+.tree .node b { font-weight: 600; }
+.tree .node div { color: var(--ink-2); }
+.tree .lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-top: 2px; }
+.tree .lane { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 8px 10px; background: var(--bg); display: grid; gap: 2px; }
+.tree .lane b { font-size: 13px; }
+.tree .lane small { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+.tree code { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+/* ── Principles ── */
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 28px 36px; }
+.principles > div { display: grid; gap: 8px; align-content: start; border-top: 2px solid var(--ink); padding-top: 14px; }
+.principles p { font-size: 14.5px; }
+
+/* ── Tokens ── */
+.tokens { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .tokens { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 22px; display: grid; gap: 18px; align-content: start; min-width: 0; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.sw { display: grid; gap: 6px; font-size: 12.5px; }
+.sw i { display: block; height: 52px; border-radius: var(--r-ctl); border: 1px solid var(--line); }
+.sw b { font-weight: 500; }
+.sw span { color: var(--ink-3); line-height: 1.35; }
+.scale { display: grid; gap: 10px; }
+.scale div { display: grid; grid-template-columns: 74px 1fr; gap: 14px; align-items: baseline; border-bottom: 1px solid var(--line-2); padding-bottom: 10px; min-width: 0; }
+.scale div:last-child { border-bottom: 0; padding-bottom: 0; }
+.scale small { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+.scale span { overflow-wrap: anywhere; }
+.comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.comp { display: grid; gap: 12px; align-content: start; }
+.comp > p { font-size: 13.5px; }
+.demo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 18px; border-radius: var(--r-ctl); background: var(--bg); border: 1px solid var(--line-2); }
+
+/* Shared component styles: used by both token demos and mockups */
+.btn { font: 500 13px/1 var(--font); display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 13px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.pri:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
+.btn.sm { height: 26px; padding: 0 9px; font-size: 12px; }
+.btn svg { width: 15px; height: 15px; }
+.seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--sunk); border-radius: var(--r-ctl); }
+.seg button { font: 500 12.5px/1 var(--font); height: 26px; padding: 0 11px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 99px; font-size: 12px; font-weight: 500; background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); }
+.chip.ok { background: var(--ok-wash); color: var(--ok); } .chip.ok::before { background: var(--ok); }
+.chip.run { background: var(--tally-wash); color: var(--tally); } .chip.run::before { background: var(--tally); animation: tally 1.4s ease-in-out infinite; }
+.chip.err { color: var(--err); } .chip.err::before { background: var(--err); }
+.chip.plain::before { display: none; }
+@keyframes tally { 50% { opacity: .25; } }
+.spk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.spk::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--c, var(--spk1)); }
+.tcfield { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border-radius: var(--r-ctl); background: var(--sunk); font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.tcfield i { font-style: normal; color: var(--ink-3); }
+.job { display: grid; gap: 7px; min-width: 260px; flex: 1; }
+.job-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.job-top b { font-weight: 500; }
+.job-top span { color: var(--ink-3); font-size: 12px; }
+.steps { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 3px; }
+.steps i { height: 4px; border-radius: 2px; background: var(--line); position: relative; overflow: hidden; }
+.steps i.d { background: var(--ok); }
+.steps i.a { background: var(--tally-wash); }
+.steps i.a::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p, 50%); background: var(--tally); }
+
+/* ── Mockup monitor ── */
+.monitor { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.mon-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.screen-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.screen-tabs button { font: 500 13px/1 var(--font); height: 30px; padding: 0 12px; border-radius: var(--r-ctl); border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+.screen-tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.mon-view { overflow-x: auto; background: var(--sunk); padding: 18px; }
+.mon-note { padding: 18px 20px 20px; display: grid; gap: 10px; border-top: 1px solid var(--line); }
+.mon-note ul { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 4px; font-size: 14.5px; max-width: 90ch; }
+
+/* The app inside the monitor carries its own light/dark tokens so both chromes can be shown regardless of page theme. */
+.app {
+  --bg: #F4F5F7; --surface: #FFFFFF; --sunk: #ECEEF1; --line: #E0E3E8; --line-2: #ECEEF1;
+  --ink: #15171C; --ink-2: #4A4F59; --ink-3: #787E89;
+  --accent: #0F67EA; --accent-ink: #0B4FB8; --accent-wash: #E7F0FE;
+  --tally: #C98204; --tally-wash: #FDF3DC; --ok: #1E9150; --ok-wash: #E3F4EA; --err: #D33A2C;
+  --stage: #1C1E23;
+  color-scheme: light;
+  width: 1180px; height: 720px; display: grid; grid-template-columns: 56px 1fr; background: var(--bg); color: var(--ink);
+  border-radius: 10px; overflow: hidden; font-size: 13px; line-height: 1.45; box-shadow: 0 0 0 1px var(--line), 0 20px 50px -20px rgba(10,14,25,.35); position: relative;
+}
+.app[data-mode="dark"] {
+  --bg: #111216; --surface: #181A1F; --sunk: #0E0F12; --line: #2A2D35; --line-2: #22252B;
+  --ink: #ECEDF0; --ink-2: #B4B8C1; --ink-3: #868B96;
+  --accent: #3A84F5; --accent-ink: #8AB6FA; --accent-wash: #16294A;
+  --tally: #F0B429; --tally-wash: #3A2E10; --ok: #45C27C; --ok-wash: #14301F; --err: #F0645A;
+  --stage: #0A0B0D; color-scheme: dark;
+}
+.app p { color: var(--ink-2); }
+.rail { background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px; }
+.mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; margin-bottom: 14px; }
+.mark svg { width: 16px; height: 16px; color: #fff; }
+.rail a { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 8px; color: var(--ink-3); }
+.rail a.on { background: var(--sunk); color: var(--ink); }
+.rail a svg { width: 18px; height: 18px; }
+.rail .sp { flex: 1; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-wash); color: var(--accent-ink); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+.main { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; min-height: 0; }
+.main.lib { grid-template-rows: auto 1fr; }
+.bar { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); min-width: 0; }
+.crumb b { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar .grow { flex: 1; }
+.jobs-pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: var(--r-ctl); background: var(--tally-wash); color: var(--ink); font-size: 12.5px; font-weight: 500; position: relative; }
+.jobs-pill .ring { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(var(--tally) 0 62%, var(--line) 0); -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px); mask: radial-gradient(circle, transparent 4px, #000 4.5px); }
+.tools { display: flex; gap: 2px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.tools a { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 12px; color: var(--ink-2); font-weight: 500; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tools a.on { color: var(--ink); border-color: var(--ink); }
+.tools a svg { width: 15px; height: 15px; }
+.tools a .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.tools a .dot.ok { background: var(--ok); } .tools a .dot.run { background: var(--tally); }
+.tools .count { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ws { min-height: 0; overflow: hidden; display: grid; }
+.lbl { font-size: 12px; color: var(--ink-3); font-weight: 500; }
+.h { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+
+/* Footage placeholder: an abstract two-person podcast set */
+.footage { position: relative; background:
+  radial-gradient(circle at 30% 40%, #d7a07e 0 6.5%, transparent 7%),
+  radial-gradient(ellipse 15% 26% at 30% 80%, #34506f 0 99%, transparent 100%),
+  radial-gradient(circle at 70% 38%, #b98563 0 6.5%, transparent 7%),
+  radial-gradient(ellipse 15% 26% at 70% 79%, #6b3b3b 0 99%, transparent 100%),
+  radial-gradient(ellipse 30% 12% at 50% 98%, #2a2420 0 99%, transparent 100%),
+  linear-gradient(180deg, #2b3a40 0%, #1d272c 62%, #3a2e26 63%, #2a221d 100%);
+  border-radius: var(--r-frame); overflow: hidden; }
+.footage.v2 { filter: hue-rotate(140deg) saturate(.8); }
+.footage.v3 { filter: hue-rotate(260deg) saturate(.7) brightness(1.1); }
+.footage.v4 { filter: hue-rotate(40deg) brightness(.85); }
+.footage.solo { background:
+  radial-gradient(circle at 50% 40%, #d2a07f 0 9%, transparent 9.5%),
+  radial-gradient(ellipse 22% 30% at 50% 84%, #3c5672 0 99%, transparent 100%),
+  linear-gradient(180deg, #33424a, #1f292e); }
+.sub { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); font: 700 20px/1.2 var(--font); color: #fff; text-align: center; white-space: nowrap;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000; }
+.sub em { font-style: normal; color: #FFD43B; }
+.dur { position: absolute; right: 6px; bottom: 6px; font: 500 11px/1 var(--mono); color: #fff; background: rgba(0,0,0,.6); padding: 3px 5px; border-radius: 3px; }
+
+/* Stage = always-dark surround for footage, in both chrome modes */
+.stage { background: var(--stage); display: grid; grid-template-rows: 1fr auto; min-height: 0; }
+.stage-view { display: grid; place-items: center; padding: 18px; min-height: 0; }
+.transport { display: flex; align-items: center; gap: 12px; padding: 8px 14px; color: #E9EAEE; font-size: 12px; border-top: 1px solid rgba(255,255,255,.06); }
+.transport svg { width: 16px; height: 16px; }
+.transport .tc { color: #E9EAEE; font-size: 12px; }
+.transport .tc i { color: #8A8F99; font-style: normal; }
+.scrub { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); position: relative; }
+.scrub::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p, 30%); background: #fff; border-radius: 2px; }
+
+/* Timeline */
+.tl { background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: 92px 1fr; font-size: 11.5px; position: relative; }
+.tl .ruler, .tl .row { display: contents; }
+.tl .hd { padding: 0 10px; display: flex; align-items: center; color: var(--ink-3); border-right: 1px solid var(--line-2); height: 30px; }
+.tl .ruler .hd, .tl .ruler .ticks { height: 22px; border-bottom: 1px solid var(--line-2); }
+.ticks { position: relative; display: flex; justify-content: space-between; padding: 0 8px; align-items: center; font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.track { position: relative; height: 30px; border-bottom: 1px solid var(--line-2); }
+.blk { position: absolute; top: 5px; bottom: 5px; border-radius: 3px; background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent-ink); padding: 0 5px; overflow: hidden; white-space: nowrap; font-size: 10.5px; line-height: 18px; }
+.blk.s1 { background: color-mix(in srgb, var(--spk1) 22%, transparent); border-color: transparent; }
+.blk.s2 { background: color-mix(in srgb, var(--spk2) 22%, transparent); border-color: transparent; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--err); left: var(--x); pointer-events: none; }
+.playhead::before { content: ""; position: absolute; top: 0; left: -4px; border: 5px solid transparent; border-top-color: var(--err); }
+
+/* Inspector */
+.insp { background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.insp-sec { padding: 14px 16px; border-bottom: 1px solid var(--line-2); display: grid; gap: 10px; }
+.insp-sec .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { display: grid; gap: 5px; }
+.inp { height: 30px; border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 0 9px; display: flex; align-items: center; justify-content: space-between; color: var(--ink); background: var(--surface); font-size: 12.5px; }
+.inp i { color: var(--ink-3); font-style: normal; }
+.slider { display: grid; grid-template-columns: 1fr 40px; gap: 10px; align-items: center; }
+.slider .t { height: 4px; border-radius: 2px; background: var(--line); position: relative; }
+.slider .t::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p); background: var(--ink); border-radius: 2px; }
+.slider .t::after { content: ""; position: absolute; top: 50%; left: var(--p); width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--ink); }
+.slider span { font: 12px var(--mono); color: var(--ink-2); text-align: right; }
+.colors { display: flex; gap: 8px; }
+.colors span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.colors i { width: 20px; height: 20px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.preset { aspect-ratio: 1.25; border-radius: var(--r-ctl); background: #2a3238; display: grid; place-items: end center; padding-bottom: 7px; font: 700 10px/1 var(--font); color: #fff; position: relative; border: 1px solid transparent; }
+.preset.on { box-shadow: 0 0 0 2px var(--accent); }
+.preset em { font-style: normal; color: #FFD43B; }
+.preset.box span { background: rgba(0,0,0,.75); padding: 2px 4px; border-radius: 2px; }
+.preset.big span { font-size: 13px; font-family: Impact, "Anton", var(--font); letter-spacing: .02em; }
+.preset-names { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; color: var(--ink-3); text-align: center; margin-top: -4px; }
+.posgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: 84px; padding: 4px; background: var(--sunk); border-radius: var(--r-ctl); }
+.posgrid i { height: 14px; border-radius: 2px; background: var(--surface); }
+.posgrid i.on { background: var(--accent); }
+.insp-foot { margin-top: auto; padding: 14px 16px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.btn.block { width: 100%; justify-content: center; height: 36px; }
+
+/* Screen-specific */
+.lib-ws { padding: 22px 26px; overflow: hidden; display: grid; gap: 18px; align-content: start; }
+.lib-head { display: flex; align-items: center; gap: 12px; }
+.lib-head .h { font-size: 20px; letter-spacing: -0.02em; }
+.search { width: 260px; height: 32px; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--ink-3); }
+.search svg { width: 14px; height: 14px; }
+.drop { border: 1.5px dashed var(--line); border-radius: var(--r-panel); padding: 16px 18px; display: flex; align-items: center; gap: 16px; background: var(--surface); }
+.drop .ic { width: 38px; height: 38px; border-radius: 8px; background: var(--accent-wash); color: var(--accent); display: grid; place-items: center; }
+.drop .ic svg { width: 18px; height: 18px; }
+.drop .up { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.upbar { height: 4px; border-radius: 2px; background: var(--sunk); overflow: hidden; }
+.upbar i { display: block; height: 100%; width: 38%; background: var(--accent); }
+.vgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+.vcard { display: grid; gap: 8px; }
+.vcard .footage { aspect-ratio: 16/9; }
+.vcard .t { font-weight: 600; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vcard .m { font-size: 12px; color: var(--ink-3); }
+.outs { display: flex; gap: 5px; flex-wrap: wrap; }
+.out { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: 4px; font-size: 11px; background: var(--sunk); color: var(--ink-2); font-weight: 500; }
+.out svg { width: 11px; height: 11px; }
+.out.run { background: var(--tally-wash); color: var(--tally); }
+.out.off { background: transparent; color: var(--ink-3); box-shadow: inset 0 0 0 1px var(--line-2); }
+.filters { display: flex; gap: 6px; align-items: center; }
+
+.ov { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.ov-left { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.ov-left .stage { grid-template-rows: auto auto; }
+.ov-left .stage-view { padding: 16px 16px 10px; }
+.shelf { padding: 16px 18px; display: grid; gap: 12px; align-content: start; overflow: hidden; }
+.shelf-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.asset { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px; display: grid; gap: 7px; }
+.asset .footage { aspect-ratio: 16/9; }
+.asset .footage.tall { aspect-ratio: 16/9; background-size: 100% 100%; }
+.asset .t { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asset .m { font-size: 11px; color: var(--ink-3); display: flex; justify-content: space-between; }
+.make { background: var(--surface); border-left: 1px solid var(--line); display: grid; align-content: start; overflow: hidden; }
+.make-h { padding: 16px 18px 6px; }
+.tool { padding: 14px 18px; border-bottom: 1px solid var(--line-2); display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: start; }
+.tool .ti { width: 30px; height: 30px; border-radius: 7px; background: var(--sunk); display: grid; place-items: center; color: var(--ink-2); }
+.tool .ti svg { width: 15px; height: 15px; }
+.tool b { font-weight: 600; color: var(--ink); display: block; }
+.tool p { font-size: 12px; margin-top: 2px; }
+.tool .steps { margin-top: 8px; }
+.facts { display: flex; gap: 18px; font-size: 12px; color: var(--ink-3); padding: 0 16px 12px; }
+.facts b { color: #E9EAEE; font-weight: 500; }
+
+.popover { position: absolute; top: 46px; right: 112px; width: 330px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 40px -12px rgba(10,14,25,.35); z-index: 5; padding: 6px; }
+.popover .ph { display: flex; justify-content: space-between; padding: 8px 10px 6px; }
+.popover .jr { padding: 10px; border-radius: 7px; display: grid; gap: 7px; }
+.popover .jr:first-of-type { background: var(--bg); }
+
+.cap { display: grid; grid-template-columns: 300px 1fr 286px; min-height: 0; }
+.tx { background: var(--surface); border-right: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.tx-h { padding: 12px 14px; display: flex; gap: 8px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line-2); }
+.tx-list { overflow: hidden; }
+.seg-row { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
+.seg-row .meta { display: flex; justify-content: space-between; align-items: center; }
+.seg-row .meta .tc { font-size: 11px; color: var(--ink-3); }
+.seg-row .txt { color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+.seg-row.on { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); }
+.seg-row.on .txt { color: var(--ink); }
+.seg-row .txt u { text-decoration: none; background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 2px; }
+.seg-row .txt s { text-decoration: none; border-bottom: 1.5px dashed var(--tally); }
+.center { display: grid; grid-template-rows: 1fr auto; min-height: 0; min-width: 0; }
+
+.clips { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.ctrl { display: flex; align-items: end; gap: 22px; padding: 12px 18px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.ctrl .field { gap: 6px; }
+.clips-body { display: grid; grid-template-columns: 440px 1fr; min-height: 0; }
+.clips-body .stage-view { place-items: start center; padding-top: 22px; }
+.clist { padding: 14px 18px; display: grid; gap: 10px; align-content: start; overflow: hidden; }
+.clip { display: grid; grid-template-columns: 74px 1fr auto; gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; align-items: start; }
+.clip.on { box-shadow: 0 0 0 1.5px var(--accent); border-color: transparent; }
+.clip .footage { aspect-ratio: 9/16; width: 74px; }
+.clip .t { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.clip q { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 3px; quotes: "“" "”"; }
+.clip .m { display: flex; gap: 12px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--ink-3); }
+.score { display: grid; gap: 4px; justify-items: end; }
+.score b { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.score small { font-size: 11px; color: var(--ink-3); }
+.clip .acts { display: flex; gap: 6px; margin-top: 10px; }
+
+.thumbs { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.pipe { display: flex; gap: 0; padding: 14px 18px; background: var(--surface); border-bottom: 1px solid var(--line); align-items: center; }
+.pstep { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); flex: 1; }
+.pstep i { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 600; background: var(--sunk); color: var(--ink-3); flex-shrink: 0; }
+.pstep.d { color: var(--ink-2); } .pstep.d i { background: var(--ok-wash); color: var(--ok); }
+.pstep.a { color: var(--ink); font-weight: 500; } .pstep.a i { background: var(--tally); color: #fff; }
+.pstep::after { content: ""; flex: 1; height: 1px; background: var(--line); margin: 0 10px; }
+.pstep:last-child { flex: 0 0 auto; } .pstep:last-child::after { display: none; }
+.tgrid { padding: 16px 18px; display: grid; gap: 14px; align-content: start; overflow: hidden; }
+.trow { display: grid; grid-template-columns: 120px repeat(3, 1fr); gap: 12px; align-items: center; }
+.trow .rh { display: grid; gap: 3px; }
+.trow .rh .tc { font-size: 12px; color: var(--ink); }
+.tcell { position: relative; }
+.tcell .footage { aspect-ratio: 16/9; }
+.tcell .tag { position: absolute; left: 6px; top: 6px; font-size: 10.5px; font-weight: 600; color: #fff; background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 3px; }
+.tcell.on { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.tcell .pick { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; }
+.tcell .pick svg { width: 12px; height: 12px; }
+.thead { display: grid; grid-template-columns: 120px repeat(3, 1fr); gap: 12px; font-size: 12px; color: var(--ink-3); }
+.shimmer { aspect-ratio: 16/9; border-radius: var(--r-frame); background: linear-gradient(100deg, var(--sunk) 30%, var(--line-2) 50%, var(--sunk) 70%); background-size: 200% 100%; animation: sh 1.6s linear infinite; display: grid; place-items: center; color: var(--ink-3); font-size: 11.5px; }
+@keyframes sh { to { background-position: -200% 0; } }
+
+.rf { display: grid; grid-template-columns: 1fr 286px; min-height: 0; }
+.rf .stage-view { position: relative; }
+.rf-src { width: 560px; aspect-ratio: 16/9; position: relative; }
+.rf-src .footage { position: absolute; inset: 0; }
+.rf-crop { position: absolute; top: 0; bottom: 0; left: 21%; width: 28.1%; box-shadow: 0 0 0 999px rgba(10,11,13,.68); outline: 2px solid #fff; }
+.rf-crop::after { content: "9:16"; position: absolute; top: 6px; left: 6px; font: 600 10.5px/1 var(--font); color: #111; background: #fff; padding: 3px 5px; border-radius: 3px; }
+.layouts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.lay { display: grid; gap: 5px; justify-items: center; font-size: 11px; color: var(--ink-3); }
+.lay .g { width: 30px; height: 50px; border-radius: 4px; border: 1.5px solid var(--line); display: grid; gap: 2px; padding: 3px; }
+.lay .g i { background: var(--line); border-radius: 1px; }
+.lay.on { color: var(--ink); font-weight: 500; } .lay.on .g { border-color: var(--accent); } .lay.on .g i { background: var(--accent); }
+.blk.lay-fill { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.blk.lay-split { background: color-mix(in srgb, var(--spk2) 22%, transparent); color: var(--ink-2); border-color: transparent; }
+
+/* ── Roadmap ── */
+.phases { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.phase { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 20px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+@media (max-width: 760px) { .phase { grid-template-columns: 40px 1fr; } .phase .files { grid-column: 2; } }
+.phase .no { font-size: 22px; font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.phase p { font-size: 14.5px; }
+.phase .files { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); line-height: 1.7; overflow-wrap: anywhere; }
+.decide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .decide { grid-template-columns: 1fr; } }
+.decide > div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel); padding: 18px; display: grid; gap: 6px; align-content: start; }
+.decide p { font-size: 14px; }
+.decide .rec { font-size: 13px; color: var(--ink); }
+.decide .rec b { color: var(--accent-ink); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) { .chip.run::before, .shimmer { animation: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-lib" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-lab" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h6M8 11h6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-cc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 10.5a2 2 0 1 0 0 3M17 10.5a2 2 0 1 0 0 3"/></symbol>
+    <symbol id="i-cut" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></symbol>
+    <symbol id="i-img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5L5 20"/></symbol>
+    <symbol id="i-crop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-frame" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h4v14H4zM10 5h4v14h-4zM16 5h4v14h-4z" opacity=".95"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <h1>One video in, every social format out.</h1>
+  <p class="lede">A redesign direction for the SocialPilot video tool. Today it is six separate experiments behind one nav bar. This proposal turns it into a single studio where a video is the project, and captions, clips, thumbnails and reframing are tools that work on it and feed each other.</p>
+  <div class="hero-meta">
+    <span>Scope <b>app/client, every route</b></span>
+    <span>Covers <b>information architecture, design system, 6 key screens, rollout</b></span>
+    <span>Status <b>proposal for review</b></span>
+  </div>
+</header>
+
+<section id="audit">
+  <div class="sec-head">
+    <span class="k">What the current app tells a first-time user</span>
+    <h2>The features are solid. The product around them is missing.</h2>
+    <p>Each tool was built as its own POC with its own layout, upload box and visual rules. Nothing tells the user that the video they just captioned is the same one they can clip, thumbnail and reframe. These numbers come straight from <span class="tc">app/client/src</span>.</p>
+  </div>
+  <div class="audit">
+    <div><span class="n">5 <small>upload boxes</small></span><p>Home, Clips, Thumbnails, Playground and SmartCrop each start with their own upload. The user re-picks the same video on every tool.</p></div>
+    <div><span class="n">2 <small>design languages</small></span><p>SmartCrop runs a forced-black theme with white pill buttons and its own <span class="tc">--sc-*</span> tokens. Crossing into it feels like leaving the app.</p></div>
+    <div><span class="n">492 <small>inline style blocks</small></span><p>Most layout and type lives in <span class="tc">style={{…}}</span>, so spacing, sizes and colors drift from page to page.</p></div>
+    <div><span class="n">129 <small>text sizes of 9–11px</small></span><p>Everything is set in IBM Plex Mono at 10–12px. It reads like a terminal, not a creative tool, and is hard to scan.</p></div>
+    <div><span class="n">7 <small>top-level nav items</small></span><p>Upload, Playground, Thumbnails, Clips, SmartCrop, Docs and Sign out sit at equal weight. Internal lab tools look like product features.</p></div>
+    <div><span class="n">0 <small>shared progress pattern</small></span><p>Transcribe, burn, clip export, thumbnail generation and render each report progress differently: toasts, inline bars, overlays, modals.</p></div>
+  </div>
+</section>
+
+<section id="ia">
+  <div class="sec-head">
+    <span class="k">Information architecture</span>
+    <h2>Make the video the project, and the features its tools.</h2>
+    <p>Every feature already takes a <span class="tc">videoId</span>. The redesign makes that explicit: open a video once, then move between tools with tabs that keep the same header, the same player and the same job status.</p>
+  </div>
+  <div class="ia">
+    <div class="ia-col">
+      <h3>Today <span>flat, feature-first</span></h3>
+      <div class="navrow"><span class="up">Upload New</span><span>Playground</span><span>Thumbnails</span><span>Clips</span><span>SmartCrop</span><span>Docs</span><span>Sign out</span></div>
+      <div class="tree">
+        <div class="node"><b>/editor/:id</b><div>Captions only. Own top bar, own back button, links out to the other tools.</div></div>
+        <div class="node"><b>/clips/:id</b><div>Re-asks for a video if none is in the URL. Separate layout.</div></div>
+        <div class="node"><b>/thumbnails/:id</b><div>Same pattern, third layout.</div></div>
+        <div class="node"><b>/smartcrop/*</b><div>Separate upload, separate project list, always dark.</div></div>
+      </div>
+    </div>
+    <div class="ia-col">
+      <h3>Proposed <span>project-first</span></h3>
+      <div class="tree">
+        <div class="node"><b>Library</b><div>All videos, with what has been made from each. One upload, used by every tool. <code>/</code></div></div>
+        <div class="node"><b>Project</b><div>One video. Tabs for each tool, a shared player, a shared jobs tray and an outputs shelf. <code>/v/:id/…</code>
+          <div class="lanes">
+            <div class="lane"><b>Overview</b><small>Status of every tool, all outputs</small></div>
+            <div class="lane"><b>Captions</b><small>Transcript, style, burn, export</small></div>
+            <div class="lane"><b>Clips</b><small>Find, preview, export shorts</small></div>
+            <div class="lane"><b>Thumbnails</b><small>Generate, compare, pick</small></div>
+            <div class="lane"><b>Reframe</b><small>SmartCrop to 9:16, 1:1, 4:5</small></div>
+          </div>
+        </div></div>
+        <div class="node"><b>Lab</b><div>Provider playground and research docs, moved under one rail icon for the team. <code>/lab</code>, <code>/lab/docs</code></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="principles">
+  <div class="sec-head">
+    <span class="k">Design principles</span>
+    <h2>Quiet chrome, a dark stage, and status you can read from across the room.</h2>
+  </div>
+  <div class="principles">
+    <div><h3>The footage is the loudest thing on screen</h3><p>Chrome follows the light or dark theme, but video always sits on a dark stage, like a monitor in an edit bay. Subtitle colors, crops and thumbnails are judged against real contrast in both themes.</p></div>
+    <div><h3>One tally color means "working"</h3><p>Amber, borrowed from a camera's tally light, marks anything in progress across the app: transcribing, burning, rendering. Green is done, red is failed, and the brand blue is reserved for actions and selection.</p></div>
+    <div><h3>Tools hand off to each other</h3><p>A clip has a "Reframe to 9:16" action. A reframed short can open in Captions. Each hand-off keeps the same project, so the user builds a set of outputs instead of starting over.</p></div>
+    <div><h3>Talk about results, not models</h3><p>Users pick "Watch the video" or "Read the transcript", not <span class="tc">gemini-2.5-flash</span>. Model names, costs and provider comparisons move to the Lab, where the team needs them.</p></div>
+    <div><h3>Timecode is the one place for monospace</h3><p>UI text is set in a proportional sans at 13px and up. Mono appears only for timecodes and durations, where columns of digits have to line up.</p></div>
+    <div><h3>Presets first, controls second</h3><p>Captions open on four style presets. The full style panel is still there for fine-tuning, but most videos should be styled in one click.</p></div>
+  </div>
+</section>
+
+<section id="system">
+  <div class="sec-head">
+    <span class="k">Design system</span>
+    <h2>One token set for every screen, SmartCrop included.</h2>
+    <p>Same token names as today's <span class="tc">index.css</span> where possible so the migration is mostly value changes. The <span class="tc">--sc-*</span> set is retired. This page itself uses the system, so switching your theme shows both palettes.</p>
+  </div>
+  <div class="tokens">
+    <div class="panel">
+      <h3>Color</h3>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--bg)"></i><b>bg</b><span>App background</span></div>
+        <div class="sw"><i style="background:var(--surface)"></i><b>surface</b><span>Panels, bars, cards</span></div>
+        <div class="sw"><i style="background:var(--sunk)"></i><b>sunk</b><span>Inputs, segmented tracks</span></div>
+        <div class="sw"><i style="background:var(--stage)"></i><b>stage</b><span>Behind footage, both themes</span></div>
+        <div class="sw"><i style="background:var(--ink)"></i><b>ink</b><span>Primary text</span></div>
+        <div class="sw"><i style="background:var(--accent)"></i><b>accent</b><span>SocialPilot blue. Actions, selection</span></div>
+        <div class="sw"><i style="background:var(--tally)"></i><b>tally</b><span>In progress, anywhere</span></div>
+        <div class="sw"><i style="background:var(--ok)"></i><b>ok</b><span>Done, saved</span></div>
+        <div class="sw"><i style="background:var(--err)"></i><b>err</b><span>Failed, playhead</span></div>
+        <div class="sw"><i style="background:linear-gradient(90deg,var(--spk1) 25%,var(--spk2) 25% 50%,var(--spk3) 50% 75%,var(--spk4) 75%)"></i><b>speaker 1–4</b><span>Diarization, never used for UI state</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Type</h3>
+      <div class="scale">
+        <div><small>28 / 600</small><span style="font-size:28px;font-weight:600;letter-spacing:-0.02em;line-height:1.1">Library</span></div>
+        <div><small>20 / 600</small><span style="font-size:20px;font-weight:600;letter-spacing:-0.02em">Founder podcast, ep. 12</span></div>
+        <div><small>15 / 600</small><span style="font-size:15px;font-weight:600">Find clips</span></div>
+        <div><small>13 / 400</small><span style="font-size:13px;color:var(--ink-2)">Base UI size. Labels, transcript, inspector fields.</span></div>
+        <div><small>12 / 500</small><span style="font-size:12px;color:var(--ink-3);font-weight:500">Field labels and metadata</span></div>
+        <div><small>mono 12</small><span class="tc" style="font-size:12.5px">00:04:12:08 → 00:04:54:20</span></div>
+      </div>
+      <p style="font-size:13.5px">Geist for UI, Geist Mono for timecode only. Both open-source and on Google Fonts. Radii: 6px controls, 10px panels, 4px on footage so frames read as frames.</p>
+    </div>
+  </div>
+
+  <div class="comp-grid">
+    <div class="comp">
+      <h3>Actions</h3>
+      <div class="demo">
+        <button class="btn pri" type="button"><svg><use href="#i-down"/></svg>Burn captions</button>
+        <button class="btn" type="button">Export subtitles</button>
+        <button class="btn quiet" type="button">Reset style</button>
+      </div>
+      <p>One primary action per panel. The primary verb carries through: "Burn captions" produces a job named "Burning captions" and a toast that says "Captions burned".</p>
+    </div>
+    <div class="comp">
+      <h3>Choice</h3>
+      <div class="demo">
+        <div class="seg" role="group" aria-label="Clip length"><button type="button" aria-pressed="true">Auto</button><button type="button" aria-pressed="false">Under 30s</button><button type="button" aria-pressed="false">30–60s</button><button type="button" aria-pressed="false">60–90s</button></div>
+      </div>
+      <p>One segmented control replaces the three hand-built versions in Clips, Thumbnails and SmartCrop.</p>
+    </div>
+    <div class="comp">
+      <h3>Status</h3>
+      <div class="demo">
+        <span class="chip ok">Transcribed</span><span class="chip run">Rendering 62%</span><span class="chip">Not started</span><span class="chip err">Export failed</span>
+      </div>
+      <p>The same four chips on library cards, tool tabs, clip rows and the jobs tray.</p>
+    </div>
+    <div class="comp">
+      <h3>Jobs</h3>
+      <div class="demo">
+        <div class="job"><div class="job-top"><b>Reframing to 9:16</b><span>Step 3 of 4 · about 2 min</span></div><div class="steps" style="--n:4"><i class="d"></i><i class="d"></i><i class="a" style="--p:62%"></i><i></i></div></div>
+      </div>
+      <p>Every long task is a sequence of named steps. The bar shows which step, not one opaque percentage.</p>
+    </div>
+    <div class="comp">
+      <h3>Speakers and time</h3>
+      <div class="demo">
+        <span class="spk" style="--c:var(--spk1)">Priya</span><span class="spk" style="--c:var(--spk2)">Marcus</span>
+        <span class="tcfield"><i>In</i> 00:04:12:08</span><span class="tcfield"><i>Out</i> 00:04:54:20</span>
+      </div>
+      <p>Speaker colors come from a separate set so they never read as status. Timecodes show frames for precise trims.</p>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="sec-head">
+    <span class="k">Key screens</span>
+    <h2>The same shell, from library to render.</h2>
+    <p>These are layout studies, drawn at desktop size. Switch between the screens and between light and dark chrome. The stage stays dark in both.</p>
+  </div>
+
+  <div class="monitor">
+    <div class="mon-bar">
+      <div class="screen-tabs" role="tablist" aria-label="Screens">
+        <button role="tab" type="button" aria-selected="true" data-s="library">Library</button>
+        <button role="tab" type="button" aria-selected="false" data-s="overview">Project overview</button>
+        <button role="tab" type="button" aria-selected="false" data-s="captions">Captions</button>
+        <button role="tab" type="button" aria-selected="false" data-s="clips">Clips</button>
+        <button role="tab" type="button" aria-selected="false" data-s="thumbs">Thumbnails</button>
+        <button role="tab" type="button" aria-selected="false" data-s="reframe">Reframe</button>
+      </div>
+      <div class="seg" role="group" aria-label="Chrome theme"><button type="button" aria-pressed="true" data-m="light">Light chrome</button><button type="button" aria-pressed="false" data-m="dark">Dark chrome</button></div>
+    </div>
+
+    <div class="mon-view">
+
+      <!-- LIBRARY -->
+      <div class="app" data-screen="library" data-mode="light">
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main lib">
+          <div class="bar"><div class="crumb"><b>Library</b></div><span class="grow"></span><span class="jobs-pill"><span class="ring"></span>2 jobs running</span></div>
+          <div class="lib-ws">
+            <div class="lib-head"><span class="h">Library</span><span class="grow" style="flex:1"></span><span class="search"><svg><use href="#i-search"/></svg>Search videos</span><button class="btn pri" type="button"><svg><use href="#i-up"/></svg>Upload video</button></div>
+            <div class="drop">
+              <span class="ic"><svg><use href="#i-up"/></svg></span>
+              <div class="up"><div style="display:flex;justify-content:space-between"><b style="font-weight:600">customer-call-highlights.mov</b><span class="lbl">412 MB of 1.08 GB · 38%</span></div><div class="upbar"><i></i></div></div>
+              <span class="lbl" style="max-width:200px">Drop more videos anywhere on this page.</span>
+            </div>
+            <div class="filters"><div class="seg"><button type="button" aria-pressed="true">All 14</button><button type="button" aria-pressed="false">In progress 2</button><button type="button" aria-pressed="false">Has outputs 9</button></div><span class="grow" style="flex:1"></span><span class="lbl">Sorted by last edited</span></div>
+            <div class="vgrid">
+              <div class="vcard"><div class="footage"><span class="dur">24:18</span></div><div><div class="t">Founder podcast, ep. 12</div><div class="m">Edited 12 min ago</div></div><div class="outs"><span class="out"><svg><use href="#i-cc"/></svg>Captions</span><span class="out"><svg><use href="#i-cut"/></svg>4 clips</span><span class="out run"><svg><use href="#i-crop"/></svg>9:16 62%</span></div></div>
+              <div class="vcard"><div class="footage v2"><span class="dur">08:41</span></div><div><div class="t">Q4 product launch walkthrough</div><div class="m">Edited yesterday</div></div><div class="outs"><span class="out"><svg><use href="#i-cc"/></svg>Captions</span><span class="out"><svg><use href="#i-img"/></svg>3 thumbnails</span></div></div>
+              <div class="vcard"><div class="footage solo"><span class="dur">02:05</span></div><div><div class="t">Hiring video, engineering</div><div class="m">Edited Nov 12</div></div><div class="outs"><span class="out run"><svg><use href="#i-cc"/></svg>Transcribing</span></div></div>
+              <div class="vcard"><div class="footage v3"><span class="dur">41:52</span></div><div><div class="t">Webinar: scheduling at scale</div><div class="m">Edited Nov 9</div></div><div class="outs"><span class="out"><svg><use href="#i-cut"/></svg>6 clips</span><span class="out"><svg><use href="#i-crop"/></svg>3 reframes</span></div></div>
+              <div class="vcard"><div class="footage v4"><span class="dur">01:30</span></div><div><div class="t">Customer story, Lumen Coffee</div><div class="m">Edited Nov 7</div></div><div class="outs"><span class="out off">Nothing made yet</span></div></div>
+              <div class="vcard"><div class="footage v2" style="filter:hue-rotate(200deg)"><span class="dur">12:10</span></div><div><div class="t">Agency roundtable, March</div><div class="m">Edited Nov 3</div></div><div class="outs"><span class="out"><svg><use href="#i-cc"/></svg>Captions</span><span class="out"><svg><use href="#i-cut"/></svg>2 clips</span></div></div>
+              <div class="vcard"><div class="footage solo" style="filter:hue-rotate(90deg)"><span class="dur">00:58</span></div><div><div class="t">Feature teaser, bulk upload</div><div class="m">Edited Oct 30</div></div><div class="outs"><span class="out"><svg><use href="#i-img"/></svg>3 thumbnails</span></div></div>
+              <div class="vcard"><div class="footage v3" style="filter:hue-rotate(320deg)"><span class="dur">33:20</span></div><div><div class="t">Founder podcast, ep. 11</div><div class="m">Edited Oct 28</div></div><div class="outs"><span class="out"><svg><use href="#i-cc"/></svg>Captions</span><span class="out"><svg><use href="#i-cut"/></svg>5 clips</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OVERVIEW -->
+      <div class="app" data-screen="overview" data-mode="light" hidden>
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main">
+          <div class="bar"><div class="crumb">Library <span>/</span> <b>Founder podcast, ep. 12</b></div><span class="grow"></span><span class="jobs-pill"><span class="ring"></span>2 jobs running</span><button class="btn" type="button"><svg><use href="#i-down"/></svg>Downloads</button></div>
+          <div class="tools"><a class="on"><svg><use href="#i-home"/></svg>Overview</a><a><svg><use href="#i-cc"/></svg>Captions<span class="dot ok"></span></a><a><svg><use href="#i-cut"/></svg>Clips <span class="count">4</span></a><a><svg><use href="#i-img"/></svg>Thumbnails</a><a><svg><use href="#i-crop"/></svg>Reframe<span class="dot run"></span></a></div>
+          <div class="ws ov">
+            <div class="ov-left">
+              <div class="stage">
+                <div class="stage-view"><div class="footage" style="width:600px;aspect-ratio:16/9"></div></div>
+                <div class="facts"><span><b>24:18</b> long</span><span><b>1920×1080</b> 29.97 fps</span><span><b>2</b> speakers</span><span><b>English</b></span><span>Uploaded <b>Nov 14</b></span></div>
+              </div>
+              <div class="shelf">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="h">Outputs</span><span class="lbl">5 files, ready to download or schedule</span></div>
+                <div class="shelf-row">
+                  <div class="asset"><div class="footage"><span class="sub" style="font-size:10px">we <em>stopped</em> giving it away</span></div><div class="t">Captioned full episode</div><div class="m"><span>Captions · MP4</span><span class="tc">24:18</span></div></div>
+                  <div class="asset"><div class="footage v4"></div><div class="t">Why we killed the free plan</div><div class="m"><span>Clip · 16:9</span><span class="tc">00:42</span></div></div>
+                  <div class="asset"><div class="footage v2"></div><div class="t">The pricing page test</div><div class="m"><span>Clip · 16:9</span><span class="tc">00:28</span></div></div>
+                  <div class="asset"><div class="shimmer" style="aspect-ratio:16/9">Rendering</div><div class="t">Why we killed the free plan</div><div class="m"><span>Reframe · 9:16</span><span class="chip run" style="height:18px;font-size:10.5px">62%</span></div></div>
+                </div>
+              </div>
+            </div>
+            <aside class="make">
+              <div class="make-h"><span class="h">Make from this video</span></div>
+              <div class="tool"><span class="ti"><svg><use href="#i-cc"/></svg></span><div><b>Captions</b><p>Transcript ready, 3,412 words. Styled with Bold pop.</p></div><span class="chip ok">Burned</span></div>
+              <div class="tool"><span class="ti"><svg><use href="#i-cut"/></svg></span><div><b>Clips</b><p>4 suggested from the transcript. 2 exported.</p></div><span class="chip ok">4 found</span></div>
+              <div class="tool"><span class="ti"><svg><use href="#i-crop"/></svg></span><div><b>Reframe</b><p>Clip "Why we killed the free plan" to 9:16, speaker-tracked.</p><div class="steps" style="--n:4"><i class="d"></i><i class="d"></i><i class="a" style="--p:62%"></i><i></i></div></div><span class="chip run">Rendering</span></div>
+              <div class="tool"><span class="ti"><svg><use href="#i-img"/></svg></span><div><b>Thumbnails</b><p>Pick the best frames and polish them into 3 options.</p></div><button class="btn sm" type="button">Generate</button></div>
+            </aside>
+          </div>
+        </div>
+        <div class="popover">
+          <div class="ph"><span class="h" style="font-size:13px">Jobs</span><span class="lbl">This project</span></div>
+          <div class="jr"><div class="job-top"><b>Reframing to 9:16</b><span>about 2 min left</span></div><div class="steps" style="--n:4"><i class="d"></i><i class="d"></i><i class="a" style="--p:62%"></i><i></i></div><span class="lbl">Rendering frames · step 3 of 4</span></div>
+          <div class="jr"><div class="job-top"><b>Exporting clip</b><span>00:28</span></div><div class="steps" style="--n:2"><i class="d"></i><i class="a" style="--p:30%"></i></div><span class="lbl">The pricing page test · encoding</span></div>
+          <div class="jr"><div class="job-top"><b>Captions burned</b><span style="color:var(--ok)">Done 9 min ago</span></div></div>
+        </div>
+      </div>
+
+      <!-- CAPTIONS -->
+      <div class="app" data-screen="captions" data-mode="light" hidden>
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main">
+          <div class="bar"><div class="crumb">Library <span>/</span> <b>Founder podcast, ep. 12</b></div><span class="grow"></span><span class="chip ok">Saved</span><button class="btn" type="button">Export subtitles</button></div>
+          <div class="tools"><a><svg><use href="#i-home"/></svg>Overview</a><a class="on"><svg><use href="#i-cc"/></svg>Captions<span class="dot ok"></span></a><a><svg><use href="#i-cut"/></svg>Clips <span class="count">4</span></a><a><svg><use href="#i-img"/></svg>Thumbnails</a><a><svg><use href="#i-crop"/></svg>Reframe<span class="dot run"></span></a></div>
+          <div class="ws cap">
+            <div class="tx">
+              <div class="tx-h"><span class="h" style="font-size:13.5px">Transcript</span><div class="seg"><button type="button" aria-pressed="true">Edit</button><button type="button" aria-pressed="false">Speakers</button></div></div>
+              <div class="tx-list">
+                <div class="seg-row"><div class="meta"><span class="spk" style="--c:var(--spk1)">Priya</span><span class="tc">04:02</span></div><div class="txt">So the question everyone asks is why we'd ever take something away from customers.</div></div>
+                <div class="seg-row"><div class="meta"><span class="spk" style="--c:var(--spk2)">Marcus</span><span class="tc">04:07</span></div><div class="txt">Right, it felt like a risky call at the time.</div></div>
+                <div class="seg-row on"><div class="meta"><span class="spk" style="--c:var(--spk1)">Priya</span><span class="tc">04:12</span></div><div class="txt">The free plan was costing us support hours, so <u>we stopped</u> giving it away and moved those users to a trial.</div></div>
+                <div class="seg-row"><div class="meta"><span class="spk" style="--c:var(--spk2)">Marcus</span><span class="tc">04:21</span></div><div class="txt">And what happened to <s>sign ups</s> that month?</div></div>
+                <div class="seg-row"><div class="meta"><span class="spk" style="--c:var(--spk1)">Priya</span><span class="tc">04:24</span></div><div class="txt">They dropped about twelve percent. Paid conversions doubled.</div></div>
+                <div class="seg-row"><div class="meta"><span class="spk" style="--c:var(--spk2)">Marcus</span><span class="tc">04:30</span></div><div class="txt">That's the part nobody puts in the blog post.</div></div>
+              </div>
+            </div>
+            <div class="center">
+              <div class="stage">
+                <div class="stage-view"><div class="footage" style="width:520px;aspect-ratio:16/9"><span class="sub">so <em>we stopped</em> giving it away</span></div></div>
+                <div class="transport"><svg><use href="#i-play"/></svg><span class="tc">00:04:13:02 <i>/ 00:24:18:00</i></span><span class="scrub" style="--p:17%"></span><span>1×</span></div>
+              </div>
+              <div class="tl">
+                <div class="ruler"><div class="hd"></div><div class="ticks"><span>04:00</span><span>04:05</span><span>04:10</span><span>04:15</span><span>04:20</span><span>04:25</span><span>04:30</span></div></div>
+                <div class="row"><div class="hd">Speakers</div><div class="track"><span class="blk s1" style="left:1%;width:16%"></span><span class="blk s2" style="left:18%;width:11%"></span><span class="blk s1" style="left:30%;width:28%"></span><span class="blk s2" style="left:59%;width:10%"></span><span class="blk s1" style="left:70%;width:19%"></span></div></div>
+                <div class="row"><div class="hd">Captions</div><div class="track"><span class="blk" style="left:1%;width:15%">So the question everyone</span><span class="blk" style="left:18%;width:11%">Right, it felt</span><span class="blk" style="left:30%;width:13%">The free plan was</span><span class="blk" style="left:44%;width:14%">so we stopped giving</span><span class="blk" style="left:59%;width:10%">And what</span><span class="blk" style="left:70%;width:19%">They dropped about</span></div></div>
+                <div class="playhead" style="--x:calc(92px + (100% - 92px) * .46)"></div>
+              </div>
+            </div>
+            <aside class="insp">
+              <div class="insp-sec"><span class="lbl">Style</span><div class="presets"><span class="preset"><span>Clean</span></span><span class="preset on"><span>Bold <em>pop</em></span></span><span class="preset box"><span>Boxed</span></span><span class="preset big"><span>LOUD</span></span></div><div class="preset-names"><span>Clean</span><span>Bold pop</span><span>Boxed</span><span>Loud</span></div></div>
+              <div class="insp-sec"><div class="row2"><div class="field"><span class="lbl">Font</span><span class="inp">Source Sans 3 <i>▾</i></span></div><div class="field"><span class="lbl">Weight</span><span class="inp">Bold <i>▾</i></span></div></div><div class="field"><span class="lbl">Size</span><div class="slider"><span class="t" style="--p:34%"></span><span>64</span></div></div><div class="field"><span class="lbl">Colors</span><div class="colors"><span><i style="background:#fff"></i>Text</span><span><i style="background:#FFD43B"></i>Highlight</span><span><i style="background:#000"></i>Outline</span></div></div></div>
+              <div class="insp-sec"><div style="display:flex;justify-content:space-between;align-items:start;gap:12px"><div class="field"><span class="lbl">Position</span><span class="lbl" style="font-weight:400">Or drag on the video</span></div><div class="posgrid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i></div></div><div class="field"><span class="lbl">Highlight</span><div class="seg"><button type="button" aria-pressed="true">Word</button><button type="button" aria-pressed="false">Fill</button><button type="button" aria-pressed="false">None</button></div></div><div class="field"><span class="lbl">Max lines</span><div class="seg"><button type="button" aria-pressed="false">1</button><button type="button" aria-pressed="true">2</button><button type="button" aria-pressed="false">3</button></div></div></div>
+              <div class="insp-foot"><button class="btn pri block" type="button"><svg><use href="#i-down"/></svg>Burn captions</button><span class="lbl" style="text-align:center;font-weight:400">What you see is exactly what gets burned.</span></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLIPS -->
+      <div class="app" data-screen="clips" data-mode="light" hidden>
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main">
+          <div class="bar"><div class="crumb">Library <span>/</span> <b>Founder podcast, ep. 12</b></div><span class="grow"></span><span class="jobs-pill"><span class="ring"></span>1 job running</span></div>
+          <div class="tools"><a><svg><use href="#i-home"/></svg>Overview</a><a><svg><use href="#i-cc"/></svg>Captions<span class="dot ok"></span></a><a class="on"><svg><use href="#i-cut"/></svg>Clips <span class="count">4</span></a><a><svg><use href="#i-img"/></svg>Thumbnails</a><a><svg><use href="#i-crop"/></svg>Reframe<span class="dot run"></span></a></div>
+          <div class="ws clips">
+            <div class="ctrl">
+              <div class="field"><span class="lbl">Find clips by</span><div class="seg"><button type="button" aria-pressed="true">Reading the transcript</button><button type="button" aria-pressed="false">Watching the video</button></div></div>
+              <div class="field"><span class="lbl">Length</span><div class="seg"><button type="button" aria-pressed="true">Auto</button><button type="button" aria-pressed="false">Under 30s</button><button type="button" aria-pressed="false">30–60s</button><button type="button" aria-pressed="false">60–90s</button></div></div>
+              <div class="field"><span class="lbl">How many</span><div class="seg"><button type="button" aria-pressed="false">3</button><button type="button" aria-pressed="true">4</button><button type="button" aria-pressed="false">5</button></div></div>
+              <span style="flex:1"></span><button class="btn pri" type="button">Find clips again</button>
+            </div>
+            <div class="clips-body">
+              <div class="stage">
+                <div class="stage-view"><div style="display:grid;gap:12px;justify-items:center"><div class="footage v4" style="width:220px;aspect-ratio:9/16;filter:none;background-size:330% 100%;background-position:40% 0"><span class="sub" style="font-size:13px;bottom:14%;white-space:normal;width:90%">so <em>we stopped</em> giving it away</span></div><span class="tc" style="color:#E9EAEE;font-size:12px">Preview at 9:16 · 00:00:11 / 00:00:42</span></div></div>
+                <div class="transport"><svg><use href="#i-play"/></svg><span class="tc">04:12 <i>→ 04:54</i></span><span class="scrub" style="--p:26%"></span></div>
+              </div>
+              <div class="clist">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="h">4 clips, best first</span><span class="lbl">Found 3 min ago</span></div>
+                <div class="clip on"><div class="footage v4"></div><div><div class="t">Why we killed the free plan</div><q>The free plan was costing us support hours, so we stopped giving it away.</q><div class="m"><span class="tc">04:12 → 04:54</span><span>42s</span><span class="chip ok" style="height:18px">Exported</span></div><div class="acts"><button class="btn sm" type="button">Trim</button><button class="btn sm" type="button"><svg><use href="#i-crop"/></svg>Reframe to 9:16</button><button class="btn sm" type="button"><svg><use href="#i-down"/></svg>Download</button></div></div><div class="score"><b>9.1</b><small>hook score</small></div></div>
+                <div class="clip"><div class="footage v2"></div><div><div class="t">The pricing page test</div><q>We ran the same page with and without the annual toggle for six weeks.</q><div class="m"><span class="tc">11:40 → 12:08</span><span>28s</span><span class="chip run" style="height:18px">Exporting</span></div></div><div class="score"><b>8.4</b><small>hook score</small></div></div>
+                <div class="clip"><div class="footage"></div><div><div class="t">What nobody puts in the blog post</div><q>Sign ups dropped about twelve percent. Paid conversions doubled.</q><div class="m"><span class="tc">04:24 → 05:01</span><span>37s</span></div></div><div class="score"><b>7.9</b><small>hook score</small></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- THUMBNAILS -->
+      <div class="app" data-screen="thumbs" data-mode="light" hidden>
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main">
+          <div class="bar"><div class="crumb">Library <span>/</span> <b>Founder podcast, ep. 12</b></div><span class="grow"></span><span class="jobs-pill"><span class="ring"></span>Generating thumbnails</span></div>
+          <div class="tools"><a><svg><use href="#i-home"/></svg>Overview</a><a><svg><use href="#i-cc"/></svg>Captions<span class="dot ok"></span></a><a><svg><use href="#i-cut"/></svg>Clips <span class="count">4</span></a><a class="on"><svg><use href="#i-img"/></svg>Thumbnails<span class="dot run"></span></a><a><svg><use href="#i-crop"/></svg>Reframe</a></div>
+          <div class="ws thumbs">
+            <div class="pipe">
+              <span class="pstep d"><i><svg width="11" height="11"><use href="#i-check"/></svg></i>Grab frames</span>
+              <span class="pstep d"><i><svg width="11" height="11"><use href="#i-check"/></svg></i>Score sharpness</span>
+              <span class="pstep d"><i><svg width="11" height="11"><use href="#i-check"/></svg></i>Remove duplicates</span>
+              <span class="pstep d"><i><svg width="11" height="11"><use href="#i-check"/></svg></i>Pick best 3</span>
+              <span class="pstep a"><i>5</i>Polish</span>
+            </div>
+            <div class="tgrid">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="h">Pick a thumbnail</span><span class="lbl">Click a frame to set it as the cover. Polished versions keep the original framing.</span></div>
+              <div class="thead"><span>Moment</span><span>Original frame</span><span>Polished, style A</span><span>Polished, style B</span></div>
+              <div class="trow"><div class="rh"><span class="tc">04:16</span><span class="lbl" style="font-weight:400">Score 8.8</span></div><div class="tcell"><div class="footage"></div><span class="tag">Original</span></div><div class="tcell on"><div class="footage" style="filter:saturate(1.5) contrast(1.15) brightness(1.08)"></div><span class="tag">Style A</span><span class="pick"><svg><use href="#i-check"/></svg></span></div><div class="tcell"><div class="footage" style="filter:saturate(1.2) contrast(1.3) hue-rotate(-12deg)"></div><span class="tag">Style B</span></div></div>
+              <div class="trow"><div class="rh"><span class="tc">11:52</span><span class="lbl" style="font-weight:400">Score 8.1</span></div><div class="tcell"><div class="footage v2"></div><span class="tag">Original</span></div><div class="tcell"><div class="footage v2" style="filter:hue-rotate(140deg) saturate(1.3) contrast(1.15)"></div><span class="tag">Style A</span></div><div class="shimmer">Polishing</div></div>
+              <div class="trow"><div class="rh"><span class="tc">19:03</span><span class="lbl" style="font-weight:400">Score 7.6</span></div><div class="tcell"><div class="footage v3"></div><span class="tag">Original</span></div><div class="shimmer">Polishing</div><div class="shimmer">Polishing</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REFRAME -->
+      <div class="app" data-screen="reframe" data-mode="light" hidden>
+        <nav class="rail"><span class="mark"><svg><use href="#i-frame"/></svg></span><a class="on"><svg><use href="#i-lib"/></svg></a><a><svg><use href="#i-lab"/></svg></a><a><svg><use href="#i-doc"/></svg></a><span class="sp"></span><a><svg><use href="#i-moon"/></svg></a><span class="avatar">SB</span></nav>
+        <div class="main">
+          <div class="bar"><div class="crumb">Library <span>/</span> Founder podcast, ep. 12 <span>/</span> <b>Why we killed the free plan</b></div><span class="grow"></span><span class="chip ok">Saved</span><button class="btn pri" type="button">Render</button></div>
+          <div class="tools"><a><svg><use href="#i-home"/></svg>Overview</a><a><svg><use href="#i-cc"/></svg>Captions<span class="dot ok"></span></a><a><svg><use href="#i-cut"/></svg>Clips <span class="count">4</span></a><a><svg><use href="#i-img"/></svg>Thumbnails</a><a class="on"><svg><use href="#i-crop"/></svg>Reframe</a></div>
+          <div class="ws rf">
+            <div class="center">
+              <div class="stage">
+                <div class="stage-view"><div class="rf-src"><div class="footage"></div><div class="rf-crop"></div></div></div>
+                <div class="transport"><svg><use href="#i-play"/></svg><span class="tc">00:00:11:04 <i>/ 00:00:42:00</i></span><span class="scrub" style="--p:26%"></span><span>Show source</span></div>
+              </div>
+              <div class="tl">
+                <div class="ruler"><div class="hd"></div><div class="ticks"><span>00:00</span><span>00:07</span><span>00:14</span><span>00:21</span><span>00:28</span><span>00:35</span><span>00:42</span></div></div>
+                <div class="row"><div class="hd">Shots</div><div class="track"><span class="blk lay-fill" style="left:0%;width:24%">Fill · Priya</span><span class="blk lay-split" style="left:24.5%;width:20%">Split</span><span class="blk lay-fill" style="left:45%;width:30%">Fill · Priya</span><span class="blk lay-fill" style="left:75.5%;width:24%">Fill · Marcus</span></div></div>
+                <div class="row"><div class="hd">Speakers</div><div class="track"><span class="blk s1" style="left:0%;width:44%"></span><span class="blk s2" style="left:44.5%;width:8%"></span><span class="blk s1" style="left:53%;width:22%"></span><span class="blk s2" style="left:75.5%;width:24%"></span></div></div>
+                <div class="playhead" style="--x:calc(92px + (100% - 92px) * .26)"></div>
+              </div>
+            </div>
+            <aside class="insp">
+              <div class="insp-sec"><span class="lbl">Format</span><div class="seg"><button type="button" aria-pressed="true">9:16</button><button type="button" aria-pressed="false">1:1</button><button type="button" aria-pressed="false">4:5</button><button type="button" aria-pressed="false">16:9</button></div><span class="lbl" style="font-weight:400">Reels, Shorts, TikTok</span></div>
+              <div class="insp-sec"><span class="lbl">Layout for this shot</span>
+                <div class="layouts">
+                  <div class="lay on"><span class="g" style="grid-template-rows:1fr"><i></i></span>Fill</div>
+                  <div class="lay"><span class="g" style="grid-template-rows:1fr 2fr 1fr"><i style="opacity:.3"></i><i></i><i style="opacity:.3"></i></span>Fit</div>
+                  <div class="lay"><span class="g" style="grid-template-rows:1fr 1fr"><i></i><i></i></span>Split</div>
+                  <div class="lay"><span class="g" style="grid-template-rows:1fr 1fr 1fr"><i></i><i></i><i></i></span>Three</div>
+                  <div class="lay"><span class="g" style="grid-template:1fr 1fr / 1fr 1fr"><i></i><i></i><i></i><i></i></span>Four</div>
+                </div>
+                <span class="lbl" style="font-weight:400">Fill crops to the active speaker and follows them.</span>
+              </div>
+              <div class="insp-sec"><span class="lbl">Captions</span><div style="display:flex;justify-content:space-between;align-items:center"><span>Use project captions</span><span class="seg"><button type="button" aria-pressed="true">On</button><button type="button" aria-pressed="false">Off</button></span></div><span class="lbl" style="font-weight:400">Bold pop style, moved up to clear the 9:16 safe zone.</span></div>
+              <div class="insp-foot"><button class="btn pri block" type="button">Render 9:16</button><span class="lbl" style="text-align:center;font-weight:400">Your edits save as you go.</span></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="mon-note" id="note"></div>
+  </div>
+</section>
+
+<section id="rollout">
+  <div class="sec-head">
+    <span class="k">Rollout</span>
+    <h2>Five steps, each shippable on its own.</h2>
+    <p>No backend changes are needed until step 4. The order puts the shared foundation first so every later screen is cheaper to build.</p>
+  </div>
+  <div class="phases">
+    <div class="phase"><span class="no">1</span><div><h3>Tokens and primitives</h3><p>Replace the palette and font in <span class="tc">index.css</span>, then add Button, Segmented, Chip, Field, Slider, TimecodeField, StatusSteps and Panel components. Move inline styles into them as each screen is touched.</p></div><div class="files">src/index.css<br>src/ui/*.jsx (new)<br>index.html font link</div></div>
+    <div class="phase"><span class="no">2</span><div><h3>App shell and Library</h3><p>Left rail, project top bar with tool tabs, and a jobs tray fed by the existing SSE and polling hooks. Library replaces LandingPage with a single upload and per-video output chips.</p></div><div class="files">src/App.jsx<br>src/shell/{Rail,ProjectBar,JobsTray}.jsx<br>src/pages/LibraryPage.jsx</div></div>
+    <div class="phase"><span class="no">3</span><div><h3>Captions, Clips, Thumbnails in the shell</h3><p>Move each page under <span class="tc">/v/:id/…</span> with redirects from the old routes. Drop their own uploads and top bars. Add caption presets and the shared timeline to the Captions editor.</p></div><div class="files">EditorPage, ClipsPage, ThumbnailsPage<br>StyleEditor, TranscriptionPanel<br>smartcrop/components/Timeline (reused)</div></div>
+    <div class="phase"><span class="no">4</span><div><h3>Reframe joins the project</h3><p>SmartCrop moves onto the shared tokens and into the project tabs. Starting a reframe from a library video needs the server to hand the existing upload to the SmartCrop pipeline instead of asking for a new one.</p></div><div class="files">smartcrop/smartcrop.css (retired)<br>SmartcropEditor → ReframeTab<br>server: create project from videoId</div></div>
+    <div class="phase"><span class="no">5</span><div><h3>Overview, outputs and Lab</h3><p>Project overview with the outputs shelf, then move Playground and the research docs under Lab. Login, 404 and error screens get the new shell last.</p></div><div class="files">pages/ProjectOverview.jsx<br>pages/lab/*<br>LoginPage, NotFoundPage</div></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="sec-head">
+    <span class="k">Before building</span>
+    <h2>Four calls that change the plan.</h2>
+  </div>
+  <div class="decide">
+    <div><h3>Product name in the UI</h3><p>"SP Video Editor POC" undersells it. Options are SocialPilot Studio, or no name at all inside the SocialPilot app.</p><span class="rec">Suggested: <b>SocialPilot Studio</b></span></div>
+    <div><h3>Default theme</h3><p>Today light is the default. Video tools usually default dark, but SocialPilot's main app is light.</p><span class="rec">Suggested: <b>light chrome, dark stage</b>, matching the parent app</span></div>
+    <div><h3>Who sees the Lab</h3><p>Playground, model choice and provider reports are useful to the team but confusing to customers.</p><span class="rec">Suggested: <b>Lab behind a team flag</b></span></div>
+    <div><h3>Reframe from library videos</h3><p>Folding SmartCrop into the project needs a small server change so it reuses the uploaded file.</p><span class="rec">Suggested: <b>do it in step 4</b>, keep the separate upload until then</span></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var notes = {
+    library: ['One upload for the whole product. Progress lives in the page, not in a toast that disappears.', 'Each card shows what has been made from that video, so the library doubles as a status board.', 'Filters answer the two questions people actually have: what is still running, and what is ready.'],
+    overview: ['The page a project opens on. It shows the source, every tool\'s status, and every output in one place.', 'The jobs tray (open here) is the same component everywhere: named steps, time left, and a link back to the tool.', 'Tools that have not been used show their single next action instead of a blank page.'],
+    captions: ['Transcript, player and style inspector in one view, with the speaker and caption lanes on a timeline below.', 'Style presets come first. Fine controls sit under them. Position can be set on the grid or by dragging on the video, as today.', 'Words the transcription is unsure about get a dashed amber underline so editors know where to look.', 'Provider choice moves to a "Re-transcribe" menu, since most users never change it.'],
+    clips: ['Method is described by what happens ("reading the transcript", "watching the video"), not by model name.', 'Each clip previews at 9:16 so it is judged in the format it will be posted in.', 'Clip actions hand off to other tools: Reframe to 9:16 opens the Reframe tab with this clip already loaded.'],
+    thumbs: ['The five pipeline stages become a stepper that fills in as the server streams events.', 'Rows are moments in the video; columns are the original frame and two polished styles, so comparisons are side by side.', 'Unfinished cells show where results will land, so the layout never jumps.'],
+    reframe: ['SmartCrop keeps its editor model (aspect, layout per shot, timeline) but moves onto the shared tokens and shell.', 'The stage shows the crop window over the 16:9 source, so users see what is cut, not just the result.', 'Captions carry over from the Captions tab and move up to clear the 9:16 safe zone automatically.']
+  };
+  var tabs = document.querySelectorAll('[data-s]');
+  var screens = document.querySelectorAll('.app[data-screen]');
+  var note = document.getElementById('note');
+  var mode = 'light';
+  function renderNote(s) {
+    note.innerHTML = '<ul>' + notes[s].map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
+  }
+  function show(s) {
+    tabs.forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.s === s)); });
+    screens.forEach(function (el) { el.hidden = el.dataset.screen !== s; });
+    renderNote(s);
+  }
+  tabs.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.s); }); });
+  document.querySelectorAll('[data-m]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      mode = b.dataset.m;
+      document.querySelectorAll('[data-m]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      screens.forEach(function (el) { el.dataset.mode = mode; });
+    });
+  });
+  // Decorative segmented controls inside the mockups and token demos toggle visually.
+  document.querySelectorAll('.seg:not([aria-label="Chrome theme"])').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      var btn = e.target.closest('button'); if (!btn) return;
+      g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === btn)); });
+    });
+  });
+  show('library');
+})();
+</script>

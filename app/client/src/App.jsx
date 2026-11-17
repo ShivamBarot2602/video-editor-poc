@@ -1,11 +1,11 @@
-import { BrowserRouter as Router, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import { LogOut, Sun, Moon } from 'lucide-react'
 import { useAuth } from './auth/AuthContext'
-import { useTheme } from './theme/ThemeContext'
+import Rail from './shell/Rail'
+import { JobsProvider } from './shell/jobs'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
-import LandingPage from './pages/LandingPage'
+import LibraryPage from './pages/LibraryPage'
 import EditorPage from './pages/EditorPage'
 import PlaygroundPage from './pages/PlaygroundPage'
 import ThumbnailsPage from './pages/ThumbnailsPage'
@@ -17,54 +17,6 @@ import DocsHubPage from './pages/docs/DocsHubPage'
 import SubtitlesDocPage from './pages/docs/SubtitlesDocPage'
 import ThumbnailsDocPage from './pages/docs/ThumbnailsDocPage'
 import ClipsDocPage from './pages/docs/ClipsDocPage'
-
-function Header() {
-  const location = useLocation()
-  const { logout } = useAuth()
-  const { theme, toggleTheme } = useTheme()
-  // Full-screen pages with their own top bar.
-  const isEditor = location.pathname.startsWith('/editor/')
-  const isSmartcrop = location.pathname.startsWith('/smartcrop')
-  if (isEditor || isSmartcrop) return null
-
-  const isPlayground = location.pathname === '/playground'
-  const isDocs = location.pathname.startsWith('/docs') || location.pathname === '/report'
-  const isThumbnails = location.pathname.startsWith('/thumbnails')
-  const isClips = location.pathname.startsWith('/clips')
-  const isHome = !isPlayground && !isDocs && !isThumbnails && !isClips
-
-  return (
-    <header className="topbar">
-      <Link to="/" className="topbar-logo" style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>SP Video Editor</Link>
-      <span className="topbar-poc">POC</span>
-      <nav style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-        <Link to="/" className={`topbar-tab ${isHome ? 'active' : ''}`}>Upload New</Link>
-        <Link to="/playground" className={`topbar-tab ${isPlayground ? 'active' : ''}`}>Playground</Link>
-        <Link to="/thumbnails" className={`topbar-tab ${isThumbnails ? 'active' : ''}`}>Thumbnails</Link>
-        <Link to="/clips" className={`topbar-tab ${isClips ? 'active' : ''}`}>Clips</Link>
-        <Link to="/smartcrop/projects" className="topbar-tab">SmartCrop</Link>
-        <Link to="/docs" className={`topbar-tab ${isDocs ? 'active' : ''}`}>Docs</Link>
-        <button
-          onClick={toggleTheme}
-          className="topbar-tab"
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
-        >
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
-        <button
-          onClick={logout}
-          className="topbar-tab"
-          title="Sign out"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer' }}
-        >
-          <LogOut size={14} /> Sign out
-        </button>
-      </nav>
-    </header>
-  )
-}
 
 const screenStyle = {
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -95,31 +47,33 @@ export default function App() {
 
   return (
     <Sentry.ErrorBoundary fallback={<ErrorFallback />} showDialog>
-      <Router>
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-          <Header />
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/playground" element={<PlaygroundPage />} />
-              <Route path="/docs" element={<DocsHubPage />} />
-              <Route path="/docs/subtitles" element={<SubtitlesDocPage />} />
-              <Route path="/docs/thumbnails" element={<ThumbnailsDocPage />} />
-              <Route path="/docs/clips" element={<ClipsDocPage />} />
-              <Route path="/report" element={<Navigate to="/docs/subtitles" replace />} />
-              <Route path="/editor/:videoId" element={<EditorPage />} />
-              <Route path="/thumbnails" element={<ThumbnailsPage />} />
-              <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
-              <Route path="/clips" element={<ClipsPage />} />
-              <Route path="/clips/:videoId" element={<ClipsPage />} />
-              <Route path="/smartcrop" element={<SmartcropUpload />} />
-              <Route path="/smartcrop/projects" element={<SmartcropProjects />} />
-              <Route path="/smartcrop/:projectId" element={<SmartcropEditor />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
+      <JobsProvider>
+        <Router>
+          <div className="shell">
+            <Rail />
+            <main className="shell-main">
+              <Routes>
+                <Route path="/" element={<LibraryPage />} />
+                <Route path="/playground" element={<PlaygroundPage />} />
+                <Route path="/docs" element={<DocsHubPage />} />
+                <Route path="/docs/subtitles" element={<SubtitlesDocPage />} />
+                <Route path="/docs/thumbnails" element={<ThumbnailsDocPage />} />
+                <Route path="/docs/clips" element={<ClipsDocPage />} />
+                <Route path="/report" element={<Navigate to="/docs/subtitles" replace />} />
+                <Route path="/editor/:videoId" element={<EditorPage />} />
+                <Route path="/thumbnails" element={<ThumbnailsPage />} />
+                <Route path="/thumbnails/:videoId" element={<ThumbnailsPage />} />
+                <Route path="/clips" element={<ClipsPage />} />
+                <Route path="/clips/:videoId" element={<ClipsPage />} />
+                <Route path="/smartcrop" element={<SmartcropUpload />} />
+                <Route path="/smartcrop/projects" element={<SmartcropProjects />} />
+                <Route path="/smartcrop/:projectId" element={<SmartcropEditor />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </main>
           </div>
-        </div>
-      </Router>
+        </Router>
+      </JobsProvider>
     </Sentry.ErrorBoundary>
   )
 }

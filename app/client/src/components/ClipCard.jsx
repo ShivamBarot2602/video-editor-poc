@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Bookmark, Check, Download, Trash2, Loader2, AlertTriangle, Sparkles, Clock, Copy } from 'lucide-react'
+import { Bookmark, Check, Download, Trash2, Loader2, AlertTriangle, Clock, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ClipPlayer from './ClipPlayer'
+import ScorePill from '../ui/ScorePill'
 import ClipThumbnails from './ClipThumbnails'
 
 function fmtRange(s) {
@@ -9,28 +10,6 @@ function fmtRange(s) {
   const m = Math.floor(s / 60)
   const sec = Math.floor(s % 60)
   return `${m}:${String(sec).padStart(2, '0')}`
-}
-
-/* Engagement score 1-10. Hue low=red / mid=amber / high=green, plus an icon so
-   it reads without relying on color (color-blind safe). Mirrors ThumbnailsPage. */
-function ScorePill({ score }) {
-  const num = Number(score)
-  const safe = Number.isFinite(num) ? num : 0
-  const tone = safe >= 8 ? 'high' : safe >= 5 ? 'mid' : 'low'
-  const bg = tone === 'high' ? 'rgba(34,197,94,0.18)' : tone === 'mid' ? 'rgba(234,179,8,0.18)' : 'rgba(220,38,38,0.18)'
-  const fg = tone === 'high' ? 'var(--success)' : tone === 'mid' ? '#eab308' : 'var(--error)'
-  return (
-    <span
-      title={`Engagement score: ${safe} / 10`}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        background: bg, color: fg, fontWeight: 700, fontSize: 10,
-        padding: '2px 7px', borderRadius: 999,
-      }}
-    >
-      <Sparkles size={9} /> {safe}
-    </span>
-  )
 }
 
 const IDLE = { status: 'idle', progress: 0 }
@@ -108,7 +87,7 @@ export default function ClipCard({
           <span style={{ color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
             {fmtRange(clip.start)}–{fmtRange(clip.end)}
           </span>
-          {clip.score != null && <ScorePill score={clip.score} />}
+          {clip.score != null && <ScorePill score={clip.score} label="Engagement score" />}
           {variant === 'saved' && clip.suggestProvider && (
             <span style={{ color: 'var(--text-faint)' }}>· {clip.suggestProvider}{clip.bucket ? ` · ${clip.bucket}` : ''}</span>
           )}

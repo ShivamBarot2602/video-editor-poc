@@ -3,8 +3,8 @@ import { Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { uploadVideo } from '../api/videos'
 
-const MAX_SIZE_MB = 500
-const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm'
+export const MAX_SIZE_MB = 500
+export const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm'
 
 // `onFile` (optional): hand the chosen file to the caller instead of running
 // the built-in upload — for flows with their own upload + progress UI

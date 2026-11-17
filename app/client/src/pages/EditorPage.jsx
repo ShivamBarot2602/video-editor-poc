@@ -1,12 +1,15 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, LayoutGrid, Sparkles, Scissors } from 'lucide-react'
+import { FlaskConical, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Group, Panel, Separator, useDefaultLayout } from 'react-resizable-panels'
 import VideoPlayer from '../components/VideoPlayer'
 import TranscriptionPanel from '../components/TranscriptionPanel'
 import TimerToast from '../components/TimerToast'
 import StyleEditor from '../components/StyleEditor'
+import ProjectBar from '../shell/ProjectBar'
+import { useJob } from '../shell/jobs'
+import { PROVIDERS } from '../config/providers'
 import { DEFAULT_STYLE, EXPORT_FORMATS, migrateStyleFonts } from '../config/subtitleStyle'
 import { getVideoOrNull } from '../api/videos'
 import { getTranscriptionOrNull, patchTranscription, transcribe, burn, subtitleDownloadUrl, downloadAss } from '../api/transcription'
@@ -64,7 +67,7 @@ export default function EditorPage() {
         if (cancelled) return
         if (!video) { toast.error('Video not found'); navigate('/'); return }
 
-        setVideoMeta({ name: video.filename, size: video.size })
+        setVideoMeta(video)
         setAvailableProviders(video.providers)
         setBurnState({ status: 'idle', progress: 0, burnedUrl: video.hasBurned ? `/api/video/${videoId}/burned` : null })
 
@@ -258,55 +261,43 @@ export default function EditorPage() {
     }
   }, [videoId, transcription, style, selectedProvider])
 
+  const providerLabel = PROVIDERS.find(p => p.id === selectedProvider)?.label || selectedProvider
+  useJob(`transcribe:${videoId}`, isTranscribing ? {
+    videoId, tool: 'captions', label: 'Transcribing', detail: `Using ${providerLabel}`,
+  } : null)
+  useJob(`burn:${videoId}`, burnState.status === 'burning' ? {
+    videoId, tool: 'captions', label: 'Burning captions',
+    detail: burnState.phase === 'preparing' ? 'Fetching the original video'
+      : burnState.phase === 'uploading' ? 'Saving the captioned video' : 'Rendering captions onto the video',
+    progress: burnState.progress || undefined,
+  } : null)
+
   if (loading) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <span style={{ color: 'var(--text-dim)', fontSize: 13 }}>Loading video…</span>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <ProjectBar videoId={videoId} video={videoMeta} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--text-dim)' }}>
+          <Loader2 size={16} className="spin" /> Loading video…
+        </div>
       </div>
     )
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Editor topbar */}
-      <div className="topbar" style={{ gap: 10 }}>
+      <ProjectBar
+        videoId={videoId}
+        video={videoMeta && { ...videoMeta, providers: availableProviders }}
+      >
         <button
-          className="topbar-tab"
-          onClick={() => navigate('/')}
-          style={{ fontSize: 12, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-        >
-          <ArrowLeft size={13} /> Back
-        </button>
-        <span className="topbar-logo">SP Video Editor</span>
-        {videoMeta && (
-          <span style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-            {videoMeta.name}
-          </span>
-        )}
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => navigate(`/thumbnails/${videoId}`)}
-          style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-dim)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          title="Generate thumbnail candidates"
-        >
-          <Sparkles size={11} /> Thumbnails
-        </button>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => navigate(`/clips/${videoId}${selectedProvider ? `?transcriptProvider=${selectedProvider}` : ''}`)}
-          style={{ fontSize: 11, color: 'var(--text-dim)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-          title="Suggest short clips"
-        >
-          <Scissors size={11} /> Clips
-        </button>
-        <button
-          className="btn btn-outline btn-sm"
+          type="button"
+          className="btn btn-quiet btn-sm"
           onClick={() => navigate(`/playground?video=${videoId}`)}
-          style={{ fontSize: 11, color: 'var(--text-dim)', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          title="Compare transcription providers side by side in the Lab"
         >
-          <LayoutGrid size={11} /> Playground
+          <FlaskConical size={14} /> Compare providers
         </button>
-      </div>
+      </ProjectBar>
 
       {/* Editor body — resizable panels */}
       <Group
