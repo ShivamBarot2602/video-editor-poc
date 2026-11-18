@@ -1,0 +1,14 @@
+# Only app/server and app/shared go into the server image.
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/.DS_Store
+.git
+.claude
+app/client
+app/server/videos
+app/server/test
+design
+docs
+scripts

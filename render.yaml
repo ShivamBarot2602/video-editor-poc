@@ -1,0 +1,104 @@
+# Render Blueprint for the API server (the client is on Vercel).
+# Render dashboard → New → Blueprint → pick this repo. Values marked
+# `sync: false` are asked for once when the Blueprint is created and never
+# stored in the repo; leave the API keys you don't use blank.
+services:
+  - type: web
+    name: video-editor-poc-api
+    runtime: docker
+    plan: free
+    region: virginia            # same region as the S3 buckets (us-east-1)
+    dockerfilePath: ./app/server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    # Only redeploy when server code changes, not on client-only commits.
+    buildFilter:
+      paths:
+        - app/server/**
+        - app/shared/**
+        - render.yaml
+      ignoredPaths:
+        - app/server/test/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Free instances have 512 MB and a fraction of a CPU.
+      - key: FFMPEG_THREADS
+        value: "1"
+      - key: FFMPEG_PRESET
+        value: veryfast
+      - key: MAX_FILE_SIZE_MB
+        value: "500"
+
+      # Auth (required — the server won't start without them)
+      - key: AUTH_USERNAME
+        sync: false
+      - key: AUTH_PASSWORD_HASH
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Storage (required)
+      - key: AWS_REGION
+        value: us-east-1
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_KEY_PREFIX
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PRESIGN_EXPIRES_S
+        sync: false
+
+      # Reframe (SmartCrop). Set SMARTCROP_ENABLED to false to leave it off;
+      # when true every value below is required.
+      - key: SMARTCROP_ENABLED
+        sync: false
+      - key: SMARTCROP_IN_BUCKET
+        sync: false
+      - key: SMARTCROP_JOBS_BUCKET
+        sync: false
+      - key: SMARTCROP_OUT_BUCKET
+        sync: false
+      - key: PIPELINE_JOBS_TABLE
+        sync: false
+      - key: STATE_MACHINE_ARN
+        sync: false
+      - key: PLAN_LAMBDA_FUNCTION
+        sync: false
+
+      # Transcription, clips and thumbnails providers (optional, per provider)
+      - key: ASSEMBLYAI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: GLADIA_API_KEY
+        sync: false
+      - key: SONIX_API_KEY
+        sync: false
+      - key: SPEECHMATICS_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: REVAI_ACCESS_TOKEN
+        sync: false
+      - key: PYANNOTE_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: XAI_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
