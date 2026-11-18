@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
   const apiTarget = env.BACKEND_URL
     || (isDev
       ? 'http://localhost:3001'
-      : 'https://sp-video-editor-poc-backend-4m9o.onrender.com')
+      : 'https://video-editor-poc.onrender.com')
 
   const apiProxy = {
     '/api': {
