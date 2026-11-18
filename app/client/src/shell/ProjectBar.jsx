@@ -11,7 +11,9 @@ import JobsTray from './JobsTray'
 // `video` ({ filename, providers, hasClips }) is passed by pages that load it
 // themselves (null while they are loading); when the prop is left out the bar
 // fetches it.
-export default function ProjectBar({ videoId, video: given, children }) {
+// `tabSearch` ({ [toolId]: '?…' }) adds a query string to a tab's link, so a
+// tool can hand its context to the next one (Captions → Clips: the open transcript).
+export default function ProjectBar({ videoId, video: given, tabSearch, children }) {
   const { pathname } = useLocation()
   const [fetched, setFetched] = useState(undefined) // undefined = loading, null = not found
   const jobs = useJobs(videoId)
@@ -46,7 +48,7 @@ export default function ProjectBar({ videoId, video: given, children }) {
           const active = exact ? pathname === to : pathname.startsWith(to)
           const state = runningTools.has(id) ? 'run' : done ? 'ok' : null
           return (
-            <Link key={id} to={to} className={active ? 'pbar-tab active' : 'pbar-tab'} aria-current={active ? 'page' : undefined}>
+            <Link key={id} to={to + (tabSearch?.[id] || '')} className={active ? 'pbar-tab active' : 'pbar-tab'} aria-current={active ? 'page' : undefined}>
               <Icon size={15} strokeWidth={1.8} />
               {label}
               {state && <span className={`pbar-dot pbar-dot-${state}`} aria-label={state === 'run' ? 'running' : 'has results'} />}

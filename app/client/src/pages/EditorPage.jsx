@@ -309,6 +309,7 @@ export default function EditorPage() {
       <ProjectBar
         videoId={videoId}
         video={videoMeta && { ...videoMeta, providers: availableProviders }}
+        tabSearch={selectedProvider ? { clips: `?transcriptProvider=${encodeURIComponent(selectedProvider)}` } : undefined}
       >
         <button
           type="button"
